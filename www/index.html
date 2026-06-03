@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>凯航扫码 Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, sans-serif; background: #f2f2f7; color: #1c1c1e; }
+
+    .header {
+      background: #1c1c1e; color: #fff;
+      padding: 16px 20px;
+      font-size: 18px; font-weight: 600;
+    }
+
+    .section {
+      margin: 12px; background: #fff;
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .section-title {
+      padding: 14px 16px 10px;
+      font-size: 13px; font-weight: 600;
+      color: #8e8e93; text-transform: uppercase; letter-spacing: .5px;
+    }
+    .section-body { padding: 0 16px 16px; }
+
+    .status-bar {
+      margin-bottom: 12px; padding: 10px 14px;
+      border-radius: 8px; font-size: 14px; line-height: 1.4;
+      background: #f2f2f7; color: #3a3a3c;
+      min-height: 42px;
+    }
+    .status-bar.ok  { background: #d1fae5; color: #065f46; }
+    .status-bar.err { background: #fee2e2; color: #991b1b; }
+    .status-bar.info{ background: #dbeafe; color: #1e40af; }
+
+    .btn {
+      display: inline-block; padding: 10px 20px;
+      border-radius: 8px; border: none; cursor: pointer;
+      font-size: 15px; font-weight: 500; margin: 4px 4px 0 0;
+    }
+    .btn-primary { background: #007aff; color: #fff; }
+    .btn-success { background: #34c759; color: #fff; }
+    .btn-danger  { background: #ff3b30; color: #fff; }
+    .btn-gray    { background: #e5e5ea; color: #1c1c1e; }
+    .btn:active  { opacity: .75; }
+
+    input[type=text] {
+      width: 100%; padding: 10px 12px; margin-bottom: 10px;
+      border: 1px solid #d1d1d6; border-radius: 8px;
+      font-size: 15px;
+    }
+
+    .result-box {
+      margin-top: 10px; padding: 10px 12px;
+      background: #f2f2f7; border-radius: 8px;
+      font-size: 13px; font-family: monospace;
+      word-break: break-all; min-height: 36px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">凯航扫码 — 功能 Demo</div>
+
+<!-- ── 扫码 ────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">扫码枪</div>
+  <div class="section-body">
+    <div class="status-bar" id="scan-status">等待初始化…</div>
+    <button class="btn btn-primary" onclick="startScan()">触发扫码</button>
+    <button class="btn btn-gray"    onclick="stopScan()">停止</button>
+    <div class="result-box" id="scan-result">扫码结果显示在这里</div>
+  </div>
+</div>
+
+<!-- ── 打印 ────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">标签打印</div>
+  <div class="section-body">
+    <div class="status-bar" id="print-status">等待连接打印机…</div>
+    <input type="text" id="batch-no"     placeholder="批次码（如 M05260604030012）" value="M05260604030012">
+    <input type="text" id="machine-id"   placeholder="机器编号" value="M05">
+    <input type="text" id="product-type" placeholder="产品类型" value="电容">
+    <button class="btn btn-success" onclick="connectPrinter()">连接打印机</button>
+    <button class="btn btn-primary" onclick="doPrint()">打印标签</button>
+  </div>
+</div>
+
+<!-- ── NFC ─────────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">NFC 读写</div>
+  <div class="section-body">
+    <div class="status-bar" id="nfc-status">就绪，请选择操作</div>
+    <input type="text" id="nfc-write-data" placeholder="写入内容（如批次码）" value="M05260604030012">
+    <button class="btn btn-primary" onclick="nfcRead()">读取卡片</button>
+    <button class="btn btn-success" onclick="nfcWrite()">写入卡片</button>
+    <button class="btn btn-danger"  onclick="nfcCancel()">停止</button>
+    <div class="result-box" id="nfc-result">NFC 读取结果显示在这里</div>
+  </div>
+</div>
+
+<script type="module">
+  // ── Capacitor 插件导入 ────────────────────────────────
+  import { registerPlugin } from './capacitor/capacitor.js';
+  import { NFC }            from './capacitor/nfc/index.js';
+
+  const ScanPlugin  = registerPlugin('ScanPlugin');
+  const PrintPlugin = registerPlugin('PrintPlugin');
+
+  const NFC_PREFIX = 'kaihang://nfc/';
+
+  // ── 工具 ─────────────────────────────────────────────
+  function setStatus(id, msg, type = '') {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = 'status-bar' + (type ? ' ' + type : '');
+  }
+
+  // ── 扫码 ──────────────────────────────────────────────
+  let scanListener = null;
+
+  async function initScan() {
+    try {
+      scanListener = await ScanPlugin.addListener('scanResult', ({ value }) => {
+        document.getElementById('scan-result').textContent = value;
+        setStatus('scan-status', '扫码成功', 'ok');
+      });
+      setStatus('scan-status', '监听中，等待扫码枪触发', 'info');
+    } catch (e) {
+      setStatus('scan-status', '初始化失败：' + e.message, 'err');
+    }
+  }
+
+  window.startScan = async () => {
+    setStatus('scan-status', '触发中…', 'info');
+    await ScanPlugin.startScan();
+  };
+
+  window.stopScan = async () => {
+    await ScanPlugin.stopScan();
+    setStatus('scan-status', '已停止');
+  };
+
+  // ── 打印 ──────────────────────────────────────────────
+  let printListener = null;
+
+  window.connectPrinter = async () => {
+    setStatus('print-status', '连接中…', 'info');
+    try {
+      printListener = await PrintPlugin.addListener('printStatus', ({ connection, status, flag }) => {
+        if (connection === 'connected') setStatus('print-status', '打印机已连接', 'ok');
+        else if (connection === 'failed') setStatus('print-status', '连接失败', 'err');
+        else if (status === 'PRINT_OK')  setStatus('print-status', `打印完成：${flag}`, 'ok');
+        else if (status)                 setStatus('print-status', `状态：${status}`, status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
+      });
+      await PrintPlugin.connect();
+    } catch (e) {
+      setStatus('print-status', '连接失败：' + e.message, 'err');
+    }
+  };
+
+  window.doPrint = async () => {
+    const batchNo     = document.getElementById('batch-no').value.trim();
+    const machineId   = document.getElementById('machine-id').value.trim();
+    const productType = document.getElementById('product-type').value.trim();
+    if (!batchNo) { alert('请填写批次码'); return; }
+
+    setStatus('print-status', '发送打印任务…', 'info');
+    try {
+      await PrintPlugin.prepareToPrintLabel();
+      await PrintPlugin.printBatchLabel({
+        batchNo,
+        machineId,
+        productType,
+        date: new Date().toLocaleDateString('zh', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\//g, ''),
+      });
+    } catch (e) {
+      setStatus('print-status', '打印失败：' + e.message, 'err');
+    }
+  };
+
+  // ── NFC ───────────────────────────────────────────────
+  let nfcListener = null;
+
+  function cancelNfc() {
+    if (nfcListener) { nfcListener.remove(); nfcListener = null; }
+    NFC.removeAllListeners();
+  }
+
+  window.nfcCancel = () => {
+    cancelNfc();
+    setStatus('nfc-status', '已停止');
+  };
+
+  window.nfcRead = async () => {
+    cancelNfc();
+    setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
+    document.getElementById('nfc-result').textContent = '等待读取…';
+
+    nfcListener = await NFC.addListener('nfcTag', (tag) => {
+      try {
+        const records = tag.messages?.[0]?.records ?? [];
+        let found = null;
+        for (const r of records) {
+          if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
+            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+            found = uri.startsWith(NFC_PREFIX) ? uri.replace(NFC_PREFIX, '') : uri;
+            break;
+          }
+        }
+        document.getElementById('nfc-result').textContent = found ?? JSON.stringify(records);
+        setStatus('nfc-status', found ? '读取成功（凯航数据）' : '读取成功（非凯航卡）', 'ok');
+      } catch (e) {
+        setStatus('nfc-status', '解析失败：' + e.message, 'err');
+      }
+      cancelNfc();
+    });
+  };
+
+  window.nfcWrite = async () => {
+    const content = document.getElementById('nfc-write-data').value.trim();
+    if (!content) { alert('请填写写入内容'); return; }
+    cancelNfc();
+    setStatus('nfc-status', '准备写入… 请贴近 NFC 标签', 'info');
+
+    nfcListener = await NFC.addListener('nfcTag', async () => {
+      try {
+        const encoder = new TextEncoder();
+        const uri = NFC_PREFIX + content;
+        const uriPayload = new Uint8Array(1 + uri.length);
+        uriPayload[0] = 0x00;
+        uriPayload.set(encoder.encode(uri), 1);
+
+        await NFC.write({
+          records: [
+            { tnf: 1, type: Array.from(encoder.encode('U')), id: [], payload: Array.from(uriPayload) },
+            { tnf: 4, type: Array.from(encoder.encode('android.com:pkg')), id: [], payload: Array.from(encoder.encode('com.kaihang.scanner')) },
+          ]
+        });
+        setStatus('nfc-status', '写入成功！', 'ok');
+      } catch (e) {
+        setStatus('nfc-status', '写入失败：' + e.message, 'err');
+      }
+      cancelNfc();
+    });
+  };
+
+  // ── 启动 ──────────────────────────────────────────────
+  initScan();
+</script>
+
+<!-- 兜底：Capacitor bridge 未加载时的提示 -->
+<script>
+  window.addEventListener('error', function(e) {
+    if (e.message && e.message.includes('capacitor')) {
+      document.querySelector('.header').insertAdjacentHTML('afterend',
+        '<div style="background:#ff3b30;color:#fff;padding:10px 16px;font-size:13px;">⚠️ 请在 APK 内运行，浏览器不支持硬件插件</div>'
+      );
+    }
+  });
+</script>
+</body>
+</html>
