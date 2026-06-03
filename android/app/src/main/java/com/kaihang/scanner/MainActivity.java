@@ -1,5 +1,6 @@
 package com.kaihang.scanner;
 
+import android.content.Intent;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
@@ -31,6 +32,14 @@ public class MainActivity extends BridgeActivity {
                 injectClientTypeHeader(view);
             }
         });
+    }
+
+    // App 已在前台时收到 NFC Intent，转发给 Capacitor Bridge（@capgo/capacitor-nfc 依赖此回调）
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        bridge.onNewIntent(intent);
     }
 
     private void injectClientTypeHeader(WebView view) {
