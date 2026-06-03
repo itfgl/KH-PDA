@@ -84,8 +84,8 @@
     <input type="text" id="batch-no"     placeholder="批次码（如 M05260604030012）" value="M05260604030012">
     <input type="text" id="machine-id"   placeholder="机器编号" value="M05">
     <input type="text" id="product-type" placeholder="产品类型" value="电容">
-    <button class="btn btn-success" onclick="connectPrinter()">连接打印机</button>
     <button class="btn btn-primary" onclick="doPrint()">打印标签</button>
+    <button class="btn btn-gray"    onclick="connectPrinter()">重连打印机</button>
   </div>
 </div>
 
@@ -250,6 +250,7 @@
 
   // ── 启动 ──────────────────────────────────────────────
   initScan();
+  connectPrinter();
 </script>
 
 <!-- 兜底：Capacitor bridge 未加载时的提示 -->
