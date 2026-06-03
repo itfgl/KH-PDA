@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">凯航扫码</string>
+    <string name="title_activity_main">凯航扫码</string>
+    <string name="package_name">com.kaihang.scanner</string>
+    <string name="custom_url_scheme">com.kaihang.scanner</string>
+</resources>

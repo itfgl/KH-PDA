@@ -1,0 +1,22 @@
+{
+  "name": "kaihang-scanner",
+  "version": "1.0.0",
+  "description": "凯航工业生产质检系统 Android 壳",
+  "main": "index.js",
+  "scripts": {
+    "sync": "npx cap sync android"
+  },
+  "keywords": [],
+  "author": "kaihang",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/core": "^8.2.0",
+    "@capgo/capacitor-nfc": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.2.0"
+  }
+}

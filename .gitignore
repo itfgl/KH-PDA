@@ -1,0 +1,23 @@
+node_modules/
+
+# 签名 keystore（私钥，绝对不入库，通过 GitHub Secrets 注入）
+*.jks
+*.keystore
+www/
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+*.apk
+*.aab
+
+# SDK 原始资料（本地保留，不入库）
+sdk_extracted/
+X8_安卓壳子_H5_对接资料包/
+X8_安卓本地服务器_对接资料包/
+X8_安卓壳子_H5_对接资料包.rar
+X8_安卓本地服务器_对接资料包.rar
+打印_UC_PrinterDemoSrc_Temp_V1.16_240515.zip
+uniapp扫码获取广播值方法.zip
+扫码集成开发说明(含源码demo)_v1.1.rar
