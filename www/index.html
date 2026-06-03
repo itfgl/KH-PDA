@@ -29,12 +29,11 @@
     .status-bar {
       margin-bottom: 12px; padding: 10px 14px;
       border-radius: 8px; font-size: 14px; line-height: 1.4;
-      background: #f2f2f7; color: #3a3a3c;
-      min-height: 42px;
+      background: #f2f2f7; color: #3a3a3c; min-height: 42px;
     }
-    .status-bar.ok  { background: #d1fae5; color: #065f46; }
-    .status-bar.err { background: #fee2e2; color: #991b1b; }
-    .status-bar.info{ background: #dbeafe; color: #1e40af; }
+    .status-bar.ok   { background: #d1fae5; color: #065f46; }
+    .status-bar.err  { background: #fee2e2; color: #991b1b; }
+    .status-bar.info { background: #dbeafe; color: #1e40af; }
 
     .btn {
       display: inline-block; padding: 10px 20px;
@@ -45,12 +44,12 @@
     .btn-success { background: #34c759; color: #fff; }
     .btn-danger  { background: #ff3b30; color: #fff; }
     .btn-gray    { background: #e5e5ea; color: #1c1c1e; }
+    .btn-sm      { padding: 6px 12px; font-size: 13px; }
     .btn:active  { opacity: .75; }
 
     input[type=text] {
       width: 100%; padding: 10px 12px; margin-bottom: 10px;
-      border: 1px solid #d1d1d6; border-radius: 8px;
-      font-size: 15px;
+      border: 1px solid #d1d1d6; border-radius: 8px; font-size: 15px;
     }
 
     .result-box {
@@ -59,6 +58,26 @@
       font-size: 13px; font-family: monospace;
       word-break: break-all; min-height: 36px;
     }
+
+    /* 调试日志 */
+    #debug-log {
+      margin: 0 12px 20px; background: #1c1c1e;
+      border-radius: 12px; overflow: hidden;
+    }
+    #debug-log .section-title { color: #636366; }
+    #debug-log .log-body {
+      padding: 0 12px 12px; max-height: 260px; overflow-y: auto;
+    }
+    .log-line {
+      font-family: monospace; font-size: 12px; line-height: 1.6;
+      padding: 2px 0; border-bottom: 1px solid #2c2c2e;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .log-line.info  { color: #64d2ff; }
+    .log-line.ok    { color: #30d158; }
+    .log-line.err   { color: #ff453a; }
+    .log-line.warn  { color: #ffd60a; }
+    .log-line.plain { color: #ebebf5; }
   </style>
 </head>
 <body>
@@ -102,13 +121,53 @@
   </div>
 </div>
 
-<script type="module">
-  // ── Capacitor 插件导入 ────────────────────────────────
-  import { registerPlugin } from './capacitor/capacitor.js';
-  import { NFC }            from './capacitor/nfc/index.js';
+<!-- ── 调试日志 ───────────────────────────────────────── -->
+<div id="debug-log" class="section">
+  <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
+    <span>调试日志</span>
+    <button class="btn btn-gray btn-sm" onclick="clearLog()">清空</button>
+  </div>
+  <div class="log-body" id="log-body"></div>
+</div>
 
-  const ScanPlugin  = registerPlugin('ScanPlugin');
-  const PrintPlugin = registerPlugin('PrintPlugin');
+<script type="module">
+  // ── 调试日志 ───────────────────────────────────────────
+  const logBody = document.getElementById('log-body');
+
+  window.log = function(msg, type = 'plain') {
+    const now = new Date().toTimeString().slice(0, 8);
+    const line = document.createElement('div');
+    line.className = 'log-line ' + type;
+    line.textContent = `[${now}] ${msg}`;
+    logBody.appendChild(line);
+    logBody.scrollTop = logBody.scrollHeight;
+    console.log(`[${type}] ${msg}`);
+  };
+
+  window.clearLog = () => { logBody.innerHTML = ''; };
+
+  // 拦截全局错误
+  window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
+  window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
+
+  // ── Capacitor 插件导入 ────────────────────────────────
+  log('正在导入 Capacitor…', 'info');
+  let ScanPlugin, PrintPlugin, NFC;
+  try {
+    const cap = await import('./capacitor/capacitor.js');
+    log('Capacitor 加载成功，platform=' + cap.Capacitor?.getPlatform?.(), 'ok');
+
+    const { registerPlugin } = cap;
+    ScanPlugin  = registerPlugin('ScanPlugin');
+    PrintPlugin = registerPlugin('PrintPlugin');
+    log('ScanPlugin / PrintPlugin 已注册', 'ok');
+
+    const nfcMod = await import('./capacitor/nfc/index.js');
+    NFC = nfcMod.NFC;
+    log('NFC 插件加载成功', 'ok');
+  } catch (e) {
+    log('插件导入失败: ' + e.message, 'err');
+  }
 
   const NFC_PREFIX = 'kaihang://nfc/';
 
@@ -123,23 +182,30 @@
   let scanListener = null;
 
   async function initScan() {
+    log('initScan() 开始…', 'info');
     try {
       scanListener = await ScanPlugin.addListener('scanResult', ({ value }) => {
+        log('扫码结果: ' + value, 'ok');
         document.getElementById('scan-result').textContent = value;
         setStatus('scan-status', '扫码成功', 'ok');
       });
       setStatus('scan-status', '监听中，等待扫码枪触发', 'info');
+      log('扫码监听注册成功', 'ok');
     } catch (e) {
+      log('initScan 失败: ' + e.message, 'err');
       setStatus('scan-status', '初始化失败：' + e.message, 'err');
     }
   }
 
   window.startScan = async () => {
-    setStatus('scan-status', '触发中…', 'info');
-    await ScanPlugin.startScan();
+    log('startScan()', 'info');
+    try {
+      await ScanPlugin.startScan();
+    } catch(e) { log('startScan 失败: ' + e.message, 'err'); }
   };
 
   window.stopScan = async () => {
+    log('stopScan()', 'info');
     await ScanPlugin.stopScan();
     setStatus('scan-status', '已停止');
   };
@@ -148,16 +214,24 @@
   let printListener = null;
 
   window.connectPrinter = async () => {
+    log('connectPrinter() 开始…', 'info');
     setStatus('print-status', '连接中…', 'info');
     try {
-      printListener = await PrintPlugin.addListener('printStatus', ({ connection, status, flag }) => {
-        if (connection === 'connected') setStatus('print-status', '打印机已连接', 'ok');
-        else if (connection === 'failed') setStatus('print-status', '连接失败', 'err');
-        else if (status === 'PRINT_OK')  setStatus('print-status', `打印完成：${flag}`, 'ok');
-        else if (status)                 setStatus('print-status', `状态：${status}`, status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
+      if (printListener) { printListener.remove(); printListener = null; }
+      printListener = await PrintPlugin.addListener('printStatus', (data) => {
+        log('printStatus 回调: ' + JSON.stringify(data), data.connection === 'connected' || data.status === 'PRINT_OK' ? 'ok' : data.connection === 'failed' ? 'err' : 'warn');
+        const { connection, status, flag } = data;
+        if (connection === 'connected')      setStatus('print-status', '打印机已连接', 'ok');
+        else if (connection === 'failed')    setStatus('print-status', '连接失败', 'err');
+        else if (connection === 'closed')    setStatus('print-status', '打印机已关闭', 'warn');
+        else if (status === 'PRINT_OK')      setStatus('print-status', `打印完成：${flag}`, 'ok');
+        else if (status)                     setStatus('print-status', `状态：${status}`, status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
       });
+      log('printStatus 监听注册成功', 'ok');
       await PrintPlugin.connect();
+      log('PrintPlugin.connect() 调用完成', 'info');
     } catch (e) {
+      log('connectPrinter 异常: ' + e.message, 'err');
       setStatus('print-status', '连接失败：' + e.message, 'err');
     }
   };
@@ -167,17 +241,18 @@
     const machineId   = document.getElementById('machine-id').value.trim();
     const productType = document.getElementById('product-type').value.trim();
     if (!batchNo) { alert('请填写批次码'); return; }
-
+    log(`doPrint() batchNo=${batchNo}`, 'info');
     setStatus('print-status', '发送打印任务…', 'info');
     try {
       await PrintPlugin.prepareToPrintLabel();
+      log('prepareToPrintLabel() 完成', 'info');
       await PrintPlugin.printBatchLabel({
-        batchNo,
-        machineId,
-        productType,
-        date: new Date().toLocaleDateString('zh', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\//g, ''),
+        batchNo, machineId, productType,
+        date: new Date().toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' }).replace(/\//g, ''),
       });
+      log('printBatchLabel() 调用完成，等待回调…', 'info');
     } catch (e) {
+      log('doPrint 异常: ' + e.message, 'err');
       setStatus('print-status', '打印失败：' + e.message, 'err');
     }
   };
@@ -187,81 +262,76 @@
 
   function cancelNfc() {
     if (nfcListener) { nfcListener.remove(); nfcListener = null; }
-    NFC.removeAllListeners();
+    NFC?.removeAllListeners?.();
   }
 
-  window.nfcCancel = () => {
-    cancelNfc();
-    setStatus('nfc-status', '已停止');
-  };
+  window.nfcCancel = () => { cancelNfc(); setStatus('nfc-status', '已停止'); };
 
   window.nfcRead = async () => {
+    log('nfcRead()', 'info');
     cancelNfc();
     setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
     document.getElementById('nfc-result').textContent = '等待读取…';
-
-    nfcListener = await NFC.addListener('nfcTag', (tag) => {
-      try {
-        const records = tag.messages?.[0]?.records ?? [];
-        let found = null;
-        for (const r of records) {
-          if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
-            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-            found = uri.startsWith(NFC_PREFIX) ? uri.replace(NFC_PREFIX, '') : uri;
-            break;
+    try {
+      nfcListener = await NFC.addListener('nfcTag', (tag) => {
+        log('nfcTag 回调: ' + JSON.stringify(tag).slice(0, 200), 'ok');
+        try {
+          const records = tag.messages?.[0]?.records ?? [];
+          let found = null;
+          for (const r of records) {
+            if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
+              const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+              found = uri.startsWith(NFC_PREFIX) ? uri.replace(NFC_PREFIX, '') : uri;
+              break;
+            }
           }
+          document.getElementById('nfc-result').textContent = found ?? JSON.stringify(records);
+          setStatus('nfc-status', found ? '读取成功（凯航数据）' : '读取成功（非凯航卡）', 'ok');
+        } catch (e) {
+          log('NFC 解析失败: ' + e.message, 'err');
+          setStatus('nfc-status', '解析失败：' + e.message, 'err');
         }
-        document.getElementById('nfc-result').textContent = found ?? JSON.stringify(records);
-        setStatus('nfc-status', found ? '读取成功（凯航数据）' : '读取成功（非凯航卡）', 'ok');
-      } catch (e) {
-        setStatus('nfc-status', '解析失败：' + e.message, 'err');
-      }
-      cancelNfc();
-    });
+        cancelNfc();
+      });
+      log('NFC 监听注册成功', 'ok');
+    } catch(e) { log('nfcRead 失败: ' + e.message, 'err'); }
   };
 
   window.nfcWrite = async () => {
     const content = document.getElementById('nfc-write-data').value.trim();
     if (!content) { alert('请填写写入内容'); return; }
+    log(`nfcWrite() content=${content}`, 'info');
     cancelNfc();
     setStatus('nfc-status', '准备写入… 请贴近 NFC 标签', 'info');
-
-    nfcListener = await NFC.addListener('nfcTag', async () => {
-      try {
-        const encoder = new TextEncoder();
-        const uri = NFC_PREFIX + content;
-        const uriPayload = new Uint8Array(1 + uri.length);
-        uriPayload[0] = 0x00;
-        uriPayload.set(encoder.encode(uri), 1);
-
-        await NFC.write({
-          records: [
-            { tnf: 1, type: Array.from(encoder.encode('U')), id: [], payload: Array.from(uriPayload) },
-            { tnf: 4, type: Array.from(encoder.encode('android.com:pkg')), id: [], payload: Array.from(encoder.encode('com.kaihang.scanner')) },
-          ]
-        });
-        setStatus('nfc-status', '写入成功！', 'ok');
-      } catch (e) {
-        setStatus('nfc-status', '写入失败：' + e.message, 'err');
-      }
-      cancelNfc();
-    });
+    try {
+      nfcListener = await NFC.addListener('nfcTag', async () => {
+        try {
+          const encoder = new TextEncoder();
+          const uri = NFC_PREFIX + content;
+          const uriPayload = new Uint8Array(1 + uri.length);
+          uriPayload[0] = 0x00;
+          uriPayload.set(encoder.encode(uri), 1);
+          await NFC.write({
+            records: [
+              { tnf: 1, type: Array.from(encoder.encode('U')), id: [], payload: Array.from(uriPayload) },
+              { tnf: 4, type: Array.from(encoder.encode('android.com:pkg')), id: [], payload: Array.from(encoder.encode('com.kaihang.scanner')) },
+            ]
+          });
+          log('NFC 写入成功', 'ok');
+          setStatus('nfc-status', '写入成功！', 'ok');
+        } catch (e) {
+          log('NFC 写入失败: ' + e.message, 'err');
+          setStatus('nfc-status', '写入失败：' + e.message, 'err');
+        }
+        cancelNfc();
+      });
+    } catch(e) { log('nfcWrite 监听失败: ' + e.message, 'err'); }
   };
 
   // ── 启动 ──────────────────────────────────────────────
-  initScan();
-  connectPrinter();
-</script>
-
-<!-- 兜底：Capacitor bridge 未加载时的提示 -->
-<script>
-  window.addEventListener('error', function(e) {
-    if (e.message && e.message.includes('capacitor')) {
-      document.querySelector('.header').insertAdjacentHTML('afterend',
-        '<div style="background:#ff3b30;color:#fff;padding:10px 16px;font-size:13px;">⚠️ 请在 APK 内运行，浏览器不支持硬件插件</div>'
-      );
-    }
-  });
+  log('页面初始化开始', 'info');
+  if (ScanPlugin)  initScan();
+  if (PrintPlugin) connectPrinter();
 </script>
 </body>
 </html>
