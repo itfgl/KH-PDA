@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Build;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -44,7 +45,12 @@ public class ScanPlugin extends Plugin {
                 notifyListeners(EVENT_SCAN, data);
             }
         };
-        getContext().registerReceiver(scanReceiver, new IntentFilter(ACTION_RESULT));
+        // Android 13+（API 33）必须显式声明 RECEIVER_EXPORTED，否则跨 App 广播收不到
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getContext().registerReceiver(scanReceiver, new IntentFilter(ACTION_RESULT), Context.RECEIVER_EXPORTED);
+        } else {
+            getContext().registerReceiver(scanReceiver, new IntentFilter(ACTION_RESULT));
+        }
         receiverRegistered = true;
     }
 
