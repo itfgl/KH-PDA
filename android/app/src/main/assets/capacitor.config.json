@@ -1,0 +1,6 @@
+{
+	"appId": "com.kaihang.scanner",
+	"appName": "凯航扫码",
+	"webDir": "www",
+	"bundledWebRuntime": false
+}
