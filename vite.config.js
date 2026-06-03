@@ -1,16 +1,14 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  root: 'src',
   build: {
-    outDir: '../www',
-    emptyOutDir: false,   // 不清空 www/，保留 index.html
-    rollupOptions: {
-      input: 'src/main.js',
-      output: {
-        entryFileNames: 'plugins.js',
-        format: 'iife',
-      },
+    outDir: 'www',
+    emptyOutDir: false,
+    lib: {
+      entry: './src/main.js',
+      formats: ['iife'],
+      name: 'KaihangPlugins',
+      fileName: () => 'plugins.js',
     },
   },
 });
