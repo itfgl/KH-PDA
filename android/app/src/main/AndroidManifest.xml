@@ -29,11 +29,26 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- NFC 贴卡唤醒，kaihang://nfc/<业务数据> -->
+            <!-- 已写入凯航数据的卡：精确匹配 kaihang://nfc/ URI -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="kaihang" android:host="nfc" />
+            </intent-filter>
+
+            <!-- 空白卡 / 非 NDEF 卡：匹配常见卡类型（Ndef / NdefFormatable / NfcA 等） -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/nfc_tech_filter" />
+
+            <!-- 兜底：任意 NFC 卡都唤起本 App（优先级最低，系统级兜底） -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TAG_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
         </activity>
