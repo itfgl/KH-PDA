@@ -130,7 +130,8 @@
   <div class="log-body" id="log-body"></div>
 </div>
 
-<script type="module">
+<script src="plugins.js"></script>
+<script>
   // ── 调试日志 ───────────────────────────────────────────
   const logBody = document.getElementById('log-body');
 
@@ -146,29 +147,16 @@
 
   window.clearLog = () => { logBody.innerHTML = ''; };
 
-  // 拦截全局错误
   window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
   window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
 
-  // ── Capacitor 插件导入 ────────────────────────────────
-  log('正在导入 Capacitor…', 'info');
-  let ScanPlugin, PrintPlugin, NFC;
-  try {
-    const cap = await import('./capacitor/capacitor.js');
-    log('Capacitor 加载成功，platform=' + cap.Capacitor?.getPlatform?.(), 'ok');
+  // plugins.js 已把 ScanPlugin / PrintPlugin / NFC 挂到 window
+  log('platform=' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
+  log('ScanPlugin=' + (window.ScanPlugin ? 'ok' : 'missing'), window.ScanPlugin ? 'ok' : 'err');
+  log('PrintPlugin=' + (window.PrintPlugin ? 'ok' : 'missing'), window.PrintPlugin ? 'ok' : 'err');
+  log('NFC=' + (window.NFC ? 'ok' : 'missing'), window.NFC ? 'ok' : 'err');
 
-    const { registerPlugin } = cap;
-    ScanPlugin  = registerPlugin('ScanPlugin');
-    PrintPlugin = registerPlugin('PrintPlugin');
-    log('ScanPlugin / PrintPlugin 已注册', 'ok');
-
-    const nfcMod = await import('./capacitor/nfc/index.js');
-    NFC = nfcMod.NFC;
-    log('NFC 插件加载成功', 'ok');
-  } catch (e) {
-    log('插件导入失败: ' + e.message, 'err');
-  }
-
+  const { ScanPlugin, PrintPlugin, NFC } = window;
   const NFC_PREFIX = 'kaihang://nfc/';
 
   // ── 工具 ─────────────────────────────────────────────
@@ -333,5 +321,6 @@
   if (ScanPlugin)  initScan();
   if (PrintPlugin) connectPrinter();
 </script>
+
 </body>
 </html>

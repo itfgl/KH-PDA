@@ -4,7 +4,8 @@
   "description": "凯航工业生产质检系统 Android 壳",
   "main": "index.js",
   "scripts": {
-    "sync": "npx cap sync android"
+    "build": "vite build",
+    "sync": "npm run build && npx cap sync android"
   },
   "keywords": [],
   "author": "kaihang",
@@ -13,7 +14,8 @@
   "dependencies": {
     "@capacitor/android": "^8.2.0",
     "@capacitor/core": "^8.2.0",
-    "@capgo/capacitor-nfc": "^8.0.28"
+    "@capgo/capacitor-nfc": "^8.0.28",
+    "vite": "^5.0.0"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

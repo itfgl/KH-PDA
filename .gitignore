@@ -1,5 +1,9 @@
 node_modules/
 
+# Vite 构建产物（CI 动态生成）
+www/plugins.js
+www/assets/
+
 # 签名 keystore（私钥，绝对不入库，通过 GitHub Secrets 注入）
 *.jks
 *.keystore

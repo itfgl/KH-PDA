@@ -24,9 +24,10 @@ jobs:
         distribution: 'zulu'
         java-version: '21'
 
-    - name: 4. 安装依赖并同步 Capacitor
+    - name: 4. 安装依赖、构建 JS、同步 Capacitor
       run: |
         npm install
+        npm run build
         npx cap sync android
 
     - name: 5. 编译 Debug APK（可直接装机测试，无需签名配置）
