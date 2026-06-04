@@ -86,7 +86,7 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 机器二维码标签
-     * 布局 384×320：大二维码居中，下方机器信息三行
+     * 布局 384×300：大二维码居中，下方机器信息三行
      * QR 内容格式：machineId|productType|date
      */
     @PluginMethod
@@ -97,21 +97,38 @@ public class PrintPlugin extends Plugin {
 
         if (machineId.isEmpty()) { call.reject("machineId is required"); return; }
 
-        String qrContent = machineId + "|" + productType + "|" + date;
+        // 后台线程执行，避免主线程 ANR
+        new Thread(() -> {
+            try {
+                String qrContent = machineId + "|" + productType + "|" + date;
 
-        Bitmap qr = BarcodeCreater.createBarcode(
-            getContext(), qrContent, 220, 220, false, 2  // type 2 = QR
-        );
+                Bitmap qr = BarcodeCreater.createBarcode(
+                    getContext(), qrContent, 200, 200, false, 2
+                );
+                if (qr == null) {
+                    call.reject("QR code generation failed for content: " + qrContent);
+                    return;
+                }
 
-        Bitmap label = new AbsoluteLayoutBitmap(384, 320)
-            .addBmp(qr, 82, 8)                                     // 居中（(384-220)/2=82）
-            .addText("机 器：" + machineId, 26, 20, 244)
-            .addText("品 类：" + productType, 24, 20, 272)
-            .addText("日 期：" + date, 24, 20, 300)
-            .getBitmap();
+                // 布局高度收紧到 300，防止超出打印机最大进纸
+                Bitmap label = new AbsoluteLayoutBitmap(384, 300)
+                    .addBmp(qr, 92, 8)                          // 居中（(384-200)/2=92）
+                    .addText("机 器：" + machineId, 24, 16, 224)
+                    .addText("品 类：" + productType, 22, 16, 252)
+                    .addText("日 期：" + date, 22, 16, 278)
+                    .getBitmap();
 
-        Printer.print(new BitmapData(label, 15, 0), 16, "machine_qr_" + machineId, false);
-        call.resolve();
+                if (label == null) {
+                    call.reject("Label bitmap creation failed");
+                    return;
+                }
+
+                Printer.print(new BitmapData(label, 15, 0), 16, "machine_qr_" + machineId, false);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("printMachineQR error: " + e.getMessage(), e);
+            }
+        }).start();
     }
 
     @Override
