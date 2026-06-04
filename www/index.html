@@ -498,7 +498,7 @@
         log('BarcodeDetector API 不存在，使用 ZXing', 'info');
       }
 
-      // ── 降级到 ZXing ──
+      // ── 降级到 ZXing（事件驱动：Promise 包装，回调外关相机）──
       if (!usedApi) {
         if (!window.ZXingReader) {
           setStatus('cam-status', '⚠️ 无可用扫码引擎', 'err');
@@ -507,12 +507,23 @@
         }
         log('ZXing 开始检测…', 'info');
         setStatus('cam-status', '扫描中（ZXing）…', 'info');
+
         const reader = new window.ZXingReader();
         camZxing = reader;
-        reader.decodeFromVideoElement(v, (result, err) => {
-          if (result) {
-            onResult(result.getText(), result.getBarcodeFormat().toString());
-          }
+
+        // 用 Promise 接收第一个结果，不在回调内直接操作相机
+        const resultPromise = new Promise((resolve, reject) => {
+          reader.decodeFromVideoElement(v, (result, err) => {
+            if (result) resolve({ val: result.getText(), fmt: result.getBarcodeFormat().toString() });
+            // err 是正常的"未检测到"，不需要 reject
+          });
+        });
+
+        // 在 Promise 解析后（回调外）关相机，时序安全
+        resultPromise.then(({ val, fmt }) => {
+          onResult(val, fmt);  // onResult 内调 stopCamScan，此时已在回调外
+        }).catch(e => {
+          log('ZXing 异常: ' + e.message, 'err');
         });
       }
 
