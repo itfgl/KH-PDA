@@ -3,278 +3,379 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>凯航扫码 Demo</title>
+  <title>凯航扫码</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, sans-serif; background: #f2f2f7; color: #1c1c1e; }
+    body { font-family: -apple-system, sans-serif; background: #f2f2f7; color: #1c1c1e;
+           display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
 
+    /* ── Header ── */
     .header {
       background: #1c1c1e; color: #fff;
-      padding: 16px 20px;
-      font-size: 18px; font-weight: 600;
+      padding: 12px 16px 8px;
+      flex-shrink: 0;
     }
+    .header-title { font-size: 17px; font-weight: 600; }
+    .header-sub   { font-size: 11px; opacity: 0.5; margin-top: 1px; }
 
-    .section {
-      margin: 12px; background: #fff;
-      border-radius: 12px; overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex; background: #fff;
+      border-bottom: 1px solid #e5e5ea;
+      flex-shrink: 0;
     }
-    .section-title {
-      padding: 14px 16px 10px;
+    .tab-item {
+      flex: 1; padding: 10px 4px 8px;
+      text-align: center; cursor: pointer;
+      font-size: 12px; color: #8e8e93;
+      border-bottom: 2px solid transparent;
+      transition: all .15s;
+      user-select: none;
+    }
+    .tab-item .tab-icon { font-size: 20px; display: block; margin-bottom: 2px; }
+    .tab-item.active { color: #007aff; border-bottom-color: #007aff; }
+
+    /* ── Tab Content ── */
+    .tab-content { flex: 1; overflow-y: auto; display: none; padding: 12px; }
+    .tab-content.active { display: block; }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff; border-radius: 12px;
+      padding: 14px 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06);
+      margin-bottom: 12px;
+    }
+    .card-title {
       font-size: 13px; font-weight: 600;
-      color: #8e8e93; text-transform: uppercase; letter-spacing: .5px;
+      color: #8e8e93; text-transform: uppercase;
+      letter-spacing: .4px; margin-bottom: 10px;
     }
-    .section-body { padding: 0 16px 16px; }
 
+    /* ── Status ── */
     .status-bar {
-      margin-bottom: 12px; padding: 10px 14px;
-      border-radius: 8px; font-size: 14px; line-height: 1.4;
-      background: #f2f2f7; color: #3a3a3c; min-height: 42px;
+      padding: 10px 12px; border-radius: 8px;
+      font-size: 14px; line-height: 1.4;
+      background: #f2f2f7; color: #3a3a3c;
+      margin-bottom: 10px; min-height: 40px;
     }
     .status-bar.ok   { background: #d1fae5; color: #065f46; }
     .status-bar.err  { background: #fee2e2; color: #991b1b; }
     .status-bar.info { background: #dbeafe; color: #1e40af; }
+    .status-bar.warn { background: #fef9c3; color: #854d0e; }
 
+    /* ── Inputs ── */
+    input[type=text] {
+      width: 100%; padding: 10px 12px; margin-bottom: 8px;
+      border: 1px solid #d1d1d6; border-radius: 8px; font-size: 15px;
+      background: #fff;
+    }
+    input[type=text]:focus { outline: none; border-color: #007aff; }
+
+    /* ── Buttons ── */
     .btn {
-      display: inline-block; padding: 10px 20px;
+      display: inline-block; padding: 10px 16px;
       border-radius: 8px; border: none; cursor: pointer;
-      font-size: 15px; font-weight: 500; margin: 4px 4px 0 0;
+      font-size: 14px; font-weight: 500; margin: 3px 3px 0 0;
     }
     .btn-primary { background: #007aff; color: #fff; }
     .btn-success { background: #34c759; color: #fff; }
     .btn-danger  { background: #ff3b30; color: #fff; }
-    .btn-gray    { background: #e5e5ea; color: #1c1c1e; }
-    .btn-sm      { padding: 6px 12px; font-size: 13px; }
+    .btn-gray    { background: #e5e5ea; color: #3a3a3c; }
+    .btn-full    { width: 100%; margin: 6px 0 0; text-align: center; }
     .btn:active  { opacity: .75; }
 
-    input[type=text] {
-      width: 100%; padding: 10px 12px; margin-bottom: 10px;
-      border: 1px solid #d1d1d6; border-radius: 8px; font-size: 15px;
-    }
-
-    @keyframes scanline {
-      0%   { top: 10%; }
-      50%  { top: 85%; }
-      100% { top: 10%; }
-    }
-
+    /* ── Result Box ── */
     .result-box {
-      margin-top: 10px; padding: 10px 12px;
-      background: #f2f2f7; border-radius: 8px;
-      font-size: 13px; font-family: monospace;
-      word-break: break-all; min-height: 36px;
+      padding: 10px 12px; background: #f2f2f7;
+      border-radius: 8px; font-size: 13px;
+      font-family: monospace; word-break: break-all;
+      min-height: 36px; margin-top: 8px;
     }
 
-    /* 调试日志 */
-    #debug-log {
-      margin: 0 12px 20px; background: #1c1c1e;
-      border-radius: 12px; overflow: hidden;
+    /* ── Camera ── */
+    #cam-wrap {
+      position: relative; border-radius: 10px;
+      overflow: hidden; margin-bottom: 10px;
+      background: #000; display: none;
     }
-    #debug-log .section-title { color: #636366; }
-    #debug-log .log-body {
-      padding: 0 12px 12px; max-height: 260px; overflow-y: auto;
+    #cam-video { width: 100%; display: block; max-height: 240px; object-fit: cover; }
+    .viewfinder {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 56%; height: 44%;
+      pointer-events: none;
     }
-    .log-line {
-      font-family: monospace; font-size: 12px; line-height: 1.6;
-      padding: 2px 0; border-bottom: 1px solid #2c2c2e;
-      white-space: pre-wrap; word-break: break-all;
+    .vf-corner {
+      position: absolute; width: 22px; height: 22px;
+      border-color: #007aff; border-style: solid;
     }
+    .vf-tl { top:0; left:0;  border-width: 3px 0 0 3px; border-radius: 3px 0 0 0; }
+    .vf-tr { top:0; right:0; border-width: 3px 3px 0 0; border-radius: 0 3px 0 0; }
+    .vf-bl { bottom:0; left:0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 3px; }
+    .vf-br { bottom:0; right:0; border-width: 0 3px 3px 0; border-radius: 0 0 3px 0; }
+    .vf-line {
+      position: absolute; left: 4%; right: 4%; height: 2px;
+      background: linear-gradient(90deg, transparent, #007aff, transparent);
+      animation: scanline 2s ease-in-out infinite;
+    }
+    @keyframes scanline { 0%,100% { top: 8%; } 50% { top: 88%; } }
+
+    .cam-badge {
+      position: absolute; bottom: 8px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.6); color: #fff;
+      font-size: 11px; padding: 3px 10px;
+      border-radius: 99px; white-space: nowrap;
+    }
+
+    /* ── Debug Log ── */
+    #log-body {
+      background: #1c1c1e; border-radius: 10px;
+      padding: 10px 12px; max-height: 320px;
+      overflow-y: auto; font-family: monospace;
+    }
+    .log-line { font-size: 12px; line-height: 1.7; border-bottom: 1px solid #2c2c2e;
+                white-space: pre-wrap; word-break: break-all; }
     .log-line.info  { color: #64d2ff; }
     .log-line.ok    { color: #30d158; }
     .log-line.err   { color: #ff453a; }
     .log-line.warn  { color: #ffd60a; }
     .log-line.plain { color: #ebebf5; }
+    .log-actions { display: flex; gap: 8px; margin-bottom: 8px; }
   </style>
 </head>
 <body>
 
+<!-- Header -->
 <div class="header">
-  凯航扫码 — 功能 Demo
-  <div id="build-time" style="font-size:11px;font-weight:400;opacity:0.6;margin-top:2px;">build: 加载中…</div>
+  <div class="header-title">凯航扫码</div>
+  <div class="header-sub" id="build-time">build: —</div>
 </div>
 
-<!-- ── 扫码 ────────────────────────────────────────── -->
-<div class="section" id="scan-section">
-  <div class="section-title">扫码枪</div>
-  <div class="section-body">
+<!-- Tab Bar -->
+<div class="tab-bar">
+  <div class="tab-item active" onclick="switchTab('scan')">
+    <span class="tab-icon">⌨️</span>扫码
+  </div>
+  <div class="tab-item" onclick="switchTab('print')">
+    <span class="tab-icon">🖨️</span>打印
+  </div>
+  <div class="tab-item" onclick="switchTab('nfc')">
+    <span class="tab-icon">📡</span>NFC
+  </div>
+  <div class="tab-item" onclick="switchTab('log')">
+    <span class="tab-icon">🪲</span>日志
+  </div>
+</div>
+
+<!-- ═══ Tab: 扫码 ═══ -->
+<div class="tab-content active" id="tab-scan">
+
+  <!-- 硬件扫码枪 -->
+  <div class="card">
+    <div class="card-title">硬件扫码枪（X8）</div>
     <div class="status-bar" id="scan-status">等待初始化…</div>
     <button class="btn btn-primary" onclick="startScan()">触发扫码</button>
     <button class="btn btn-gray"    onclick="stopScan()">停止</button>
     <div class="result-box" id="scan-result">扫码结果显示在这里</div>
   </div>
+
+  <!-- 相机扫码 -->
+  <div class="card">
+    <div class="card-title">相机扫码（普通安卓 / 支持一维 + 二维）</div>
+    <div class="status-bar" id="cam-status">支持 Code128、QR、EAN 等格式</div>
+    <div id="cam-wrap">
+      <video id="cam-video" autoplay playsinline muted></video>
+      <div class="viewfinder">
+        <div class="vf-corner vf-tl"></div>
+        <div class="vf-corner vf-tr"></div>
+        <div class="vf-corner vf-bl"></div>
+        <div class="vf-corner vf-br"></div>
+        <div class="vf-line"></div>
+      </div>
+      <div class="cam-badge">对准条码 / 二维码</div>
+    </div>
+    <div class="result-box" id="cam-result">识别结果显示在这里</div>
+    <div style="margin-top:8px;">
+      <button class="btn btn-primary" id="cam-btn-start" onclick="startCamScan()">开始扫码</button>
+      <button class="btn btn-danger"  id="cam-btn-stop"  onclick="stopCamScan()" style="display:none;">停止</button>
+    </div>
+  </div>
+
 </div>
 
-<!-- ── 打印 ────────────────────────────────────────── -->
-<div class="section" id="print-section">
-  <div class="section-title">标签打印</div>
-  <div class="section-body">
-    <div class="status-bar" id="print-status">等待连接打印机…</div>
+<!-- ═══ Tab: 打印 ═══ -->
+<div class="tab-content" id="tab-print">
+
+  <div class="card">
+    <div class="card-title">打印参数</div>
     <input type="text" id="batch-no"     placeholder="批次码（如 M05260604030012）" value="M05260604030012">
     <input type="text" id="machine-id"   placeholder="机器编号" value="M05">
     <input type="text" id="product-type" placeholder="产品类型" value="电容">
-    <button class="btn btn-primary" onclick="doPrint()">打印批次条码</button>
-    <button class="btn btn-success" onclick="doPrintMachineQR()">打印机器二维码</button>
-    <button class="btn btn-gray"    onclick="connectPrinter()">重连打印机</button>
   </div>
+
+  <div class="card">
+    <div class="card-title">批次标签（一维码）</div>
+    <div class="status-bar" id="print-status">等待连接打印机…</div>
+    <p style="font-size:13px;color:#8e8e93;margin-bottom:8px;">
+      Code128 一维码 + 批次码明文 + 机器/日期/品类
+    </p>
+    <button class="btn btn-primary btn-full" onclick="doPrint()">打印批次条码</button>
+    <button class="btn btn-gray    btn-full" onclick="connectPrinter()">重连打印机</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">机器二维码</div>
+    <p style="font-size:13px;color:#8e8e93;margin-bottom:8px;">
+      QR 码（机器号|品类|日期）+ 三行机器信息
+    </p>
+    <button class="btn btn-success btn-full" onclick="doPrintMachineQR()">打印机器二维码</button>
+  </div>
+
 </div>
 
-<!-- ── 相机扫码 ───────────────────────────────────────── -->
-<div class="section">
-  <div class="section-title">相机扫码（普通安卓测试用）</div>
-  <div class="section-body">
-    <div class="status-bar" id="cam-status">点击开始扫码</div>
-    <div id="cam-container" style="position:relative;display:none;margin-bottom:10px;">
-      <video id="cam-video" autoplay playsinline style="width:100%;border-radius:8px;display:block;"></video>
-      <!-- 取景框 -->
-      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;height:40%;pointer-events:none;">
-        <div style="position:absolute;top:0;left:0;width:24px;height:24px;border-top:3px solid #007aff;border-left:3px solid #007aff;border-radius:2px 0 0 0;"></div>
-        <div style="position:absolute;top:0;right:0;width:24px;height:24px;border-top:3px solid #007aff;border-right:3px solid #007aff;border-radius:0 2px 0 0;"></div>
-        <div style="position:absolute;bottom:0;left:0;width:24px;height:24px;border-bottom:3px solid #007aff;border-left:3px solid #007aff;border-radius:0 0 0 2px;"></div>
-        <div style="position:absolute;bottom:0;right:0;width:24px;height:24px;border-bottom:3px solid #007aff;border-right:3px solid #007aff;border-radius:0 0 2px 0;"></div>
-        <div id="scan-line" style="position:absolute;left:0;right:0;height:2px;background:#007aff;opacity:0.8;animation:scanline 2s linear infinite;"></div>
-      </div>
-    </div>
-    <div class="result-box" id="cam-result">扫码结果显示在这里</div>
-    <button class="btn btn-primary" onclick="startCamScan()" id="cam-btn-start">开始扫码</button>
-    <button class="btn btn-danger"  onclick="stopCamScan()"  id="cam-btn-stop" style="display:none;">停止扫码</button>
-  </div>
-</div>
+<!-- ═══ Tab: NFC ═══ -->
+<div class="tab-content" id="tab-nfc">
 
-<!-- ── NFC ─────────────────────────────────────────── -->
-<div class="section">
-  <div class="section-title">NFC 读写</div>
-  <div class="section-body">
-    <div class="status-bar" id="nfc-status">就绪，请选择操作</div>
+  <div class="card">
+    <div class="card-title">写入内容</div>
     <input type="text" id="nfc-write-data" placeholder="写入内容（如批次码）" value="M05260604030012">
+  </div>
+
+  <div class="card">
+    <div class="card-title">NFC 操作</div>
+    <div class="status-bar" id="nfc-status">就绪，请选择操作</div>
     <button class="btn btn-primary" onclick="nfcRead()">读取卡片</button>
     <button class="btn btn-success" onclick="nfcWrite()">写入卡片</button>
-    <button class="btn btn-danger"  onclick="nfcCancel()">停止</button>
-    <div class="result-box" id="nfc-result">NFC 读取结果显示在这里</div>
-    <button id="nfc-print-btn" class="btn btn-success" onclick="doPrint()" style="display:none;margin-top:10px;width:100%;">打印此批次条码</button>
+    <button class="btn btn-gray"    onclick="nfcCancel()">停止</button>
+    <div class="result-box" id="nfc-result">读取结果显示在这里</div>
+    <button id="nfc-print-btn" class="btn btn-success btn-full"
+            onclick="doPrint()" style="display:none;margin-top:8px;">
+      打印此批次条码
+    </button>
   </div>
+
+  <div class="card" style="background:#fffbeb;">
+    <div class="card-title" style="color:#92400e;">卡片兼容说明</div>
+    <p style="font-size:13px;color:#78350f;line-height:1.6;">
+      当前卡（MifareUltralight）：使用凯航原始格式写入，读写正常。<br>
+      换 NTAG213 贴纸后：自动切换 NDEF 格式，支持贴卡直接唤起 App。
+    </p>
+  </div>
+
 </div>
 
-<!-- ── 调试日志 ───────────────────────────────────────── -->
-<div id="debug-log" class="section">
-  <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
-    <span>调试日志</span>
-    <div>
-      <button class="btn btn-gray btn-sm" onclick="copyLog()" style="margin-right:6px;">复制</button>
-      <button class="btn btn-gray btn-sm" onclick="clearLog()">清空</button>
-    </div>
+<!-- ═══ Tab: 日志 ═══ -->
+<div class="tab-content" id="tab-log">
+  <div class="log-actions">
+    <button class="btn btn-gray" onclick="copyLog()" id="copy-btn">复制全部</button>
+    <button class="btn btn-gray" onclick="clearLog()">清空</button>
   </div>
-  <div class="log-body" id="log-body"></div>
+  <div id="log-body"></div>
 </div>
 
+<!-- ════════════════ Scripts ════════════════ -->
 <script src="plugins.js"></script>
 <script>
-  // ── 调试日志 ───────────────────────────────────────────
-  const logBody = document.getElementById('log-body');
+  // ── Tab 切换 ─────────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab-item').forEach((el, i) => {
+      const names = ['scan','print','nfc','log'];
+      el.classList.toggle('active', names[i] === name);
+    });
+    document.querySelectorAll('.tab-content').forEach(el => {
+      el.classList.toggle('active', el.id === 'tab-' + name);
+    });
+  }
 
-  window.log = function(msg, type = 'plain') {
-    const now = new Date().toTimeString().slice(0, 8);
-    const line = document.createElement('div');
-    line.className = 'log-line ' + type;
-    line.textContent = `[${now}] ${msg}`;
-    logBody.appendChild(line);
+  // ── 日志 ─────────────────────────────────────────────
+  const logBody = document.getElementById('log-body');
+  window.log = (msg, type = 'plain') => {
+    const t = new Date().toTimeString().slice(0, 8);
+    const el = document.createElement('div');
+    el.className = 'log-line ' + type;
+    el.textContent = `[${t}] ${msg}`;
+    logBody.appendChild(el);
     logBody.scrollTop = logBody.scrollHeight;
     console.log(`[${type}] ${msg}`);
   };
-
-  window.clearLog = () => { logBody.innerHTML = ''; };
-
+  window.clearLog = () => logBody.innerHTML = '';
   window.copyLog = () => {
-    const lines = [...logBody.querySelectorAll('.log-line')].map(el => el.textContent).join('\n');
-    navigator.clipboard.writeText(lines).then(
-      () => { const b = document.querySelector('[onclick="copyLog()"]'); b.textContent = '已复制'; setTimeout(() => b.textContent = '复制', 1500); },
-      () => alert(lines)  // 降级：弹窗显示
+    const text = [...logBody.querySelectorAll('.log-line')].map(e => e.textContent).join('\n');
+    const btn = document.getElementById('copy-btn');
+    navigator.clipboard.writeText(text).then(
+      () => { btn.textContent = '已复制 ✓'; setTimeout(() => btn.textContent = '复制全部', 1500); },
+      () => alert(text)
     );
   };
 
   window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
   window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
 
-  // plugins.js 已把 ScanPlugin / PrintPlugin / NFC 挂到 window
-  // 显示构建时间
-  const bt = window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh') : '未知';
-  document.getElementById('build-time').textContent = 'build: ' + bt;
-  log('build: ' + bt, 'plain');
-  log('platform=' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
-  log('ScanPlugin=' + (window.ScanPlugin ? 'ok' : 'missing'), window.ScanPlugin ? 'ok' : 'err');
-  log('PrintPlugin=' + (window.PrintPlugin ? 'ok' : 'missing'), window.PrintPlugin ? 'ok' : 'err');
-  log('KaihangNfc=' + (window.KaihangNfc ? 'ok' : 'missing'), window.KaihangNfc ? 'ok' : 'err');
-
+  // ── 插件引用 ──────────────────────────────────────────
   const { ScanPlugin, PrintPlugin, KaihangNfc } = window;
-  const NFC_PREFIX = 'kaihang://nfc/';
+  document.getElementById('build-time').textContent = 'build: ' +
+    (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh') : '—');
 
-  // ── 工具 ─────────────────────────────────────────────
+  log('build: ' + (window.BUILD_TIME ?? '—'), 'plain');
+  log('platform=' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
+  log('ScanPlugin='  + (ScanPlugin  ? 'ok' : 'missing'), ScanPlugin  ? 'ok' : 'err');
+  log('PrintPlugin=' + (PrintPlugin ? 'ok' : 'missing'), PrintPlugin ? 'ok' : 'err');
+  log('KaihangNfc='  + (KaihangNfc  ? 'ok' : 'missing'), KaihangNfc  ? 'ok' : 'err');
+
   function setStatus(id, msg, type = '') {
     const el = document.getElementById(id);
+    if (!el) return;
     el.textContent = msg;
     el.className = 'status-bar' + (type ? ' ' + type : '');
   }
 
-  // ── 扫码 ──────────────────────────────────────────────
-  let scanListener = null;
+  // ── 扫码枪 ────────────────────────────────────────────
   let scanAvailable = false;
-
   async function initScan() {
-    log('initScan() 开始…', 'info');
+    log('initScan()…', 'info');
     try {
-      scanListener = await ScanPlugin.addListener('scanResult', ({ value }) => {
-        log('扫码结果: ' + value, 'ok');
+      await ScanPlugin.addListener('scanResult', ({ value }) => {
+        log('扫码枪: ' + value, 'ok');
         document.getElementById('scan-result').textContent = value;
+        document.getElementById('batch-no').value = value;
         setStatus('scan-status', '扫码成功', 'ok');
       });
       scanAvailable = true;
       setStatus('scan-status', '监听中，等待扫码枪触发', 'info');
       log('扫码监听注册成功', 'ok');
     } catch (e) {
-      log('initScan 不可用（非 X8 设备）: ' + e.message, 'warn');
-      setStatus('scan-status', '⚠️ 扫码枪仅支持 X8 硬件', '');
-      // 禁用按钮
-      document.querySelectorAll('#scan-section button').forEach(b => b.disabled = true);
+      log('initScan 不可用（非 X8）: ' + e.message, 'warn');
+      setStatus('scan-status', '⚠️ 仅支持 X8 硬件', '');
+      document.querySelectorAll('#tab-scan .card:first-child button').forEach(b => b.disabled = true);
     }
   }
+  window.startScan = () => scanAvailable && ScanPlugin.startScan();
+  window.stopScan  = () => scanAvailable && ScanPlugin.stopScan();
 
-  window.startScan = async () => {
-    if (!scanAvailable) return;
-    log('startScan()', 'info');
-    try { await ScanPlugin.startScan(); } catch(e) { log('startScan 失败: ' + e.message, 'err'); }
-  };
-
-  window.stopScan = async () => {
-    if (!scanAvailable) return;
-    log('stopScan()', 'info');
-    await ScanPlugin.stopScan();
-    setStatus('scan-status', '已停止');
-  };
-
-  // ── 打印 ──────────────────────────────────────────────
-  let printListener = null;
+  // ── 打印机 ────────────────────────────────────────────
   let printAvailable = false;
-
   window.connectPrinter = async () => {
-    log('connectPrinter() 开始…', 'info');
     setStatus('print-status', '连接中…', 'info');
+    log('connectPrinter()…', 'info');
     try {
-      if (printListener) { printListener.remove(); printListener = null; }
-      printListener = await PrintPlugin.addListener('printStatus', (data) => {
-        log('printStatus 回调: ' + JSON.stringify(data), data.connection === 'connected' || data.status === 'PRINT_OK' ? 'ok' : data.connection === 'failed' ? 'err' : 'warn');
+      await PrintPlugin.addListener('printStatus', (data) => {
         const { connection, status, flag } = data;
+        log('printStatus: ' + JSON.stringify(data),
+          connection === 'connected' || status === 'PRINT_OK' ? 'ok' :
+          connection === 'failed' ? 'err' : 'warn');
         if (connection === 'connected')   { printAvailable = true; setStatus('print-status', '打印机已连接', 'ok'); }
         else if (connection === 'failed') setStatus('print-status', '连接失败', 'err');
-        else if (connection === 'closed') setStatus('print-status', '打印机已关闭', 'warn');
-        else if (status === 'PRINT_OK')   setStatus('print-status', `打印完成：${flag}`, 'ok');
-        else if (status)                  setStatus('print-status', `状态：${status}`, status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
+        else if (status === 'PRINT_OK')   setStatus('print-status', '打印完成：' + flag, 'ok');
+        else if (status)                  setStatus('print-status', status,
+          status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
       });
-      log('printStatus 监听注册成功', 'ok');
       await PrintPlugin.connect();
       log('PrintPlugin.connect() 调用完成', 'info');
     } catch (e) {
-      log('connectPrinter 不可用（非 X8 设备）: ' + e.message, 'warn');
-      setStatus('print-status', '⚠️ 打印机仅支持 X8 硬件', '');
-      document.querySelectorAll('#print-section button').forEach(b => b.disabled = true);
+      log('connectPrinter 不可用（非 X8）: ' + e.message, 'warn');
+      setStatus('print-status', '⚠️ 仅支持 X8 硬件', '');
     }
   };
 
@@ -288,172 +389,149 @@
   }
 
   window.doPrint = async () => {
-    if (!printAvailable) { alert('打印机未连接或不支持'); return; }
+    if (!printAvailable) { alert('打印机未连接'); return; }
     const p = getPrintParams();
     if (!p.batchNo) { alert('请填写批次码'); return; }
-    log(`打印批次条码 batchNo=${p.batchNo}`, 'info');
-    setStatus('print-status', '发送打印任务…', 'info');
+    log('打印批次条码 ' + p.batchNo, 'info');
+    setStatus('print-status', '发送打印…', 'info');
     try {
       await PrintPlugin.prepareToPrintLabel();
       await PrintPlugin.printBatchLabel(p);
-      log('printBatchLabel() 已发送', 'info');
     } catch (e) {
-      log('打印异常: ' + e.message, 'err');
+      log('打印失败: ' + e.message, 'err');
       setStatus('print-status', '打印失败：' + e.message, 'err');
     }
   };
 
   window.doPrintMachineQR = async () => {
-    if (!printAvailable) { alert('打印机未连接或不支持'); return; }
+    if (!printAvailable) { alert('打印机未连接'); return; }
     const p = getPrintParams();
     if (!p.machineId) { alert('请填写机器编号'); return; }
-    log(`打印机器二维码 machineId=${p.machineId}`, 'info');
-    setStatus('print-status', '发送二维码打印任务…', 'info');
+    log('打印机器二维码 ' + p.machineId, 'info');
+    setStatus('print-status', '发送二维码打印…', 'info');
     try {
       await PrintPlugin.prepareToPrintLabel();
       await PrintPlugin.printMachineQR({ machineId: p.machineId, productType: p.productType, date: p.date });
-      log('printMachineQR() 已发送', 'info');
     } catch (e) {
-      log('二维码打印异常: ' + e.message, 'err');
+      log('二维码打印失败: ' + e.message, 'err');
       setStatus('print-status', '打印失败：' + e.message, 'err');
     }
   };
 
-  // 从扫码/NFC结果填入批次码并触发打印
-  window.printFromResult = async (batchNo) => {
-    document.getElementById('batch-no').value = batchNo;
-    log(`NFC→打印联动 batchNo=${batchNo}`, 'info');
-    await window.doPrint();
-  };
-
   // ── 相机扫码 ───────────────────────────────────────────
-  let camStream = null;
-  let camScanLoop = null;
+  let camStream = null, camLoop = null;
 
   window.startCamScan = async () => {
     try {
-      setStatus('cam-status', '请求相机权限…', 'info');
+      setStatus('cam-status', '请求相机…', 'info');
       camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-      const video = document.getElementById('cam-video');
-      video.srcObject = camStream;
-      await video.play();
-      document.getElementById('cam-container').style.display = 'block';
+      const v = document.getElementById('cam-video');
+      v.srcObject = camStream;
+      await v.play();
+      document.getElementById('cam-wrap').style.display = 'block';
       document.getElementById('cam-btn-start').style.display = 'none';
-      document.getElementById('cam-btn-stop').style.display = 'inline-block';
-      setStatus('cam-status', '扫描中… 将条码置于取景框内', 'info');
-      log('相机扫码已启动', 'ok');
+      document.getElementById('cam-btn-stop').style.display  = 'inline-block';
 
       if ('BarcodeDetector' in window) {
-        const detector = new BarcodeDetector({ formats: ['code_128','code_39','qr_code','ean_13','ean_8','data_matrix'] });
-        const scan = async () => {
+        setStatus('cam-status', '扫描中… 支持一维码 / 二维码', 'info');
+        const det = new BarcodeDetector({
+          formats: ['code_128','code_39','code_93','qr_code','ean_13','ean_8','data_matrix','aztec']
+        });
+        const loop = async () => {
           if (!camStream) return;
           try {
-            const codes = await detector.detect(video);
-            if (codes.length > 0) {
+            const codes = await det.detect(v);
+            if (codes.length) {
               const val = codes[0].rawValue;
               document.getElementById('cam-result').textContent = val;
-              setStatus('cam-status', `识别到：${val}`, 'ok');
-              log(`相机扫码结果: ${val}`, 'ok');
-              // 填入批次码输入框
               document.getElementById('batch-no').value = val;
+              setStatus('cam-status', `识别：${val}（${codes[0].format}）`, 'ok');
+              log('相机识别: ' + val + ' [' + codes[0].format + ']', 'ok');
               stopCamScan();
               return;
             }
           } catch(_) {}
-          camScanLoop = requestAnimationFrame(scan);
+          camLoop = requestAnimationFrame(loop);
         };
-        camScanLoop = requestAnimationFrame(scan);
+        camLoop = requestAnimationFrame(loop);
       } else {
-        setStatus('cam-status', '⚠️ 当前 WebView 不支持 BarcodeDetector，仅限查看画面', 'warn');
+        setStatus('cam-status', '⚠️ WebView 不支持 BarcodeDetector', 'warn');
         log('BarcodeDetector 不可用', 'warn');
       }
     } catch (e) {
+      setStatus('cam-status', '相机失败: ' + e.message, 'err');
       log('相机启动失败: ' + e.message, 'err');
-      setStatus('cam-status', '相机启动失败：' + e.message, 'err');
     }
   };
 
   window.stopCamScan = () => {
-    if (camScanLoop) { cancelAnimationFrame(camScanLoop); camScanLoop = null; }
+    if (camLoop) { cancelAnimationFrame(camLoop); camLoop = null; }
     if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-    document.getElementById('cam-container').style.display = 'none';
+    document.getElementById('cam-wrap').style.display = 'none';
     document.getElementById('cam-btn-start').style.display = 'inline-block';
-    document.getElementById('cam-btn-stop').style.display = 'none';
-    setStatus('cam-status', '已停止');
-    log('相机扫码已停止', 'info');
+    document.getElementById('cam-btn-stop').style.display  = 'none';
+    setStatus('cam-status', '支持 Code128、QR、EAN 等格式');
   };
 
   // ── NFC ───────────────────────────────────────────────
-  let nfcEventListener = null;
-  let nfcMode = null; // 'read' | 'write' | null(待机)
-  let lastNfcEvent = null;
-  let lastNfcEventTime = 0;
+  let nfcMode = null, lastNfcEvent = null, lastNfcTime = 0;
 
   async function nfcInit() {
     try {
-      nfcEventListener = await KaihangNfc.addListener('nfcEvent', handleNfcEvent);
+      await KaihangNfc.addListener('nfcEvent', handleNfcEvent);
       await KaihangNfc.startScanning();
-      log('NFC 前台拦截已激活', 'ok');
       setStatus('nfc-status', '就绪，请选择操作', '');
-    } catch(e) {
+      log('NFC 前台拦截已激活', 'ok');
+    } catch (e) {
+      setStatus('nfc-status', 'NFC 初始化失败', 'err');
       log('NFC 初始化失败: ' + e.message, 'err');
-      setStatus('nfc-status', 'NFC 初始化失败: ' + e.message, 'err');
     }
   }
 
   async function handleNfcEvent(event) {
-    lastNfcEvent = event;
-    lastNfcEventTime = Date.now();
-    const { techTypes, isNdef, isMifareUltralight, ndefMessage, mifareData } = event;
+    lastNfcEvent = event; lastNfcTime = Date.now();
+    const { isNdef, isMifareUltralight, ndefMessage, mifareData } = event;
     log(`nfcEvent mode=${nfcMode} isNdef=${isNdef} isMifare=${isMifareUltralight}`, 'info');
 
     if (nfcMode === 'read') {
       let found = null;
-
-      // 优先读 NDEF
       if (isNdef && ndefMessage) {
         for (const r of ndefMessage) {
           if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
             const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-            found = uri.startsWith(NFC_PREFIX) ? uri.replace(NFC_PREFIX, '') : uri;
+            found = uri.startsWith('kaihang://nfc/') ? uri.replace('kaihang://nfc/', '') : uri;
             break;
           }
         }
       }
-      // 其次读凯航自定义 Mifare 格式
       if (!found && mifareData) found = mifareData;
-
-      const display = found ?? `未知卡 techTypes=${JSON.stringify(techTypes)}`;
-      document.getElementById('nfc-result').textContent = display;
-      log('读取结果: ' + display, 'ok');
+      document.getElementById('nfc-result').textContent = found ?? '无凯航数据';
+      log('NFC 读取: ' + (found ?? '无数据'), found ? 'ok' : 'warn');
       nfcMode = null;
       if (found) {
-        // 填入批次码，显示联动打印按钮
         document.getElementById('batch-no').value = found;
-        setStatus('nfc-status', `读取成功：${found}`, 'ok');
-        document.getElementById('nfc-print-btn').style.display = 'inline-block';
+        setStatus('nfc-status', '读取成功：' + found, 'ok');
+        document.getElementById('nfc-print-btn').style.display = 'block';
       } else {
-        setStatus('nfc-status', '读取成功（无凯航数据）', '');
+        setStatus('nfc-status', '读取完成（无凯航数据）', '');
       }
 
     } else if (nfcMode === 'write') {
       const content = document.getElementById('nfc-write-data').value.trim();
-      log(`写入内容: ${content}，卡类型: isNdef=${isNdef} isMifare=${isMifareUltralight}`, 'info');
+      log('NFC 写入: ' + content, 'info');
       try {
         if (isNdef) {
-          // NTAG213/215/216 等 NDEF 卡
           await KaihangNfc.writeNdef({ data: content, allowFormat: true });
           log('NDEF 写入成功', 'ok');
         } else if (isMifareUltralight) {
-          // MifareUltralight 原始写入
           await KaihangNfc.writeMifareRaw({ data: content });
-          log('MifareUltralight 原始写入成功', 'ok');
+          log('MifareUltralight 写入成功', 'ok');
         } else {
-          throw new Error(`不支持的卡类型: ${JSON.stringify(techTypes)}`);
+          throw new Error('不支持的卡类型');
         }
         setStatus('nfc-status', '写入成功！', 'ok');
-      } catch(e) {
-        log('写入失败: ' + e.message, 'err');
+      } catch (e) {
+        log('NFC 写入失败: ' + e.message, 'err');
         setStatus('nfc-status', '写入失败：' + e.message, 'err');
       }
       nfcMode = null;
@@ -461,48 +539,31 @@
     }
   }
 
-  async function cancelNfc() {
-    nfcMode = null;
-  }
-
-  window.nfcCancel = () => {
-    nfcMode = null;
-    setStatus('nfc-status', '就绪，请选择操作', '');
-    log('NFC 模式已取消', 'info');
-  };
+  window.nfcCancel = () => { nfcMode = null; setStatus('nfc-status', '就绪，请选择操作', ''); };
 
   window.nfcRead = () => {
     nfcMode = 'read';
     document.getElementById('nfc-result').textContent = '等待读取…';
     document.getElementById('nfc-print-btn').style.display = 'none';
     setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
-    log('nfcRead() 模式已设置，请贴卡', 'info');
-    // 卡已在位（1.5秒内有事件）则立即处理
-    if (lastNfcEvent && Date.now() - lastNfcEventTime < 1500) {
-      log('卡已在位，立即读取', 'ok');
-      handleNfcEvent(lastNfcEvent);
-    }
+    log('nfcRead 模式，请贴卡', 'info');
+    if (lastNfcEvent && Date.now() - lastNfcTime < 1500) handleNfcEvent(lastNfcEvent);
   };
 
   window.nfcWrite = () => {
     const content = document.getElementById('nfc-write-data').value.trim();
     if (!content) { alert('请填写写入内容'); return; }
     nfcMode = 'write';
-    setStatus('nfc-status', `准备写入 [${content}]… 请贴近 NFC 标签`, 'info');
-    log(`nfcWrite() 模式已设置 content=${content}，请贴卡`, 'info');
-    // 卡已在位则立即写入
-    if (lastNfcEvent && Date.now() - lastNfcEventTime < 1500) {
-      log('卡已在位，立即写入', 'ok');
-      handleNfcEvent(lastNfcEvent);
-    }
+    setStatus('nfc-status', `准备写入 [${content}]…`, 'info');
+    log('nfcWrite 模式，请贴卡', 'info');
+    if (lastNfcEvent && Date.now() - lastNfcTime < 1500) handleNfcEvent(lastNfcEvent);
   };
 
-  // ── 启动 ──────────────────────────────────────────────
-  log('页面初始化开始', 'info');
-  if (ScanPlugin)  initScan();
-  if (PrintPlugin) connectPrinter();
-  if (KaihangNfc)  nfcInit();
+  // ── 启动 ─────────────────────────────────────────────
+  log('初始化开始', 'info');
+  initScan();
+  connectPrinter();
+  if (KaihangNfc) nfcInit();
 </script>
-
 </body>
 </html>
