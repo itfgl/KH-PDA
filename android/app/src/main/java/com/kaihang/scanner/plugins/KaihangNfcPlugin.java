@@ -157,6 +157,54 @@ public class KaihangNfcPlugin extends Plugin {
         }
     }
 
+    /**
+     * 清除卡片数据
+     * - NDEF 卡：写入空 NDEF 消息（erase）
+     * - MifareUltralight 卡：将页 4-7 全部写零（清除凯航格式魔数和数据）
+     */
+    @PluginMethod
+    public void clearTag(PluginCall call) {
+        Tag tag = lastTag.get();
+        if (tag == null) { call.reject("No tag available"); return; }
+
+        executor.execute(() -> {
+            try {
+                boolean cleared = false;
+
+                // 尝试 NDEF erase
+                Ndef ndef = Ndef.get(tag);
+                if (ndef != null && ndef.isWritable()) {
+                    ndef.connect();
+                    ndef.writeNdefMessage(new NdefMessage(
+                        new NdefRecord(NdefRecord.TNF_EMPTY, new byte[0], new byte[0], new byte[0])
+                    ));
+                    ndef.close();
+                    cleared = true;
+                    android.util.Log.d("KaihangNfc", "clearTag: NDEF erased");
+                }
+
+                // MifareUltralight：写零清页 4-7
+                MifareUltralight ul = MifareUltralight.get(tag);
+                if (ul != null) {
+                    ul.connect();
+                    byte[] zeros = new byte[4];
+                    ul.writePage(DATA_START_PAGE,     zeros);
+                    ul.writePage(DATA_START_PAGE + 1, zeros);
+                    ul.writePage(DATA_START_PAGE + 2, zeros);
+                    ul.writePage(DATA_START_PAGE + 3, zeros);
+                    ul.close();
+                    cleared = true;
+                    android.util.Log.d("KaihangNfc", "clearTag: Mifare pages zeroed");
+                }
+
+                if (cleared) { call.resolve(); }
+                else { call.reject("Tag type not supported for clear"); }
+            } catch (Exception e) {
+                call.reject("clearTag failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();

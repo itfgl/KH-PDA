@@ -175,7 +175,8 @@
   <div class="card">
     <div class="card-title">NFC</div>
     <div class="status" id="debug-nfc-status">监听中（mode=scan）</div>
-    <button class="btn btn-gray" onclick="clearNfcState()">清空NFC状态</button>
+    <button class="btn btn-gray" onclick="resetNfcUi()">重置界面状态</button>
+    <button class="btn btn-gray" onclick="startClearTag()" style="margin-top:6px">清空卡片数据（贴卡）</button>
   </div>
 
   <div class="card">
@@ -410,8 +411,8 @@ async function initNfcListener() {
           switchTab('setup');
           setStatus('setup-status', '检测到空白卡，请填写信息后写入', 'warn');
         }
-      } else if (nfcMode === 'write') {
-        // 写入模式：由 setupWriteNFC 内部处理，此处跳过
+      } else if (nfcMode === 'write' || nfcMode === 'clear') {
+        // 写入 / 清空模式：由各自的一次性监听处理，此处跳过
       }
     });
     log('NFC 全局监听已启动', 'ok');
@@ -424,14 +425,46 @@ async function initNfcListener() {
   }
 }
 
-// 清除当前扫描结果，重置为等待状态（调试用）
-window.clearNfcState = () => {
+// 重置界面状态（不操作卡片）
+window.resetNfcUi = () => {
   nfcMode = 'scan';
   scanReset();
   setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
   const dbg = document.getElementById('debug-nfc-status');
   if (dbg) { dbg.textContent = '监听中（mode=scan）'; dbg.className = 'status ok'; }
-  log('NFC 状态已清除，等待下一次贴卡', 'info');
+  log('界面状态已重置', 'info');
+};
+
+// 清空卡片里的 NFC 数据（需要贴卡）
+window.startClearTag = async () => {
+  const dbg = document.getElementById('debug-nfc-status');
+  dbg.textContent = '请贴卡…（将清空卡片数据）';
+  dbg.className = 'status warn';
+  log('等待贴卡以清空数据…', 'warn');
+
+  nfcMode = 'clear';
+  let clearListener = null;
+  try {
+    clearListener = await KaihangNfc.addListener('nfcEvent', async () => {
+      clearListener.remove(); clearListener = null;
+      nfcMode = 'scan';
+      try {
+        await KaihangNfc.clearTag();
+        dbg.textContent = '卡片数据已清空';
+        dbg.className = 'status ok';
+        log('NFC 卡片数据清空成功', 'ok');
+      } catch(e) {
+        dbg.textContent = '清空失败：' + e.message;
+        dbg.className = 'status err';
+        log('NFC 清空失败：' + e.message, 'err');
+      }
+    });
+  } catch(e) {
+    nfcMode = 'scan';
+    dbg.textContent = '启动失败：' + e.message;
+    dbg.className = 'status err';
+    log('清空监听启动失败：' + e.message, 'err');
+  }
 };
 
 // ── 扫码枪 ────────────────────────────────────────────────────────────────────
