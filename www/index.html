@@ -418,7 +418,6 @@
     log('打印批次条码 ' + p.batchNo, 'info');
     setStatus('print-status', '发送打印…', 'info');
     try {
-      await PrintPlugin.prepareToPrintLabel();
       await PrintPlugin.printBatchLabel(p);
     } catch (e) {
       log('打印失败: ' + e.message, 'err');
@@ -433,7 +432,6 @@
     log('打印机器二维码 ' + p.machineId, 'info');
     setStatus('print-status', '发送二维码打印…', 'info');
     try {
-      await PrintPlugin.prepareToPrintLabel();
       await PrintPlugin.printMachineQR({ machineId: p.machineId, productType: p.productType, date: p.date });
     } catch (e) {
       log('二维码打印失败: ' + e.message, 'err');

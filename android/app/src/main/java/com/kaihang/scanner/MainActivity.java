@@ -1,8 +1,11 @@
 package com.kaihang.scanner;
 
 import android.content.Intent;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
+import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.WebViewListener;
 import com.kaihang.scanner.plugins.KaihangNfcPlugin;
 import com.kaihang.scanner.plugins.PrintPlugin;
@@ -21,6 +24,15 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void load() {
         super.load();
+
+        // 让 WebView 的 getUserMedia 能拿到相机权限
+        bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(bridge) {
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                request.grant(request.getResources());
+            }
+        });
+
         // 所有 fetch/XHR 请求自动附加 X-Client-Type: capacitor 头，便于服务端区分客户端类型
         bridge.addWebViewListener(new WebViewListener() {
             @Override
