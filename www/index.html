@@ -162,7 +162,13 @@
 <div class="page" id="page-debug">
 
   <div class="card">
-    <div class="card-title">插件状态</div>
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+      <span>插件状态</span>
+      <div style="display:flex;gap:6px">
+        <button onclick="refreshPluginStatus()" style="border:none;background:#e5e5ea;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">刷新状态</button>
+        <button onclick="location.reload()" style="border:none;background:#007aff;color:#fff;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">刷新页面</button>
+      </div>
+    </div>
     <div id="plugin-status-body" style="font-size:13px; line-height:2.2"></div>
   </div>
 
@@ -298,12 +304,15 @@ async function onMachineCodeDetected(code) {
       document.getElementById('print-buttons').style.display = 'none';
 
       try {
+        // [FIX] 用 || 而不是 ??，防止 current_product_name="" 空字符串通过校验
+        const product_name = m.current_product_name || m.current_product_type || 'unknown';
+        log(`创建批次 machine_id=${m.id} product_type=${m.current_product_type} product_name=${product_name}`, 'info');
         const batch = await apiFetch('/api/batches', {
           method: 'POST',
           body: JSON.stringify({
             machine_id:   m.id,
             product_type: m.current_product_type,
-            product_name: m.current_product_name ?? m.current_product_type,
+            product_name,
           }),
         });
         currentBatchNo = batch.batch_no;
@@ -440,11 +449,22 @@ let _camStream = null, _camReader = null;
 async function triggerCamera() {
   if (_camStream) { stopCamera(); return; }
   setStatus('scan-hint', '启动相机…', 'info');
+  log('triggerCamera() 调用', 'info');
   try {
+    // 检查 API 可用性
+    log('mediaDevices=' + (!!navigator.mediaDevices) + ' getUserMedia=' + (!!(navigator.mediaDevices?.getUserMedia)), 'info');
     if (!navigator.mediaDevices?.getUserMedia) {
-      setStatus('scan-hint', '⚠️ 相机不可用（需在 APK 内运行）', 'warn'); return;
+      // 从 http:// 加载时 WebView 可能限制，尝试旧式 API
+      const legacyGUM = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+      if (!legacyGUM) {
+        setStatus('scan-hint', '⚠️ 相机不可用：当前环境不支持 getUserMedia', 'warn');
+        log('getUserMedia 不可用，页面可能非安全上下文（http://）', 'err');
+        return;
+      }
     }
+    log('开始请求相机权限…', 'info');
     _camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } });
+    log('相机权限已获取', 'ok');
 
     // 插入 video 元素
     let vid = document.getElementById('_cam_vid');
