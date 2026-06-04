@@ -182,6 +182,14 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<!--
+  [FIX] plugins.js 由 Vite IIFE 构建，包含：
+    - @capacitor/core（ScanPlugin / PrintPlugin / KaihangNfc 代理）
+    - @zxing/browser + @zxing/library（相机扫码降级方案）
+  ⚠️ 不要改为 type="module"，IIFE 格式不支持 ESM 导入
+  ⚠️ 不要从 plugins.js 中移除 ZXing，否则相机降级失效
+  详见 HTML_RULES.md
+-->
 <script src="plugins.js"></script>
 <script>
 'use strict';
@@ -230,7 +238,11 @@ function setStatus(id, msg, type = '') {
 // ══════════════════════════════════════════════════════════════════════════════
 // 页面 1：扫描
 // ══════════════════════════════════════════════════════════════════════════════
-const { NFC, ScanPlugin, PrintPlugin } = window;
+// [FIX] 插件引用：使用 KaihangNfc（自研插件），不要改回 @capgo/capacitor-nfc 的 NFC
+// KaihangNfc 事件名是 'nfcEvent'，tag 数据结构是 { isNdef, isMifareUltralight, ndefMessage, mifareData }
+// @capgo 的旧 API（nfcTag 事件、tag.messages[0].records）已废弃，详见 NFC_RULES.md
+const { KaihangNfc, ScanPlugin, PrintPlugin } = window;
+const NFC = KaihangNfc; // 保留别名供部分旧调用使用
 let nfcScanListener  = null;
 let printListener    = null;
 let currentBatchNo   = '';
@@ -291,28 +303,32 @@ async function onMachineCodeDetected(code) {
 }
 
 // ── NFC ───────────────────────────────────────────────────────────────────────
+// [FIX] 事件名必须是 'nfcEvent'，不是 'nfcTag'
+// [FIX] 数据结构：event.ndefMessage（NDEF 卡）/ event.mifareData（凯航格式 Mifare 卡）
+// ⚠️ 不要改回 NFC.addListener('nfcTag', ...) 或 tag.messages[0].records，那是旧 API
 async function triggerNFC() {
-  if (nfcScanListener) { nfcScanListener.remove(); nfcScanListener = null; NFC?.removeAllListeners?.(); }
+  if (nfcScanListener) { nfcScanListener.remove(); nfcScanListener = null; }
   setStatus('scan-hint', '扫描中… 请靠近 NFC 标签', 'info');
   try {
-    nfcScanListener = await NFC.addListener('nfcTag', async (tag) => {
+    nfcScanListener = await KaihangNfc.addListener('nfcEvent', async (event) => {
       nfcScanListener.remove(); nfcScanListener = null;
-      await NFC.removeAllListeners();
 
-      const records = tag.messages?.[0]?.records ?? [];
+      // 优先从 NDEF URI record 解析
       let machineCode = null;
-      for (const r of records) {
-        if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
-          const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-          if (uri.startsWith(NFC_PREFIX)) machineCode = uri.replace(NFC_PREFIX, '').trim();
-          break;
+      if (event.ndefMessage) {
+        for (const r of event.ndefMessage) {
+          if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
+            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+            if (uri.startsWith(NFC_PREFIX)) { machineCode = uri.replace(NFC_PREFIX, '').trim(); break; }
+          }
         }
       }
+      // 其次从凯航 MifareUltralight 格式解析
+      if (!machineCode && event.mifareData) machineCode = event.mifareData.trim();
 
       if (machineCode) {
         await onMachineCodeDetected(machineCode);
       } else {
-        // 空白卡 → 跳转设置机器
         log('空白卡，跳转设置机器', 'warn');
         setStatus('scan-hint', '空白卡，已跳转到【设置机器】', 'warn');
         switchTab('setup');
@@ -334,10 +350,74 @@ async function triggerScanGun() {
   }
 }
 
-// ── 相机 ──────────────────────────────────────────────────────────────────────
-function triggerCamera() {
-  // TODO: 接入 ZXing 相机扫码
-  setStatus('scan-hint', '相机扫码开发中…', 'warn');
+// ── 相机 ─────────────────────────────────────────────────────────────────────
+// ZXing 懒加载：只在首次点击时拉取，后续复用
+let _camStream = null, _camReader = null;
+
+async function triggerCamera() {
+  if (_camStream) { stopCamera(); return; }
+  setStatus('scan-hint', '启动相机…', 'info');
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setStatus('scan-hint', '⚠️ 相机不可用（需在 APK 内运行）', 'warn'); return;
+    }
+    _camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode:'environment' } });
+
+    // 插入 video 元素
+    let vid = document.getElementById('_cam_vid');
+    if (!vid) {
+      vid = document.createElement('video');
+      vid.id = '_cam_vid'; vid.autoplay = true; vid.playsinline = true; vid.muted = true;
+      vid.style.cssText = 'width:100%;border-radius:8px;margin-top:10px;max-height:220px;object-fit:cover;';
+      document.getElementById('scan-hint').after(vid);
+    }
+    vid.srcObject = _camStream;
+    await new Promise(r => { vid.onplaying = r; vid.play().catch(r); });
+
+    const onResult = (val) => {
+      stopCamera();
+      setStatus('scan-hint', '识别到：' + val, 'ok');
+      log('相机识别：' + val, 'ok');
+      onMachineCodeDetected(val);
+    };
+
+    // 优先 BarcodeDetector
+    if ('BarcodeDetector' in window) {
+      try {
+        const det = new BarcodeDetector({ formats: ['code_128','qr_code','ean_13','code_39','data_matrix'] });
+        await det.detect(vid); // 试跑一帧确认服务可用
+        setStatus('scan-hint', '相机扫码中（系统API）…', 'info');
+        const loop = async () => {
+          if (!_camStream) return;
+          if (vid.readyState >= 2) {
+            try { const r = await det.detect(vid); if (r.length) { onResult(r[0].rawValue); return; } } catch(_) {}
+          }
+          requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+        return;
+      } catch(e) { log('BarcodeDetector 不可用：' + e.message + '，切 ZXing', 'warn'); }
+    }
+
+    // 降级 ZXing（已打包在 plugins.js）
+    setStatus('scan-hint', '相机扫码中（ZXing）…', 'info');
+    _camReader = new window.ZXingReader();
+    const result = await new Promise((res, rej) => {
+      _camReader.decodeFromVideoElement(vid, (r, e) => { if (r) res(r.getText()); });
+    });
+    onResult(result);
+  } catch(e) {
+    stopCamera();
+    setStatus('scan-hint', '相机失败：' + e.message, 'err');
+    log('相机失败：' + e.message, 'err');
+  }
+}
+
+function stopCamera() {
+  if (_camReader) { try { _camReader.reset(); } catch(_) {} _camReader = null; }
+  if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
+  const vid = document.getElementById('_cam_vid');
+  if (vid) { vid.srcObject = null; vid.remove(); }
 }
 
 // ── 打印 ──────────────────────────────────────────────────────────────────────
@@ -362,9 +442,10 @@ async function doPrint(count) {
   el.textContent = `发送 ${count} 张打印任务…`;
   el.className   = 'status info';
   el.style.display = '';
+  // [FIX] 不要在这里加 prepareToPrintLabel()，会多出空白标签
+  // prepareToPrintLabel 的作用是走纸定位，connect() 时已自动执行，每次打印前再调会浪费一张
   try {
     for (let i = 0; i < count; i++) {
-      await PrintPlugin.prepareToPrintLabel();
       await PrintPlugin.printBatchLabel({
         batchNo:     currentBatchNo,
         machineId:   currentMachine.code,
@@ -413,7 +494,6 @@ async function setupPrintLabel() {
   if (!setupCode) return;
   setStatus('setup-status', '发送打印任务…', 'info');
   try {
-    await PrintPlugin.prepareToPrintLabel();
     await PrintPlugin.printBatchLabel({
       batchNo: setupCode, machineId: setupCode,
       productType: document.getElementById('setup-pname').value.trim() || '—',
@@ -430,21 +510,18 @@ async function setupWriteNFC() {
   document.getElementById('setup-write-btn').disabled = true;
 
   try {
-    setupNfcListener = await NFC.addListener('nfcTag', async () => {
+    // [FIX] 使用 KaihangNfc.writeNdef / writeMifareRaw，自动识别卡类型
+    // ⚠️ 不要改回 NFC.write({ records: [...] })，那是旧 @capgo API，已废弃
+    setupNfcListener = await KaihangNfc.addListener('nfcEvent', async (event) => {
       setupNfcListener.remove(); setupNfcListener = null;
-      await NFC.removeAllListeners();
       try {
-        const enc = new TextEncoder();
-        const uri = NFC_PREFIX + setupCode;
-        const pl  = new Uint8Array(1 + uri.length);
-        pl[0] = 0x00;
-        pl.set(enc.encode(uri), 1);
-        await NFC.write({
-          records: [
-            { tnf: 1, type: Array.from(enc.encode('U')),               id: [], payload: Array.from(pl) },
-            { tnf: 4, type: Array.from(enc.encode('android.com:pkg')), id: [], payload: Array.from(enc.encode('com.kaihang.scanner')) },
-          ]
-        });
+        if (event.isNdef) {
+          await KaihangNfc.writeNdef({ data: setupCode, allowFormat: true });
+        } else if (event.isMifareUltralight) {
+          await KaihangNfc.writeMifareRaw({ data: setupCode });
+        } else {
+          throw new Error('不支持的卡类型：' + JSON.stringify(event.techTypes));
+        }
         setStatus('setup-status', `写入成功！机器 ${setupCode} 已绑定到卡片。`, 'ok');
         log('NFC 写卡成功：' + setupCode, 'ok');
       } catch(e) {
@@ -469,7 +546,7 @@ function refreshPluginStatus() {
   document.getElementById('plugin-status-body').innerHTML = [
     ['ScanPlugin',  !!window.ScanPlugin],
     ['PrintPlugin', !!window.PrintPlugin],
-    ['NFC',         !!window.NFC],
+    ['KaihangNfc',  !!window.KaihangNfc],
     ['Platform',    window.Capacitor?.getPlatform?.() ?? 'unknown'],
   ].map(([k, v]) => typeof v === 'boolean'
     ? `<span style="color:${v?'#30d158':'#ff453a'}">${v?'✓':'✗'} ${k}</span><br>`
@@ -495,7 +572,7 @@ async function connectPrinter() {
 log('platform='    + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
 log('ScanPlugin='  + (window.ScanPlugin  ? 'ok' : 'missing'), window.ScanPlugin  ? 'ok' : 'err');
 log('PrintPlugin=' + (window.PrintPlugin ? 'ok' : 'missing'), window.PrintPlugin ? 'ok' : 'err');
-log('NFC='         + (window.NFC         ? 'ok' : 'missing'), window.NFC         ? 'ok' : 'err');
+log('KaihangNfc='  + (window.KaihangNfc  ? 'ok' : 'missing'), window.KaihangNfc  ? 'ok' : 'err');
 
 // 扫码枪结果 → 当作机器编号处理
 if (ScanPlugin) {
