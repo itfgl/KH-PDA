@@ -90,14 +90,15 @@
 
   <div class="card">
     <div class="card-title">扫描方式</div>
-    <button class="btn btn-blue" onclick="triggerNFC()">贴 NFC</button>
+    <!-- NFC 全程后台监听，无需点击，贴卡即触发 -->
+    <div class="status info" id="nfc-always-status" style="margin-bottom:8px">📡 NFC 监听中，贴卡即识别</div>
     <div class="btn-row">
       <button class="btn btn-gray" onclick="triggerScanGun()">扫码枪</button>
       <button class="btn btn-gray" onclick="triggerCamera()">相机扫码</button>
     </div>
   </div>
 
-  <div class="status info" id="scan-hint">选择扫描方式后靠近机器标签</div>
+  <div class="status info" id="scan-hint">靠近机器 NFC 标签 / 扫描条码</div>
 
   <!-- 机器信息（识别成功后显示） -->
   <div class="card" id="machine-info-card" style="display:none">
@@ -163,6 +164,12 @@
   <div class="card">
     <div class="card-title">插件状态</div>
     <div id="plugin-status-body" style="font-size:13px; line-height:2.2"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">NFC</div>
+    <div class="status" id="debug-nfc-status">监听中（mode=scan）</div>
+    <button class="btn btn-gray" onclick="clearNfcState()">清空NFC状态</button>
   </div>
 
   <div class="card">
@@ -243,7 +250,13 @@ function setStatus(id, msg, type = '') {
 // @capgo 的旧 API（nfcTag 事件、tag.messages[0].records）已废弃，详见 NFC_RULES.md
 const { KaihangNfc, ScanPlugin, PrintPlugin } = window;
 const NFC = KaihangNfc; // 保留别名供部分旧调用使用
-let nfcScanListener  = null;
+
+// [FIX] NFC 全程持续监听，不需要用户点按钮触发
+// nfcMode 控制当前 NFC 贴卡行为：
+//   'scan'  → 识别机器码（默认，全程激活）
+//   'write' → 写入机器码（setupWriteNFC 时临时切换，写完自动恢复 scan）
+let nfcMode = 'scan';
+
 let printListener    = null;
 let currentBatchNo   = '';
 let currentMachine   = null;
@@ -302,45 +315,62 @@ async function onMachineCodeDetected(code) {
   }
 }
 
-// ── NFC ───────────────────────────────────────────────────────────────────────
+// ── NFC 全局持续监听 ───────────────────────────────────────────────────────────
 // [FIX] 事件名必须是 'nfcEvent'，不是 'nfcTag'
 // [FIX] 数据结构：event.ndefMessage（NDEF 卡）/ event.mifareData（凯航格式 Mifare 卡）
 // ⚠️ 不要改回 NFC.addListener('nfcTag', ...) 或 tag.messages[0].records，那是旧 API
-async function triggerNFC() {
-  if (nfcScanListener) { nfcScanListener.remove(); nfcScanListener = null; }
-  setStatus('scan-hint', '扫描中… 请靠近 NFC 标签', 'info');
-  try {
-    nfcScanListener = await KaihangNfc.addListener('nfcEvent', async (event) => {
-      nfcScanListener.remove(); nfcScanListener = null;
-
-      // 优先从 NDEF URI record 解析
-      let machineCode = null;
-      if (event.ndefMessage) {
-        for (const r of event.ndefMessage) {
-          if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
-            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-            if (uri.startsWith(NFC_PREFIX)) { machineCode = uri.replace(NFC_PREFIX, '').trim(); break; }
-          }
-        }
+// ⚠️ 不要改成 one-shot 监听（remove 后不再注册），NFC 需要全程保持
+function extractMachineCode(event) {
+  if (event.ndefMessage) {
+    for (const r of event.ndefMessage) {
+      if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
+        const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+        if (uri.startsWith(NFC_PREFIX)) return uri.replace(NFC_PREFIX, '').trim();
       }
-      // 其次从凯航 MifareUltralight 格式解析
-      if (!machineCode && event.mifareData) machineCode = event.mifareData.trim();
+    }
+  }
+  return event.mifareData?.trim() || null;
+}
 
-      if (machineCode) {
-        await onMachineCodeDetected(machineCode);
-      } else {
-        log('空白卡，跳转设置机器', 'warn');
-        setStatus('scan-hint', '空白卡，已跳转到【设置机器】', 'warn');
-        switchTab('setup');
-        setStatus('setup-status', '检测到空白卡，请填写信息后写入', 'warn');
+async function initNfcListener() {
+  try {
+    await KaihangNfc.addListener('nfcEvent', async (event) => {
+      log(`NFC 贴卡 mode=${nfcMode} isNdef=${event.isNdef} isMifare=${event.isMifareUltralight}`, 'info');
+
+      if (nfcMode === 'scan') {
+        // 扫描模式：识别机器码
+        const code = extractMachineCode(event);
+        if (code) {
+          await onMachineCodeDetected(code);
+        } else {
+          log('空白卡，跳转设置机器', 'warn');
+          setStatus('scan-hint', '空白卡，跳转到【设置机器】', 'warn');
+          switchTab('setup');
+          setStatus('setup-status', '检测到空白卡，请填写信息后写入', 'warn');
+        }
+      } else if (nfcMode === 'write') {
+        // 写入模式：由 setupWriteNFC 内部处理，此处跳过
       }
     });
-    log('NFC 监听注册成功', 'info');
+    log('NFC 全局监听已启动', 'ok');
+    document.getElementById('nfc-always-status').textContent = '📡 NFC 监听中，贴卡即识别';
+    document.getElementById('nfc-always-status').className = 'status ok';
   } catch(e) {
-    setStatus('scan-hint', 'NFC 启动失败：' + e.message, 'err');
-    log('NFC 启动失败：' + e.message, 'err');
+    log('NFC 监听启动失败：' + e.message, 'err');
+    document.getElementById('nfc-always-status').textContent = 'NFC 不可用：' + e.message;
+    document.getElementById('nfc-always-status').className = 'status err';
   }
 }
+
+// 清除当前扫描结果，重置为等待状态（调试用）
+window.clearNfcState = () => {
+  nfcMode = 'scan';
+  scanReset();
+  setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
+  const dbg = document.getElementById('debug-nfc-status');
+  if (dbg) { dbg.textContent = '监听中（mode=scan）'; dbg.className = 'status ok'; }
+  log('NFC 状态已清除，等待下一次贴卡', 'info');
+};
 
 // ── 扫码枪 ────────────────────────────────────────────────────────────────────
 async function triggerScanGun() {
@@ -464,7 +494,6 @@ async function doPrint(count) {
 // 页面 2：设置机器
 // ══════════════════════════════════════════════════════════════════════════════
 let setupCode = '';
-let setupNfcListener = null;
 
 async function setupCreate() {
   const code  = document.getElementById('setup-code').value.trim();
@@ -505,15 +534,19 @@ async function setupPrintLabel() {
 
 async function setupWriteNFC() {
   if (!setupCode) return;
-  if (setupNfcListener) { setupNfcListener.remove(); setupNfcListener = null; NFC?.removeAllListeners?.(); }
   setStatus('setup-status', '请靠近 NFC 标签写入…', 'warn');
   document.getElementById('setup-write-btn').disabled = true;
 
+  // 切换到写入模式，全局监听器收到贴卡后不走扫描逻辑
+  // 同时注册一个一次性监听专门处理写入
+  // [FIX] 使用 KaihangNfc.writeNdef / writeMifareRaw，自动识别卡类型
+  // ⚠️ 不要改回 NFC.write({ records: [...] })，那是旧 @capgo API，已废弃
+  nfcMode = 'write';
+  let writeListener = null;
   try {
-    // [FIX] 使用 KaihangNfc.writeNdef / writeMifareRaw，自动识别卡类型
-    // ⚠️ 不要改回 NFC.write({ records: [...] })，那是旧 @capgo API，已废弃
-    setupNfcListener = await KaihangNfc.addListener('nfcEvent', async (event) => {
-      setupNfcListener.remove(); setupNfcListener = null;
+    writeListener = await KaihangNfc.addListener('nfcEvent', async (event) => {
+      writeListener.remove(); writeListener = null;
+      nfcMode = 'scan'; // 立即恢复扫描模式
       try {
         if (event.isNdef) {
           await KaihangNfc.writeNdef({ data: setupCode, allowFormat: true });
@@ -532,6 +565,7 @@ async function setupWriteNFC() {
     });
     log('NFC 写卡监听注册：' + setupCode, 'info');
   } catch(e) {
+    nfcMode = 'scan';
     setStatus('setup-status', 'NFC 监听失败：' + e.message, 'err');
     document.getElementById('setup-write-btn').disabled = false;
   }
@@ -546,7 +580,7 @@ function refreshPluginStatus() {
   document.getElementById('plugin-status-body').innerHTML = [
     ['ScanPlugin',  !!window.ScanPlugin],
     ['PrintPlugin', !!window.PrintPlugin],
-    ['KaihangNfc',  !!window.KaihangNfc],
+    ['KaihangNfc',  !!window.KaihangNfc ? `ok (mode=${nfcMode})` : false],
     ['Platform',    window.Capacitor?.getPlatform?.() ?? 'unknown'],
   ].map(([k, v]) => typeof v === 'boolean'
     ? `<span style="color:${v?'#30d158':'#ff453a'}">${v?'✓':'✗'} ${k}</span><br>`
@@ -583,6 +617,7 @@ if (ScanPlugin) {
 }
 
 connectPrinter();
+initNfcListener(); // NFC 全程监听，启动即激活
 refreshPluginStatus();
 </script>
 </body>
