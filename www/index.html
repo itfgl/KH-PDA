@@ -129,6 +129,12 @@
       border-radius: 99px; white-space: nowrap;
     }
 
+    /* ── 倒计时 ── */
+    #nfc-countdown { display:none; margin-top:10px; }
+    .countdown-bar  { height:4px; background:#e5e5ea; border-radius:2px; overflow:hidden; }
+    .countdown-fill { height:100%; background:#007aff; border-radius:2px; width:100%; transition:width 1s linear; }
+    .countdown-text { font-size:13px; color:#8e8e93; margin-top:5px; text-align:center; }
+
     /* ── Debug Log ── */
     #log-body {
       background: #1c1c1e; border-radius: 10px;
@@ -250,10 +256,11 @@
     <button class="btn btn-success" onclick="nfcWrite()">写入卡片</button>
     <button class="btn btn-gray"    onclick="nfcCancel()">停止</button>
     <div class="result-box" id="nfc-result">读取结果显示在这里</div>
-    <button id="nfc-print-btn" class="btn btn-success btn-full"
-            onclick="doPrint()" style="display:none;margin-top:8px;">
-      打印此批次条码
-    </button>
+    <div id="nfc-countdown">
+      <div class="countdown-bar"><div class="countdown-fill" id="countdown-fill"></div></div>
+      <div class="countdown-text" id="countdown-text">5秒后自动打印…</div>
+      <button class="btn btn-danger btn-full" onclick="cancelCountdown()" style="margin-top:6px;">取消打印</button>
+    </div>
   </div>
 
   <div class="card" style="background:#fffbeb;">
@@ -584,7 +591,8 @@
       if (found) {
         document.getElementById('batch-no').value = found;
         setStatus('nfc-status', '读取成功：' + found, 'ok');
-        document.getElementById('nfc-print-btn').style.display = 'block';
+        switchTab('nfc');          // 不管在哪个页面，跳到 NFC tab
+        startCountdown(found);     // 5s 倒计时自动打印
       } else {
         setStatus('nfc-status', '读取完成（无凯航数据）', '');
       }
@@ -612,12 +620,50 @@
     }
   }
 
-  window.nfcCancel = () => { nfcMode = null; setStatus('nfc-status', '就绪，请选择操作', ''); };
+  // ── NFC 倒计时打印 ────────────────────────────────────
+  let countdownTimer = null;
+
+  function startCountdown(batchNo, seconds = 5) {
+    cancelCountdown();
+    const box  = document.getElementById('nfc-countdown');
+    const fill = document.getElementById('countdown-fill');
+    const text = document.getElementById('countdown-text');
+    box.style.display = 'block';
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+
+    let remain = seconds;
+    text.textContent = `${remain}s 后自动打印…`;
+
+    // 下一帧再启动过渡，让浏览器渲染初始宽度
+    requestAnimationFrame(() => {
+      fill.style.transition = `width ${seconds}s linear`;
+      fill.style.width = '0%';
+    });
+
+    countdownTimer = setInterval(() => {
+      remain--;
+      text.textContent = remain > 0 ? `${remain}s 后自动打印…` : '正在打印…';
+      if (remain <= 0) {
+        cancelCountdown();
+        doPrint();
+      }
+    }, 1000);
+  }
+
+  window.cancelCountdown = () => {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    document.getElementById('nfc-countdown').style.display = 'none';
+    setStatus('nfc-status', '已取消自动打印', '');
+    log('倒计时已取消', 'info');
+  };
+
+  window.nfcCancel = () => { nfcMode = null; cancelCountdown(); setStatus('nfc-status', '就绪，请选择操作', ''); };
 
   window.nfcRead = () => {
     nfcMode = 'read';
+    cancelCountdown();
     document.getElementById('nfc-result').textContent = '等待读取…';
-    document.getElementById('nfc-print-btn').style.display = 'none';
     setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
     log('nfcRead 模式，请贴卡', 'info');
     if (lastNfcEvent && Date.now() - lastNfcTime < 1500) handleNfcEvent(lastNfcEvent);
