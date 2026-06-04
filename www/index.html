@@ -52,6 +52,12 @@
       border: 1px solid #d1d1d6; border-radius: 8px; font-size: 15px;
     }
 
+    @keyframes scanline {
+      0%   { top: 10%; }
+      50%  { top: 85%; }
+      100% { top: 10%; }
+    }
+
     .result-box {
       margin-top: 10px; padding: 10px 12px;
       background: #f2f2f7; border-radius: 8px;
@@ -106,8 +112,31 @@
     <input type="text" id="batch-no"     placeholder="批次码（如 M05260604030012）" value="M05260604030012">
     <input type="text" id="machine-id"   placeholder="机器编号" value="M05">
     <input type="text" id="product-type" placeholder="产品类型" value="电容">
-    <button class="btn btn-primary" onclick="doPrint()">打印标签</button>
+    <button class="btn btn-primary" onclick="doPrint()">打印批次条码</button>
+    <button class="btn btn-success" onclick="doPrintMachineQR()">打印机器二维码</button>
     <button class="btn btn-gray"    onclick="connectPrinter()">重连打印机</button>
+  </div>
+</div>
+
+<!-- ── 相机扫码 ───────────────────────────────────────── -->
+<div class="section">
+  <div class="section-title">相机扫码（普通安卓测试用）</div>
+  <div class="section-body">
+    <div class="status-bar" id="cam-status">点击开始扫码</div>
+    <div id="cam-container" style="position:relative;display:none;margin-bottom:10px;">
+      <video id="cam-video" autoplay playsinline style="width:100%;border-radius:8px;display:block;"></video>
+      <!-- 取景框 -->
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:60%;height:40%;pointer-events:none;">
+        <div style="position:absolute;top:0;left:0;width:24px;height:24px;border-top:3px solid #007aff;border-left:3px solid #007aff;border-radius:2px 0 0 0;"></div>
+        <div style="position:absolute;top:0;right:0;width:24px;height:24px;border-top:3px solid #007aff;border-right:3px solid #007aff;border-radius:0 2px 0 0;"></div>
+        <div style="position:absolute;bottom:0;left:0;width:24px;height:24px;border-bottom:3px solid #007aff;border-left:3px solid #007aff;border-radius:0 0 0 2px;"></div>
+        <div style="position:absolute;bottom:0;right:0;width:24px;height:24px;border-bottom:3px solid #007aff;border-right:3px solid #007aff;border-radius:0 0 2px 0;"></div>
+        <div id="scan-line" style="position:absolute;left:0;right:0;height:2px;background:#007aff;opacity:0.8;animation:scanline 2s linear infinite;"></div>
+      </div>
+    </div>
+    <div class="result-box" id="cam-result">扫码结果显示在这里</div>
+    <button class="btn btn-primary" onclick="startCamScan()" id="cam-btn-start">开始扫码</button>
+    <button class="btn btn-danger"  onclick="stopCamScan()"  id="cam-btn-stop" style="display:none;">停止扫码</button>
   </div>
 </div>
 
@@ -121,6 +150,7 @@
     <button class="btn btn-success" onclick="nfcWrite()">写入卡片</button>
     <button class="btn btn-danger"  onclick="nfcCancel()">停止</button>
     <div class="result-box" id="nfc-result">NFC 读取结果显示在这里</div>
+    <button id="nfc-print-btn" class="btn btn-success" onclick="doPrint()" style="display:none;margin-top:10px;width:100%;">打印此批次条码</button>
   </div>
 </div>
 
@@ -248,26 +278,109 @@
     }
   };
 
+  function getPrintParams() {
+    return {
+      batchNo:     document.getElementById('batch-no').value.trim(),
+      machineId:   document.getElementById('machine-id').value.trim(),
+      productType: document.getElementById('product-type').value.trim(),
+      date: new Date().toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' }).replace(/\//g, ''),
+    };
+  }
+
   window.doPrint = async () => {
     if (!printAvailable) { alert('打印机未连接或不支持'); return; }
-    const batchNo     = document.getElementById('batch-no').value.trim();
-    const machineId   = document.getElementById('machine-id').value.trim();
-    const productType = document.getElementById('product-type').value.trim();
-    if (!batchNo) { alert('请填写批次码'); return; }
-    log(`doPrint() batchNo=${batchNo}`, 'info');
+    const p = getPrintParams();
+    if (!p.batchNo) { alert('请填写批次码'); return; }
+    log(`打印批次条码 batchNo=${p.batchNo}`, 'info');
     setStatus('print-status', '发送打印任务…', 'info');
     try {
       await PrintPlugin.prepareToPrintLabel();
-      log('prepareToPrintLabel() 完成', 'info');
-      await PrintPlugin.printBatchLabel({
-        batchNo, machineId, productType,
-        date: new Date().toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' }).replace(/\//g, ''),
-      });
-      log('printBatchLabel() 调用完成，等待回调…', 'info');
+      await PrintPlugin.printBatchLabel(p);
+      log('printBatchLabel() 已发送', 'info');
     } catch (e) {
-      log('doPrint 异常: ' + e.message, 'err');
+      log('打印异常: ' + e.message, 'err');
       setStatus('print-status', '打印失败：' + e.message, 'err');
     }
+  };
+
+  window.doPrintMachineQR = async () => {
+    if (!printAvailable) { alert('打印机未连接或不支持'); return; }
+    const p = getPrintParams();
+    if (!p.machineId) { alert('请填写机器编号'); return; }
+    log(`打印机器二维码 machineId=${p.machineId}`, 'info');
+    setStatus('print-status', '发送二维码打印任务…', 'info');
+    try {
+      await PrintPlugin.prepareToPrintLabel();
+      await PrintPlugin.printMachineQR({ machineId: p.machineId, productType: p.productType, date: p.date });
+      log('printMachineQR() 已发送', 'info');
+    } catch (e) {
+      log('二维码打印异常: ' + e.message, 'err');
+      setStatus('print-status', '打印失败：' + e.message, 'err');
+    }
+  };
+
+  // 从扫码/NFC结果填入批次码并触发打印
+  window.printFromResult = async (batchNo) => {
+    document.getElementById('batch-no').value = batchNo;
+    log(`NFC→打印联动 batchNo=${batchNo}`, 'info');
+    await window.doPrint();
+  };
+
+  // ── 相机扫码 ───────────────────────────────────────────
+  let camStream = null;
+  let camScanLoop = null;
+
+  window.startCamScan = async () => {
+    try {
+      setStatus('cam-status', '请求相机权限…', 'info');
+      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const video = document.getElementById('cam-video');
+      video.srcObject = camStream;
+      await video.play();
+      document.getElementById('cam-container').style.display = 'block';
+      document.getElementById('cam-btn-start').style.display = 'none';
+      document.getElementById('cam-btn-stop').style.display = 'inline-block';
+      setStatus('cam-status', '扫描中… 将条码置于取景框内', 'info');
+      log('相机扫码已启动', 'ok');
+
+      if ('BarcodeDetector' in window) {
+        const detector = new BarcodeDetector({ formats: ['code_128','code_39','qr_code','ean_13','ean_8','data_matrix'] });
+        const scan = async () => {
+          if (!camStream) return;
+          try {
+            const codes = await detector.detect(video);
+            if (codes.length > 0) {
+              const val = codes[0].rawValue;
+              document.getElementById('cam-result').textContent = val;
+              setStatus('cam-status', `识别到：${val}`, 'ok');
+              log(`相机扫码结果: ${val}`, 'ok');
+              // 填入批次码输入框
+              document.getElementById('batch-no').value = val;
+              stopCamScan();
+              return;
+            }
+          } catch(_) {}
+          camScanLoop = requestAnimationFrame(scan);
+        };
+        camScanLoop = requestAnimationFrame(scan);
+      } else {
+        setStatus('cam-status', '⚠️ 当前 WebView 不支持 BarcodeDetector，仅限查看画面', 'warn');
+        log('BarcodeDetector 不可用', 'warn');
+      }
+    } catch (e) {
+      log('相机启动失败: ' + e.message, 'err');
+      setStatus('cam-status', '相机启动失败：' + e.message, 'err');
+    }
+  };
+
+  window.stopCamScan = () => {
+    if (camScanLoop) { cancelAnimationFrame(camScanLoop); camScanLoop = null; }
+    if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+    document.getElementById('cam-container').style.display = 'none';
+    document.getElementById('cam-btn-start').style.display = 'inline-block';
+    document.getElementById('cam-btn-stop').style.display = 'none';
+    setStatus('cam-status', '已停止');
+    log('相机扫码已停止', 'info');
   };
 
   // ── NFC ───────────────────────────────────────────────
@@ -312,10 +425,16 @@
 
       const display = found ?? `未知卡 techTypes=${JSON.stringify(techTypes)}`;
       document.getElementById('nfc-result').textContent = display;
-      setStatus('nfc-status', found ? '读取成功' : '读取成功（无凯航数据）', found ? 'ok' : '');
       log('读取结果: ' + display, 'ok');
       nfcMode = null;
-      setStatus('nfc-status', '就绪，请选择操作', '');
+      if (found) {
+        // 填入批次码，显示联动打印按钮
+        document.getElementById('batch-no').value = found;
+        setStatus('nfc-status', `读取成功：${found}`, 'ok');
+        document.getElementById('nfc-print-btn').style.display = 'inline-block';
+      } else {
+        setStatus('nfc-status', '读取成功（无凯航数据）', '');
+      }
 
     } else if (nfcMode === 'write') {
       const content = document.getElementById('nfc-write-data').value.trim();
@@ -355,6 +474,7 @@
   window.nfcRead = () => {
     nfcMode = 'read';
     document.getElementById('nfc-result').textContent = '等待读取…';
+    document.getElementById('nfc-print-btn').style.display = 'none';
     setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
     log('nfcRead() 模式已设置，请贴卡', 'info');
     // 卡已在位（1.5秒内有事件）则立即处理

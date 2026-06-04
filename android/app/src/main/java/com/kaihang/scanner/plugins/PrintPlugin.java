@@ -18,23 +18,10 @@ import com.uc.pdasdk.print.Printer;
 import com.uc.pdasdk.utils.AbsoluteLayoutBitmap;
 import com.uc.pdasdk.utils.BarcodeCreater;
 
-/**
- * 打印 Plugin
- *
- * 封装 uc_pda_sdk AAR（com.uc.pdasdk），向 H5 提供批次标签打印能力。
- *
- * JS 调用：
- *   PrintPlugin.connect()
- *   PrintPlugin.prepareToPrintLabel()
- *   PrintPlugin.printBatchLabel({ batchNo, machineId, productType, date })
- *   PrintPlugin.addListener('printStatus', (data) => { data.status / data.connection })
- */
 @CapacitorPlugin(name = "PrintPlugin")
 public class PrintPlugin extends Plugin {
 
-    private static final String EVENT_STATUS  = "printStatus";
-    private static final int    LABEL_WIDTH   = 384;
-    private static final int    LABEL_HEIGHT  = 200;
+    private static final String EVENT_STATUS = "printStatus";
 
     @PluginMethod
     public void connect(PluginCall call) {
@@ -63,7 +50,6 @@ public class PrintPlugin extends Plugin {
         call.resolve();
     }
 
-    /** 走纸到标签起始位置，printBatchLabel 之前调用 */
     @PluginMethod
     public void prepareToPrintLabel(PluginCall call) {
         Printer.prepareToPrintLabel();
@@ -71,19 +57,8 @@ public class PrintPlugin extends Plugin {
     }
 
     /**
-     * 打印批次标签
-     *
-     * 参数：
-     *   batchNo     (String, required) 15位批次码，如 M05260604030012
-     *   machineId   (String, optional) 机器编号
-     *   productType (String, optional) 产品类型
-     *   date        (String, optional) 日期 YYMMDD
-     *
-     * 标签布局 384×200 点：
-     *   0~55   一维码（Code128）
-     *   75     批次码明文
-     *   105    机器编号 + 日期
-     *   135    产品类型
+     * 批次标签（一维码）
+     * 布局 384×240：条码 80高，下方批次码 + 机器/日期/品类
      */
     @PluginMethod
     public void printBatchLabel(PluginCall call) {
@@ -92,23 +67,50 @@ public class PrintPlugin extends Plugin {
         String productType = call.getString("productType", "");
         String date        = call.getString("date", "");
 
-        if (batchNo.isEmpty()) {
-            call.reject("batchNo is required");
-            return;
-        }
+        if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
 
         Bitmap barcode = BarcodeCreater.createBarcode(
-            getContext(), batchNo, LABEL_WIDTH - 20, 55, false, 1
+            getContext(), batchNo, 364, 80, false, 1  // 加高：80 点
         );
 
-        Bitmap label = new AbsoluteLayoutBitmap(LABEL_WIDTH, LABEL_HEIGHT)
+        Bitmap label = new AbsoluteLayoutBitmap(384, 240)
             .addBmp(barcode, 10, 0)
-            .addText(batchNo, 22, 10, 75)
-            .addText("机器：" + machineId + "  日期：" + date, 20, 10, 105)
-            .addText("品类：" + productType, 20, 10, 135)
+            .addText(batchNo, 22, 10, 96)
+            .addText("机器：" + machineId + "  日期：" + date, 20, 10, 124)
+            .addText("品类：" + productType, 20, 10, 152)
             .getBitmap();
 
         Printer.print(new BitmapData(label, 15, 0), 16, "batch_" + batchNo, false);
+        call.resolve();
+    }
+
+    /**
+     * 机器二维码标签
+     * 布局 384×320：大二维码居中，下方机器信息三行
+     * QR 内容格式：machineId|productType|date
+     */
+    @PluginMethod
+    public void printMachineQR(PluginCall call) {
+        String machineId   = call.getString("machineId", "");
+        String productType = call.getString("productType", "");
+        String date        = call.getString("date", "");
+
+        if (machineId.isEmpty()) { call.reject("machineId is required"); return; }
+
+        String qrContent = machineId + "|" + productType + "|" + date;
+
+        Bitmap qr = BarcodeCreater.createBarcode(
+            getContext(), qrContent, 220, 220, false, 2  // type 2 = QR
+        );
+
+        Bitmap label = new AbsoluteLayoutBitmap(384, 320)
+            .addBmp(qr, 82, 8)                                     // 居中（(384-220)/2=82）
+            .addText("机 器：" + machineId, 26, 20, 244)
+            .addText("品 类：" + productType, 24, 20, 272)
+            .addText("日 期：" + date, 24, 20, 300)
+            .getBitmap();
+
+        Printer.print(new BitmapData(label, 15, 0), 16, "machine_qr_" + machineId, false);
         call.resolve();
     }
 
