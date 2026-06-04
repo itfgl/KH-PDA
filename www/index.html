@@ -435,7 +435,7 @@
   };
 
   // ── 相机扫码 ───────────────────────────────────────────
-  let camStream = null, camLoop = null, camZxing = null;
+  let camStream = null, camLoop = null, camZxing = null, camScanning = false;
 
   window.startCamScan = async () => {
     stopCamScan();
@@ -451,9 +451,12 @@
       document.getElementById('cam-wrap').style.display = 'block';
       document.getElementById('cam-btn-start').style.display = 'none';
       document.getElementById('cam-btn-stop').style.display  = 'inline-block';
+      camScanning = true;
       log('相机已启动', 'ok');
 
       const onResult = (val, fmt) => {
+        if (!camScanning) return;   // 防止回调多次触发
+        camScanning = false;
         document.getElementById('cam-result').textContent = val;
         document.getElementById('batch-no').value = val;
         setStatus('cam-status', `识别：${val} [${fmt}]`, 'ok');
@@ -520,6 +523,7 @@
   };
 
   window.stopCamScan = () => {
+    camScanning = false;
     if (camLoop)   { cancelAnimationFrame(camLoop); camLoop = null; }
     if (camZxing)  { try { camZxing.reset(); } catch(_) {} camZxing = null; }
     if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
