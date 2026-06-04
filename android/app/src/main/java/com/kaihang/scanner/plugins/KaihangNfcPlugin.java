@@ -1,0 +1,297 @@
+package com.kaihang.scanner.plugins;
+
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.MifareUltralight;
+import android.nfc.tech.Ndef;
+import android.nfc.tech.NdefFormatable;
+
+import com.getcapacitor.JSArray;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * 统一 NFC 插件
+ *
+ * 支持两类卡：
+ *  - NDEF 卡（NTAG213/215/216 等）：标准读写
+ *  - MifareUltralight 原始卡：页读写（格式 KH + 2字节长度 + UTF-8数据）
+ *
+ * JS 事件：nfcEvent { techTypes[], ndefMessage?, isNdef, isMifareUltralight }
+ * JS 方法：startScanning / stopScanning / writeNdef / writeMifareRaw / readMifareRaw
+ */
+@CapacitorPlugin(name = "KaihangNfc")
+public class KaihangNfcPlugin extends Plugin {
+
+    // 自定义格式魔数，用于识别凯航写入的数据
+    private static final byte[] MAGIC = {'K', 'H'};
+    // 用户数据从第 4 页开始
+    private static final int DATA_START_PAGE = 4;
+
+    private NfcAdapter adapter;
+    private final AtomicReference<Tag> lastTag = new AtomicReference<>();
+    private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private boolean scanningRequested = false;
+
+    private final NfcAdapter.ReaderCallback readerCallback = tag -> {
+        lastTag.set(tag);
+        String[] techs = tag.getTechList();
+
+        JSObject event = new JSObject();
+        event.put("techTypes", new JSArray(Arrays.asList(techs)));
+
+        boolean hasNdef = false;
+        boolean hasMifare = false;
+
+        for (String t : techs) {
+            if (t.contains("Ndef")) hasNdef = true;
+            if (t.contains("MifareUltralight")) hasMifare = true;
+        }
+
+        event.put("isNdef", hasNdef);
+        event.put("isMifareUltralight", hasMifare);
+
+        // 尝试读取 NDEF 数据
+        if (hasNdef) {
+            Ndef ndef = Ndef.get(tag);
+            if (ndef != null) {
+                NdefMessage msg = ndef.getCachedNdefMessage();
+                if (msg != null) {
+                    JSArray records = new JSArray();
+                    for (NdefRecord r : msg.getRecords()) {
+                        JSObject rec = new JSObject();
+                        rec.put("tnf", r.getTnf());
+                        rec.put("type", bytesToJSArray(r.getType()));
+                        rec.put("id", bytesToJSArray(r.getId()));
+                        rec.put("payload", bytesToJSArray(r.getPayload()));
+                        records.put(rec);
+                    }
+                    event.put("ndefMessage", records);
+                }
+            }
+        }
+
+        // 尝试读取 MifareUltralight 原始数据
+        if (hasMifare && !hasNdef) {
+            MifareUltralight ul = MifareUltralight.get(tag);
+            if (ul != null) {
+                try {
+                    ul.connect();
+                    byte[] raw = ul.readPages(DATA_START_PAGE); // 读取 4 页 = 16 字节
+                    ul.close();
+                    // 检查魔数
+                    if (raw[0] == MAGIC[0] && raw[1] == MAGIC[1]) {
+                        int len = ((raw[2] & 0xFF) << 8) | (raw[3] & 0xFF);
+                        len = Math.min(len, raw.length - 4);
+                        if (len > 0) {
+                            String data = new String(raw, 4, len, StandardCharsets.UTF_8);
+                            event.put("mifareData", data);
+                        }
+                    }
+                } catch (IOException e) {
+                    // 读取失败不影响事件派发
+                }
+            }
+        }
+
+        notifyListeners("nfcEvent", event);
+    };
+
+    @Override
+    public void load() {
+        adapter = NfcAdapter.getDefaultAdapter(getContext());
+    }
+
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        if (scanningRequested && adapter != null) enableReader();
+    }
+
+    @Override
+    protected void handleOnPause() {
+        super.handleOnPause();
+        if (adapter != null) {
+            try { adapter.disableReaderMode(getActivity()); } catch (Exception ignored) {}
+        }
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        super.handleOnDestroy();
+        executor.shutdownNow();
+    }
+
+    private void enableReader() {
+        int flags = NfcAdapter.FLAG_READER_NFC_A
+                | NfcAdapter.FLAG_READER_NFC_B
+                | NfcAdapter.FLAG_READER_NFC_F
+                | NfcAdapter.FLAG_READER_NFC_V
+                | NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK
+                | NfcAdapter.FLAG_READER_NO_PLATFORM_SOUNDS;
+        adapter.enableReaderMode(getActivity(), readerCallback, flags, null);
+    }
+
+    @PluginMethod
+    public void startScanning(PluginCall call) {
+        if (adapter == null) { call.reject("NFC not available"); return; }
+        scanningRequested = true;
+        enableReader();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void stopScanning(PluginCall call) {
+        scanningRequested = false;
+        if (adapter != null) {
+            try { adapter.disableReaderMode(getActivity()); } catch (Exception ignored) {}
+        }
+        call.resolve();
+    }
+
+    /** 写入 NDEF（适用于 NTAG213/215/216） */
+    @PluginMethod
+    public void writeNdef(PluginCall call) {
+        Tag tag = lastTag.get();
+        if (tag == null) { call.reject("No tag available"); return; }
+
+        String data = call.getString("data", "");
+        boolean allowFormat = Boolean.TRUE.equals(call.getBoolean("allowFormat", true));
+
+        executor.execute(() -> {
+            try {
+                byte[] uriBytes = ("kaihang://nfc/" + data).getBytes(StandardCharsets.UTF_8);
+                byte[] payload = new byte[1 + uriBytes.length];
+                payload[0] = 0x00;
+                System.arraycopy(uriBytes, 0, payload, 1, uriBytes.length);
+
+                NdefRecord uriRecord = new NdefRecord(
+                        NdefRecord.TNF_WELL_KNOWN,
+                        NdefRecord.RTD_URI,
+                        new byte[0],
+                        payload);
+
+                NdefRecord aarRecord = NdefRecord.createApplicationRecord("com.kaihang.scanner");
+                NdefMessage message = new NdefMessage(uriRecord, aarRecord);
+
+                Ndef ndef = Ndef.get(tag);
+                if (ndef != null) {
+                    ndef.connect();
+                    ndef.writeNdefMessage(message);
+                    ndef.close();
+                    call.resolve();
+                    return;
+                }
+
+                if (allowFormat) {
+                    NdefFormatable formatable = NdefFormatable.get(tag);
+                    if (formatable != null) {
+                        formatable.connect();
+                        formatable.format(message);
+                        formatable.close();
+                        call.resolve();
+                        return;
+                    }
+                }
+
+                call.reject("Tag does not support NDEF");
+            } catch (Exception e) {
+                call.reject("NDEF write failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 写入 MifareUltralight 原始数据
+     * 格式：KH(2) + length(2, big-endian) + UTF-8 data
+     * 写入从第 4 页开始，每页 4 字节
+     */
+    @PluginMethod
+    public void writeMifareRaw(PluginCall call) {
+        Tag tag = lastTag.get();
+        if (tag == null) { call.reject("No tag available"); return; }
+
+        String data = call.getString("data", "");
+        if (data.isEmpty()) { call.reject("data is required"); return; }
+
+        executor.execute(() -> {
+            MifareUltralight ul = MifareUltralight.get(tag);
+            if (ul == null) { call.reject("Not a MifareUltralight tag"); return; }
+
+            try {
+                byte[] dataBytes = data.getBytes(StandardCharsets.UTF_8);
+                // 组装：KH + 2字节长度 + 数据，补齐到 4 字节倍数
+                int headerLen = 4;
+                int totalLen = headerLen + dataBytes.length;
+                int paddedLen = ((totalLen + 3) / 4) * 4;
+                byte[] buf = new byte[paddedLen];
+                buf[0] = MAGIC[0];
+                buf[1] = MAGIC[1];
+                buf[2] = (byte)((dataBytes.length >> 8) & 0xFF);
+                buf[3] = (byte)(dataBytes.length & 0xFF);
+                System.arraycopy(dataBytes, 0, buf, 4, dataBytes.length);
+
+                ul.connect();
+                for (int i = 0; i < buf.length; i += 4) {
+                    ul.writePage(DATA_START_PAGE + (i / 4), Arrays.copyOfRange(buf, i, i + 4));
+                }
+                ul.close();
+                call.resolve();
+            } catch (IOException e) {
+                call.reject("MifareUltralight write failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /** 读取 MifareUltralight 原始数据（解析凯航格式） */
+    @PluginMethod
+    public void readMifareRaw(PluginCall call) {
+        Tag tag = lastTag.get();
+        if (tag == null) { call.reject("No tag available"); return; }
+
+        executor.execute(() -> {
+            MifareUltralight ul = MifareUltralight.get(tag);
+            if (ul == null) { call.reject("Not a MifareUltralight tag"); return; }
+
+            try {
+                ul.connect();
+                byte[] raw = ul.readPages(DATA_START_PAGE); // 16 bytes
+                ul.close();
+
+                JSObject result = new JSObject();
+                if (raw[0] == MAGIC[0] && raw[1] == MAGIC[1]) {
+                    int len = ((raw[2] & 0xFF) << 8) | (raw[3] & 0xFF);
+                    len = Math.min(len, raw.length - 4);
+                    String data = new String(raw, 4, len, StandardCharsets.UTF_8);
+                    result.put("data", data);
+                    result.put("isKaihang", true);
+                } else {
+                    result.put("data", "");
+                    result.put("isKaihang", false);
+                    result.put("raw", bytesToJSArray(raw));
+                }
+                call.resolve(result);
+            } catch (IOException e) {
+                call.reject("MifareUltralight read failed: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    private JSArray bytesToJSArray(byte[] bytes) {
+        JSArray arr = new JSArray();
+        if (bytes != null) for (byte b : bytes) arr.put(b & 0xFF);
+        return arr;
+    }
+}

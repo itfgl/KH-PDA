@@ -1,6 +1,1 @@
-[
-	{
-		"pkg": "@capgo/capacitor-nfc",
-		"classpath": "app.capgo.nfc.CapacitorNfcPlugin"
-	}
-]
+[]

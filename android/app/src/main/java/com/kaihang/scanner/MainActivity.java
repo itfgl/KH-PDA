@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
+import com.kaihang.scanner.plugins.KaihangNfcPlugin;
 import com.kaihang.scanner.plugins.PrintPlugin;
 import com.kaihang.scanner.plugins.ScanPlugin;
 
@@ -13,6 +14,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(android.os.Bundle savedInstanceState) {
         registerPlugin(ScanPlugin.class);
         registerPlugin(PrintPlugin.class);
+        registerPlugin(KaihangNfcPlugin.class);
         super.onCreate(savedInstanceState);
     }
 
