@@ -1,9 +1,10 @@
 /**
  * 机器相关 API
- * 服务端地址写死，H5 打包进 APK，直接调用远程 API。
+ * H5 由服务端托管，使用相对路径，与部署地址解耦。
+ * 本地开发时 vite.config.ts 的 proxy 会把 /api 转发到服务端。
  */
 
-const BASE_URL = 'http://115.29.178.34:2973';
+const BASE_URL = '';
 
 export type MachineStatus = 'idle' | 'running' | 'stopped';
 
