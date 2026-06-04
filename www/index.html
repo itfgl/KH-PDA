@@ -85,7 +85,7 @@
 <div class="header">凯航扫码 — 功能 Demo</div>
 
 <!-- ── 扫码 ────────────────────────────────────────── -->
-<div class="section">
+<div class="section" id="scan-section">
   <div class="section-title">扫码枪</div>
   <div class="section-body">
     <div class="status-bar" id="scan-status">等待初始化…</div>
@@ -96,7 +96,7 @@
 </div>
 
 <!-- ── 打印 ────────────────────────────────────────── -->
-<div class="section">
+<div class="section" id="print-section">
   <div class="section-title">标签打印</div>
   <div class="section-body">
     <div class="status-bar" id="print-status">等待连接打印机…</div>
@@ -168,6 +168,7 @@
 
   // ── 扫码 ──────────────────────────────────────────────
   let scanListener = null;
+  let scanAvailable = false;
 
   async function initScan() {
     log('initScan() 开始…', 'info');
@@ -177,22 +178,25 @@
         document.getElementById('scan-result').textContent = value;
         setStatus('scan-status', '扫码成功', 'ok');
       });
+      scanAvailable = true;
       setStatus('scan-status', '监听中，等待扫码枪触发', 'info');
       log('扫码监听注册成功', 'ok');
     } catch (e) {
-      log('initScan 失败: ' + e.message, 'err');
-      setStatus('scan-status', '初始化失败：' + e.message, 'err');
+      log('initScan 不可用（非 X8 设备）: ' + e.message, 'warn');
+      setStatus('scan-status', '⚠️ 扫码枪仅支持 X8 硬件', '');
+      // 禁用按钮
+      document.querySelectorAll('#scan-section button').forEach(b => b.disabled = true);
     }
   }
 
   window.startScan = async () => {
+    if (!scanAvailable) return;
     log('startScan()', 'info');
-    try {
-      await ScanPlugin.startScan();
-    } catch(e) { log('startScan 失败: ' + e.message, 'err'); }
+    try { await ScanPlugin.startScan(); } catch(e) { log('startScan 失败: ' + e.message, 'err'); }
   };
 
   window.stopScan = async () => {
+    if (!scanAvailable) return;
     log('stopScan()', 'info');
     await ScanPlugin.stopScan();
     setStatus('scan-status', '已停止');
@@ -200,6 +204,7 @@
 
   // ── 打印 ──────────────────────────────────────────────
   let printListener = null;
+  let printAvailable = false;
 
   window.connectPrinter = async () => {
     log('connectPrinter() 开始…', 'info');
@@ -209,22 +214,24 @@
       printListener = await PrintPlugin.addListener('printStatus', (data) => {
         log('printStatus 回调: ' + JSON.stringify(data), data.connection === 'connected' || data.status === 'PRINT_OK' ? 'ok' : data.connection === 'failed' ? 'err' : 'warn');
         const { connection, status, flag } = data;
-        if (connection === 'connected')      setStatus('print-status', '打印机已连接', 'ok');
-        else if (connection === 'failed')    setStatus('print-status', '连接失败', 'err');
-        else if (connection === 'closed')    setStatus('print-status', '打印机已关闭', 'warn');
-        else if (status === 'PRINT_OK')      setStatus('print-status', `打印完成：${flag}`, 'ok');
-        else if (status)                     setStatus('print-status', `状态：${status}`, status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
+        if (connection === 'connected')   { printAvailable = true; setStatus('print-status', '打印机已连接', 'ok'); }
+        else if (connection === 'failed') setStatus('print-status', '连接失败', 'err');
+        else if (connection === 'closed') setStatus('print-status', '打印机已关闭', 'warn');
+        else if (status === 'PRINT_OK')   setStatus('print-status', `打印完成：${flag}`, 'ok');
+        else if (status)                  setStatus('print-status', `状态：${status}`, status.includes('FAILED') || status.includes('NO_') ? 'err' : 'info');
       });
       log('printStatus 监听注册成功', 'ok');
       await PrintPlugin.connect();
       log('PrintPlugin.connect() 调用完成', 'info');
     } catch (e) {
-      log('connectPrinter 异常: ' + e.message, 'err');
-      setStatus('print-status', '连接失败：' + e.message, 'err');
+      log('connectPrinter 不可用（非 X8 设备）: ' + e.message, 'warn');
+      setStatus('print-status', '⚠️ 打印机仅支持 X8 硬件', '');
+      document.querySelectorAll('#print-section button').forEach(b => b.disabled = true);
     }
   };
 
   window.doPrint = async () => {
+    if (!printAvailable) { alert('打印机未连接或不支持'); return; }
     const batchNo     = document.getElementById('batch-no').value.trim();
     const machineId   = document.getElementById('machine-id').value.trim();
     const productType = document.getElementById('product-type').value.trim();
