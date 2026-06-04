@@ -273,6 +273,8 @@
   // ── NFC ───────────────────────────────────────────────
   let nfcEventListener = null;
   let nfcMode = null; // 'read' | 'write' | null(待机)
+  let lastNfcEvent = null;
+  let lastNfcEventTime = 0;
 
   async function nfcInit() {
     try {
@@ -287,6 +289,8 @@
   }
 
   async function handleNfcEvent(event) {
+    lastNfcEvent = event;
+    lastNfcEventTime = Date.now();
     const { techTypes, isNdef, isMifareUltralight, ndefMessage, mifareData } = event;
     log(`nfcEvent mode=${nfcMode} isNdef=${isNdef} isMifare=${isMifareUltralight}`, 'info');
 
@@ -345,7 +349,7 @@
   window.nfcCancel = () => {
     nfcMode = null;
     setStatus('nfc-status', '就绪，请选择操作', '');
-    log('NFC 模式已取消（scanning 保持激活）', 'info');
+    log('NFC 模式已取消', 'info');
   };
 
   window.nfcRead = () => {
@@ -353,6 +357,11 @@
     document.getElementById('nfc-result').textContent = '等待读取…';
     setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
     log('nfcRead() 模式已设置，请贴卡', 'info');
+    // 卡已在位（1.5秒内有事件）则立即处理
+    if (lastNfcEvent && Date.now() - lastNfcEventTime < 1500) {
+      log('卡已在位，立即读取', 'ok');
+      handleNfcEvent(lastNfcEvent);
+    }
   };
 
   window.nfcWrite = () => {
@@ -361,6 +370,11 @@
     nfcMode = 'write';
     setStatus('nfc-status', `准备写入 [${content}]… 请贴近 NFC 标签`, 'info');
     log(`nfcWrite() 模式已设置 content=${content}，请贴卡`, 'info');
+    // 卡已在位则立即写入
+    if (lastNfcEvent && Date.now() - lastNfcEventTime < 1500) {
+      log('卡已在位，立即写入', 'ok');
+      handleNfcEvent(lastNfcEvent);
+    }
   };
 
   // ── 启动 ──────────────────────────────────────────────
