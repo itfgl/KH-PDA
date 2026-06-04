@@ -127,12 +127,26 @@ public class KaihangNfcPlugin extends Plugin {
     @Override
     public void load() {
         adapter = NfcAdapter.getDefaultAdapter(getContext());
+        // NFC 前台拦截随插件加载即启动，不依赖 JS 调用 startScanning()
+        // 确保无论 H5 是否已加载、是否调用 startScanning()，贴卡都不弹系统选择框
+        if (adapter != null && adapter.isEnabled()) {
+            scanningRequested = true;
+            // load() 在主线程调用，可直接 enableReader
+            enableReader();
+            android.util.Log.d("KaihangNfc", "NFC reader mode enabled on load");
+        } else {
+            android.util.Log.w("KaihangNfc", "NFC adapter null or disabled on load");
+        }
     }
 
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
-        if (scanningRequested && adapter != null) enableReader();
+        // 从后台回来或锁屏解锁后重新激活 reader mode
+        if (adapter != null && adapter.isEnabled()) {
+            enableReader();
+            android.util.Log.d("KaihangNfc", "NFC reader mode re-enabled on resume");
+        }
     }
 
     @Override
