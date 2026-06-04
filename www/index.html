@@ -285,30 +285,83 @@ async function onMachineCodeDetected(code) {
       <div class="info-row"><span class="lbl">当前产品</span><span class="val">${m.current_product_name ? m.current_product_name + '（' + m.current_product_type + '）' : '—'}</span></div>
     `;
     document.getElementById('machine-info-card').style.display = '';
+    document.getElementById('batch-action-card').style.display = '';
 
-    // 批次
-    const batchCard = document.getElementById('batch-action-card');
-    batchCard.style.display = '';
-    if (m.latest_batch_no) {
-      currentBatchNo = m.latest_batch_no;
-      document.getElementById('batch-info-body').innerHTML = `
-        <div class="info-row"><span class="lbl">最新批次</span><span class="val" style="font-family:monospace">${m.latest_batch_no}</span></div>
-      `;
-      JsBarcode('#scan-barcode', m.latest_batch_no, {
-        format: 'CODE128', width: 2, height: 52, displayValue: false, margin: 6,
-      });
-      document.getElementById('scan-batch-no').textContent = m.latest_batch_no;
-      document.getElementById('batch-barcode-wrap').style.display = '';
-      document.getElementById('print-buttons').style.display = '';
-      initPrinter();
-    } else {
-      document.getElementById('batch-info-body').innerHTML = `<div style="color:#8e8e93;font-size:14px">暂无批次记录</div>`;
+    log('机器查询：' + code + ' status=' + m.status, 'ok');
+
+    // ── 生产中：自动创建批次 + 打印 ──────────────────────────────
+    if (m.status === 'running' && m.current_product_type) {
+      setStatus('scan-hint', '生产中，正在创建批次…', 'info');
+      document.getElementById('batch-info-body').innerHTML =
+        `<div style="color:#8e8e93;font-size:14px">批次创建中…</div>`;
       document.getElementById('batch-barcode-wrap').style.display = 'none';
       document.getElementById('print-buttons').style.display = 'none';
+
+      try {
+        const batch = await apiFetch('/api/batches', {
+          method: 'POST',
+          body: JSON.stringify({
+            machine_id:   m.id,
+            product_type: m.current_product_type,
+            product_name: m.current_product_name ?? m.current_product_type,
+          }),
+        });
+        currentBatchNo = batch.batch_no;
+        log('批次创建成功：' + batch.batch_no, 'ok');
+
+        // 显示批次信息
+        document.getElementById('batch-info-body').innerHTML = `
+          <div class="info-row"><span class="lbl">新批次</span>
+            <span class="val" style="font-family:monospace;color:#007aff">${batch.batch_no}</span></div>
+        `;
+        JsBarcode('#scan-barcode', batch.batch_no, {
+          format: 'CODE128', width: 2, height: 52, displayValue: false, margin: 6,
+        });
+        document.getElementById('scan-batch-no').textContent = batch.batch_no;
+        document.getElementById('batch-barcode-wrap').style.display = '';
+        document.getElementById('print-buttons').style.display = '';
+        setStatus('scan-hint', '批次已创建，正在打印…', 'info');
+
+        // 自动打印 1 张
+        await initPrinter();
+        await PrintPlugin.printBatchLabel({
+          batchNo:     batch.batch_no,
+          machineId:   m.code,
+          productType: m.current_product_name ?? m.current_product_type,
+          date: new Date().toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' }).replace(/\//g,''),
+        });
+        setStatus('scan-hint', `✅ 批次 ${batch.batch_no} 已创建并打印`, 'ok');
+        log('自动打印完成：' + batch.batch_no, 'ok');
+
+      } catch(e) {
+        setStatus('scan-hint', '批次创建失败：' + e.message, 'err');
+        log('批次创建失败：' + e.message, 'err');
+      }
+
+    // ── 非生产状态：仅展示最新批次信息 ──────────────────────────
+    } else {
+      if (m.latest_batch_no) {
+        currentBatchNo = m.latest_batch_no;
+        document.getElementById('batch-info-body').innerHTML = `
+          <div class="info-row"><span class="lbl">最新批次</span>
+            <span class="val" style="font-family:monospace">${m.latest_batch_no}</span></div>
+        `;
+        JsBarcode('#scan-barcode', m.latest_batch_no, {
+          format: 'CODE128', width: 2, height: 52, displayValue: false, margin: 6,
+        });
+        document.getElementById('scan-batch-no').textContent = m.latest_batch_no;
+        document.getElementById('batch-barcode-wrap').style.display = '';
+        document.getElementById('print-buttons').style.display = '';
+        initPrinter();
+      } else {
+        document.getElementById('batch-info-body').innerHTML =
+          `<div style="color:#8e8e93;font-size:14px">暂无批次记录</div>`;
+        document.getElementById('batch-barcode-wrap').style.display = 'none';
+        document.getElementById('print-buttons').style.display = 'none';
+      }
+      setStatus('scan-hint', m.status === 'idle' ? '机器空闲中' : '机器已停机', 'warn');
     }
 
-    setStatus('scan-hint', '查询成功', 'ok');
-    log('机器查询：' + code, 'ok');
   } catch(e) {
     setStatus('scan-hint', '查询失败：' + e.message, 'err');
     log('查询失败：' + e.message, 'err');
@@ -452,8 +505,8 @@ function stopCamera() {
 
 // ── 打印 ──────────────────────────────────────────────────────────────────────
 async function initPrinter() {
+  if (printListener) return; // 已连接，不重复初始化
   try {
-    if (printListener) { printListener.remove(); printListener = null; }
     printListener = await PrintPlugin.addListener('printStatus', ({ status, connection }) => {
       const el = document.getElementById('scan-print-status');
       el.style.display = '';
