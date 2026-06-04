@@ -89,16 +89,31 @@ public class KaihangNfcPlugin extends Plugin {
             if (ul != null) {
                 try {
                     ul.connect();
-                    byte[] raw = ul.readPages(DATA_START_PAGE); // 读取 4 页 = 16 字节
-                    ul.close();
-                    // 检查魔数
-                    if (raw[0] == MAGIC[0] && raw[1] == MAGIC[1]) {
-                        int len = ((raw[2] & 0xFF) << 8) | (raw[3] & 0xFF);
-                        len = Math.min(len, raw.length - 4);
+                    byte[] first = ul.readPages(DATA_START_PAGE);
+                    if (first[0] == MAGIC[0] && first[1] == MAGIC[1]) {
+                        int len = ((first[2] & 0xFF) << 8) | (first[3] & 0xFF);
+                        byte[] buf = first;
+                        if (len > 12 && len <= 28) {
+                            byte[] second = ul.readPages(DATA_START_PAGE + 4);
+                            buf = new byte[32];
+                            System.arraycopy(first, 0, buf, 0, 16);
+                            System.arraycopy(second, 0, buf, 16, 16);
+                        } else if (len > 28) {
+                            byte[] second = ul.readPages(DATA_START_PAGE + 4);
+                            byte[] third  = ul.readPages(DATA_START_PAGE + 8);
+                            buf = new byte[48];
+                            System.arraycopy(first,  0, buf,  0, 16);
+                            System.arraycopy(second, 0, buf, 16, 16);
+                            System.arraycopy(third,  0, buf, 32, 16);
+                        }
+                        ul.close();
+                        len = Math.min(len, buf.length - 4);
                         if (len > 0) {
-                            String data = new String(raw, 4, len, StandardCharsets.UTF_8);
+                            String data = new String(buf, 4, len, StandardCharsets.UTF_8);
                             event.put("mifareData", data);
                         }
+                    } else {
+                        ul.close();
                     }
                 } catch (IOException e) {
                     // 读取失败不影响事件派发
@@ -267,21 +282,43 @@ public class KaihangNfcPlugin extends Plugin {
 
             try {
                 ul.connect();
-                byte[] raw = ul.readPages(DATA_START_PAGE); // 16 bytes
-                ul.close();
-
+                // 先读第一批 16 字节拿到头部和长度
+                byte[] first = ul.readPages(DATA_START_PAGE);
                 JSObject result = new JSObject();
-                if (raw[0] == MAGIC[0] && raw[1] == MAGIC[1]) {
-                    int len = ((raw[2] & 0xFF) << 8) | (raw[3] & 0xFF);
-                    len = Math.min(len, raw.length - 4);
-                    String data = new String(raw, 4, len, StandardCharsets.UTF_8);
-                    result.put("data", data);
-                    result.put("isKaihang", true);
-                } else {
+                if (first[0] != MAGIC[0] || first[1] != MAGIC[1]) {
+                    ul.close();
                     result.put("data", "");
                     result.put("isKaihang", false);
-                    result.put("raw", bytesToJSArray(raw));
+                    result.put("raw", bytesToJSArray(first));
+                    call.resolve(result);
+                    return;
                 }
+                int len = ((first[2] & 0xFF) << 8) | (first[3] & 0xFF);
+                // 需要的总字节数（头 4 字节 + 数据）
+                int totalNeeded = 4 + len;
+                byte[] buf;
+                if (totalNeeded <= 16) {
+                    buf = first;
+                } else {
+                    // 继续读下一批（页 4+4 = 页 8），拼接
+                    byte[] second = ul.readPages(DATA_START_PAGE + 4); // pages 8-11
+                    buf = new byte[first.length + second.length];
+                    System.arraycopy(first, 0, buf, 0, first.length);
+                    System.arraycopy(second, 0, buf, first.length, second.length);
+                    // 如果还不够继续读（最多 44 字节，3 次 readPages 即可覆盖）
+                    if (totalNeeded > 32) {
+                        byte[] third = ul.readPages(DATA_START_PAGE + 8); // pages 12-15
+                        byte[] tmp = new byte[buf.length + third.length];
+                        System.arraycopy(buf, 0, tmp, 0, buf.length);
+                        System.arraycopy(third, 0, tmp, buf.length, third.length);
+                        buf = tmp;
+                    }
+                }
+                ul.close();
+                len = Math.min(len, buf.length - 4);
+                String data = new String(buf, 4, len, StandardCharsets.UTF_8);
+                result.put("data", data);
+                result.put("isKaihang", true);
                 call.resolve(result);
             } catch (IOException e) {
                 call.reject("MifareUltralight read failed: " + e.getMessage(), e);
