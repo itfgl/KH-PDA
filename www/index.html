@@ -568,33 +568,38 @@
     }
   }
 
-  async function handleNfcEvent(event) {
-    lastNfcEvent = event; lastNfcTime = Date.now();
-    const { isNdef, isMifareUltralight, ndefMessage, mifareData } = event;
-    log(`nfcEvent mode=${nfcMode} isNdef=${isNdef} isMifare=${isMifareUltralight}`, 'info');
-
-    if (nfcMode === 'read') {
-      let found = null;
-      if (isNdef && ndefMessage) {
-        for (const r of ndefMessage) {
-          if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
-            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-            found = uri.startsWith('kaihang://nfc/') ? uri.replace('kaihang://nfc/', '') : uri;
-            break;
-          }
+  // 从 nfcEvent 中提取凯航数据
+  function extractKaihangData({ isNdef, ndefMessage, mifareData }) {
+    if (isNdef && ndefMessage) {
+      for (const r of ndefMessage) {
+        if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
+          const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+          if (uri.startsWith('kaihang://nfc/')) return uri.replace('kaihang://nfc/', '');
         }
       }
-      if (!found && mifareData) found = mifareData;
+    }
+    return mifareData || null;
+  }
+
+  async function handleNfcEvent(event) {
+    lastNfcEvent = event; lastNfcTime = Date.now();
+    const { isNdef, isMifareUltralight } = event;
+    log(`nfcEvent mode=${nfcMode} isNdef=${isNdef} isMifare=${isMifareUltralight}`, 'info');
+
+    if (nfcMode === 'read' || nfcMode === null) {
+      // 主动读 或 被动贴卡 都尝试提取数据
+      const found = extractKaihangData(event);
       document.getElementById('nfc-result').textContent = found ?? '无凯航数据';
       log('NFC 读取: ' + (found ?? '无数据'), found ? 'ok' : 'warn');
       nfcMode = null;
       if (found) {
         document.getElementById('batch-no').value = found;
         setStatus('nfc-status', '读取成功：' + found, 'ok');
-        switchTab('nfc');          // 不管在哪个页面，跳到 NFC tab
-        startCountdown(found);     // 5s 倒计时自动打印
+        switchTab('nfc');       // 任意页面跳到 NFC tab
+        startCountdown(found);  // 5s 倒计时自动打印
       } else {
-        setStatus('nfc-status', '读取完成（无凯航数据）', '');
+        // 只在 NFC tab 显示"无数据"，其他 tab 不打扰
+        if (currentTab === 'nfc') setStatus('nfc-status', '读取完成（无凯航数据）', '');
       }
 
     } else if (nfcMode === 'write') {
