@@ -82,7 +82,10 @@
 </head>
 <body>
 
-<div class="header">凯航扫码 — 功能 Demo</div>
+<div class="header">
+  凯航扫码 — 功能 Demo
+  <div id="build-time" style="font-size:11px;font-weight:400;opacity:0.6;margin-top:2px;">build: 加载中…</div>
+</div>
 
 <!-- ── 扫码 ────────────────────────────────────────── -->
 <div class="section" id="scan-section">
@@ -125,7 +128,10 @@
 <div id="debug-log" class="section">
   <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;">
     <span>调试日志</span>
-    <button class="btn btn-gray btn-sm" onclick="clearLog()">清空</button>
+    <div>
+      <button class="btn btn-gray btn-sm" onclick="copyLog()" style="margin-right:6px;">复制</button>
+      <button class="btn btn-gray btn-sm" onclick="clearLog()">清空</button>
+    </div>
   </div>
   <div class="log-body" id="log-body"></div>
 </div>
@@ -147,10 +153,22 @@
 
   window.clearLog = () => { logBody.innerHTML = ''; };
 
+  window.copyLog = () => {
+    const lines = [...logBody.querySelectorAll('.log-line')].map(el => el.textContent).join('\n');
+    navigator.clipboard.writeText(lines).then(
+      () => { const b = document.querySelector('[onclick="copyLog()"]'); b.textContent = '已复制'; setTimeout(() => b.textContent = '复制', 1500); },
+      () => alert(lines)  // 降级：弹窗显示
+    );
+  };
+
   window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
   window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
 
   // plugins.js 已把 ScanPlugin / PrintPlugin / NFC 挂到 window
+  // 显示构建时间
+  const bt = window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh') : '未知';
+  document.getElementById('build-time').textContent = 'build: ' + bt;
+  log('build: ' + bt, 'plain');
   log('platform=' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
   log('ScanPlugin=' + (window.ScanPlugin ? 'ok' : 'missing'), window.ScanPlugin ? 'ok' : 'err');
   log('PrintPlugin=' + (window.PrintPlugin ? 'ok' : 'missing'), window.PrintPlugin ? 'ok' : 'err');
