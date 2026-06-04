@@ -279,7 +279,10 @@
 <script src="plugins.js"></script>
 <script>
   // ── Tab 切换 ─────────────────────────────────────────
+  let currentTab = 'scan';
   function switchTab(name) {
+    if (currentTab === 'scan' && name !== 'scan') stopCamScan(); // 离开扫码 tab 停相机
+    currentTab = name;
     document.querySelectorAll('.tab-item').forEach((el, i) => {
       const names = ['scan','print','nfc','log'];
       el.classList.toggle('active', names[i] === name);
@@ -422,55 +425,99 @@
   let camStream = null, camLoop = null;
 
   window.startCamScan = async () => {
+    stopCamScan(); // 先确保干净状态
     try {
-      setStatus('cam-status', '请求相机…', 'info');
-      camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setStatus('cam-status', '请求相机权限…', 'info');
+      camStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
       const v = document.getElementById('cam-video');
       v.srcObject = camStream;
-      await v.play();
+
+      // 等视频真正开始播放再检测
+      await new Promise((res, rej) => {
+        v.onplaying = res;
+        v.onerror = rej;
+        v.play().catch(rej);
+      });
+
       document.getElementById('cam-wrap').style.display = 'block';
       document.getElementById('cam-btn-start').style.display = 'none';
       document.getElementById('cam-btn-stop').style.display  = 'inline-block';
+      log('相机已启动', 'ok');
 
-      if ('BarcodeDetector' in window) {
-        setStatus('cam-status', '扫描中… 支持一维码 / 二维码', 'info');
-        const det = new BarcodeDetector({
-          formats: ['code_128','code_39','code_93','qr_code','ean_13','ean_8','data_matrix','aztec']
-        });
-        const loop = async () => {
-          if (!camStream) return;
-          try {
-            const codes = await det.detect(v);
-            if (codes.length) {
-              const val = codes[0].rawValue;
-              document.getElementById('cam-result').textContent = val;
-              document.getElementById('batch-no').value = val;
-              setStatus('cam-status', `识别：${val}（${codes[0].format}）`, 'ok');
-              log('相机识别: ' + val + ' [' + codes[0].format + ']', 'ok');
-              stopCamScan();
-              return;
-            }
-          } catch(_) {}
-          camLoop = requestAnimationFrame(loop);
-        };
-        camLoop = requestAnimationFrame(loop);
-      } else {
-        setStatus('cam-status', '⚠️ WebView 不支持 BarcodeDetector', 'warn');
-        log('BarcodeDetector 不可用', 'warn');
+      // 检测 BarcodeDetector 可用性
+      if (!('BarcodeDetector' in window)) {
+        setStatus('cam-status', '⚠️ 此 WebView 不支持 BarcodeDetector，请更新系统 Chrome/WebView', 'warn');
+        log('BarcodeDetector 不可用（API 缺失）', 'warn');
+        return;
       }
+
+      // 检测支持的格式
+      let supported = [];
+      try { supported = await BarcodeDetector.getSupportedFormats(); } catch(_) {}
+      log('BarcodeDetector 支持格式: ' + (supported.join(',') || '未知'), 'info');
+
+      const wantFormats = ['code_128','code_39','code_93','qr_code','ean_13','ean_8','data_matrix'];
+      const useFormats  = supported.length ? wantFormats.filter(f => supported.includes(f)) : wantFormats;
+      if (!useFormats.length) {
+        setStatus('cam-status', '⚠️ 无可用格式，请换用硬件扫码枪', 'warn');
+        log('没有匹配的格式', 'warn');
+        return;
+      }
+      log('使用格式: ' + useFormats.join(','), 'info');
+
+      const det = new BarcodeDetector({ formats: useFormats });
+      setStatus('cam-status', '扫描中… 支持一维码 / 二维码', 'info');
+
+      let failCount = 0;
+      const loop = async () => {
+        if (!camStream) return;
+        // 确认视频有内容
+        if (v.readyState < 2 || v.videoWidth === 0) {
+          camLoop = requestAnimationFrame(loop);
+          return;
+        }
+        try {
+          const codes = await det.detect(v);
+          failCount = 0;
+          if (codes.length) {
+            const val = codes[0].rawValue;
+            document.getElementById('cam-result').textContent = val;
+            document.getElementById('batch-no').value = val;
+            setStatus('cam-status', `识别：${val} [${codes[0].format}]`, 'ok');
+            log('相机识别: ' + val + ' [' + codes[0].format + ']', 'ok');
+            stopCamScan();
+            return;
+          }
+        } catch(e) {
+          failCount++;
+          if (failCount === 1) log('detect 报错: ' + e.message, 'warn');
+          if (failCount > 30) {
+            setStatus('cam-status', '⚠️ 识别持续失败: ' + e.message, 'warn');
+            return;
+          }
+        }
+        camLoop = requestAnimationFrame(loop);
+      };
+      // 给视频流稳定 200ms 再开始检测
+      setTimeout(() => { camLoop = requestAnimationFrame(loop); }, 200);
+
     } catch (e) {
-      setStatus('cam-status', '相机失败: ' + e.message, 'err');
+      setStatus('cam-status', '相机启动失败: ' + e.message, 'err');
       log('相机启动失败: ' + e.message, 'err');
     }
   };
 
   window.stopCamScan = () => {
-    if (camLoop) { cancelAnimationFrame(camLoop); camLoop = null; }
+    if (camLoop)   { cancelAnimationFrame(camLoop); camLoop = null; }
     if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+    const v = document.getElementById('cam-video');
+    if (v) { v.srcObject = null; v.onplaying = null; v.onerror = null; }
     document.getElementById('cam-wrap').style.display = 'none';
     document.getElementById('cam-btn-start').style.display = 'inline-block';
     document.getElementById('cam-btn-stop').style.display  = 'none';
-    setStatus('cam-status', '支持 Code128、QR、EAN 等格式');
+    setStatus('cam-status', '支持 Code128 / QR / EAN 等格式');
   };
 
   // ── NFC ───────────────────────────────────────────────
