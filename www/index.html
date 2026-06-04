@@ -8,68 +8,60 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, sans-serif; background: #f2f2f7; color: #1c1c1e; }
 
-    /* ── 顶栏 ── */
     .header { background: #1c1c1e; color: #fff; padding: 14px 16px; font-size: 17px; font-weight: 600; }
 
-    /* ── Tab 栏 ── */
+    /* Tab */
     .tab-bar { display: flex; background: #fff; border-bottom: 1px solid #e5e5ea; }
     .tab-btn { flex: 1; padding: 12px 4px; border: none; background: transparent; font-size: 14px; color: #8e8e93; cursor: pointer; border-bottom: 2px solid transparent; }
     .tab-btn.active { color: #007aff; border-bottom-color: #007aff; font-weight: 600; }
 
-    /* ── 页面 ── */
     .page { display: none; padding: 14px; }
     .page.active { display: block; }
 
-    /* ── 卡片 ── */
+    /* 卡片 */
     .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
-    .card-title { font-size: 13px; font-weight: 600; color: #8e8e93; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
+    .card-title { font-size: 12px; font-weight: 600; color: #8e8e93; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
 
-    /* ── 状态栏 ── */
-    .status { padding: 10px 12px; border-radius: 8px; font-size: 14px; min-height: 40px; background: #f2f2f7; color: #3a3a3c; margin-bottom: 10px; }
+    /* 状态 */
+    .status { padding: 10px 12px; border-radius: 8px; font-size: 14px; min-height: 40px; background: #f2f2f7; color: #3a3a3c; margin-bottom: 10px; line-height: 1.5; }
     .status.ok   { background: #d1fae5; color: #065f46; }
     .status.err  { background: #fee2e2; color: #991b1b; }
     .status.info { background: #dbeafe; color: #1e40af; }
     .status.warn { background: #fef3c7; color: #92400e; }
 
-    /* ── 按钮 ── */
-    .btn { display: block; width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+    /* 按钮 */
+    .btn { display: block; width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px; text-align: center; }
     .btn:active { opacity: .75; }
     .btn-blue  { background: #007aff; color: #fff; }
     .btn-green { background: #34c759; color: #fff; }
-    .btn-red   { background: #ff3b30; color: #fff; }
     .btn-gray  { background: #e5e5ea; color: #1c1c1e; }
     .btn-row   { display: flex; gap: 8px; }
-    .btn-row .btn { flex: 1; }
-    .btn:disabled { background: #c7c7cc; cursor: not-allowed; }
+    .btn-row .btn { flex: 1; margin-bottom: 0; }
+    .btn:disabled { background: #c7c7cc !important; cursor: not-allowed; }
 
-    /* ── 表单 ── */
+    /* 表单 */
     .field { margin-bottom: 12px; }
     .field label { display: block; font-size: 12px; color: #8e8e93; margin-bottom: 4px; }
-    .field input, .field select {
-      width: 100%; padding: 10px 12px; border: 1px solid #d1d1d6;
-      border-radius: 8px; font-size: 15px; outline: none; background: #fff;
-    }
-    .field input:focus, .field select:focus { border-color: #007aff; }
+    .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid #d1d1d6; border-radius: 8px; font-size: 15px; outline: none; background: #fff; }
+    .field input:focus { border-color: #007aff; }
 
-    /* ── 信息行 ── */
+    /* 机器详情行 */
     .info-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #f2f2f7; font-size: 14px; }
     .info-row:last-child { border-bottom: none; }
     .info-row .lbl { color: #8e8e93; }
-    .info-row .val { font-weight: 500; }
-
-    /* ── 徽章 ── */
+    .info-row .val { font-weight: 500; text-align: right; max-width: 65%; }
     .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
     .badge-idle    { background: #e5e5ea; color: #6e6e73; }
     .badge-running { background: #fef3c7; color: #92400e; }
     .badge-stopped { background: #fee2e2; color: #991b1b; }
 
-    /* ── 条码区 ── */
-    .barcode-wrap { text-align: center; padding: 10px 0; }
+    /* 条码 */
+    .barcode-wrap { text-align: center; padding: 8px 0; }
     .barcode-wrap svg { max-width: 100%; }
-    .barcode-no { font-family: monospace; font-size: 13px; color: #8e8e93; margin-top: 4px; }
+    .barcode-no { font-family: monospace; font-size: 12px; color: #8e8e93; margin-top: 4px; }
 
-    /* ── 调试日志 ── */
-    #log-body { background: #1c1c1e; border-radius: 10px; padding: 10px; max-height: 220px; overflow-y: auto; }
+    /* 日志 */
+    #log-body { background: #1c1c1e; border-radius: 10px; padding: 10px; max-height: 260px; overflow-y: auto; }
     .log-line { font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; border-bottom: 1px solid #2c2c2e; }
     .log-line.info  { color: #64d2ff; }
     .log-line.ok    { color: #30d158; }
@@ -83,205 +75,232 @@
 <div class="header">凯航扫码</div>
 
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('nfc-machine')">机器</button>
-  <button class="tab-btn"        onclick="switchTab('batch')">批次</button>
+  <button class="tab-btn active" onclick="switchTab('scan')">扫描</button>
+  <button class="tab-btn"        onclick="switchTab('setup')">设置机器</button>
   <button class="tab-btn"        onclick="switchTab('debug')">调试</button>
 </div>
 
-<!-- ════════════════════ 机器 NFC ════════════════════ -->
-<div class="page active" id="page-nfc-machine">
+<!-- ══════════════════════════════════════════════
+     页面 1：扫描
+     NFC / 扫码枪 / 相机 → 识别机器编号
+       → 已写入卡：查机器状态 + 最新批次 → 打印
+       → 空白卡：自动跳转【设置机器】
+════════════════════════════════════════════════ -->
+<div class="page active" id="page-scan">
 
   <div class="card">
-    <div class="card-title">NFC 扫描</div>
-    <div class="status info" id="nfc-m-status">点击按钮后靠近 NFC 标签</div>
-    <button class="btn btn-blue" id="nfc-m-scan-btn" onclick="nfcMachineScan()">开始扫描</button>
-    <button class="btn btn-gray" id="nfc-m-cancel-btn" style="display:none" onclick="nfcMachineCancel()">取消</button>
+    <div class="card-title">扫描方式</div>
+    <button class="btn btn-blue" onclick="triggerNFC()">贴 NFC</button>
+    <div class="btn-row">
+      <button class="btn btn-gray" onclick="triggerScanGun()">扫码枪</button>
+      <button class="btn btn-gray" onclick="triggerCamera()">相机扫码</button>
+    </div>
   </div>
 
-  <!-- 已有机器详情 -->
-  <div class="card" id="machine-detail-card" style="display:none">
+  <div class="status info" id="scan-hint">选择扫描方式后靠近机器标签</div>
+
+  <!-- 机器信息（识别成功后显示） -->
+  <div class="card" id="machine-info-card" style="display:none">
     <div class="card-title">机器信息</div>
-    <div id="machine-detail-body"></div>
+    <div id="machine-info-body"></div>
   </div>
 
-  <!-- 新建机器表单 -->
-  <div class="card" id="new-machine-card" style="display:none">
-    <div class="card-title">新建机器并写入卡片</div>
-    <div class="field"><label>机器编号（如 M01）</label><input id="nm-code" placeholder="M01" maxlength="8"></div>
-    <div class="field"><label>机器名称</label><input id="nm-name" placeholder="1号生产线"></div>
-    <button class="btn btn-green" onclick="createAndWrite()">确认创建并写卡</button>
-    <button class="btn btn-gray" onclick="nfcMachineReset()">取消</button>
+  <!-- 批次 + 打印（有批次记录时显示） -->
+  <div class="card" id="batch-action-card" style="display:none">
+    <div class="card-title">批次</div>
+    <div id="batch-info-body"></div>
+    <div class="barcode-wrap" id="batch-barcode-wrap" style="display:none">
+      <svg id="scan-barcode"></svg>
+      <div class="barcode-no" id="scan-batch-no"></div>
+    </div>
+    <div class="status" id="scan-print-status" style="display:none"></div>
+    <div id="print-buttons" style="display:none; margin-top:10px">
+      <div class="btn-row">
+        <button class="btn btn-green" onclick="doPrint(1)">打印 1 张</button>
+        <button class="btn btn-green" onclick="doPrint(3)">打印 3 张</button>
+        <button class="btn btn-green" onclick="doPrint(5)">打印 5 张</button>
+      </div>
+    </div>
   </div>
 
 </div>
 
-<!-- ════════════════════ 批次录入 ════════════════════ -->
-<div class="page" id="page-batch">
+<!-- ══════════════════════════════════════════════
+     页面 2：设置机器
+     录入信息 → 创建机器 → 打印机器标签 → 写入 NFC
+════════════════════════════════════════════════ -->
+<div class="page" id="page-setup">
 
   <div class="card">
-    <div class="card-title">选择机器</div>
-    <div class="field">
-      <select id="batch-machine-sel" onchange="onMachineSelect()">
-        <option value="">— 请选择机器 —</option>
-      </select>
-    </div>
-    <div id="batch-machine-warn" style="display:none" class="status warn"></div>
+    <div class="card-title">机器信息</div>
+    <div class="field"><label>机器编号（如 M01）</label><input id="setup-code" placeholder="M01" maxlength="8"></div>
+    <div class="field"><label>机器名称</label><input id="setup-name" placeholder="1号生产线"></div>
+    <div class="field"><label>产品类型码</label><input id="setup-ptype" placeholder="01" maxlength="8"></div>
+    <div class="field"><label>产品名称</label><input id="setup-pname" placeholder="电容"></div>
   </div>
 
-  <div class="card">
-    <div class="card-title">产品类型</div>
-    <div style="display:flex; gap:10px">
-      <div class="field" style="flex:0 0 90px; margin-bottom:0">
-        <label>类型码</label>
-        <input id="batch-ptype" placeholder="01" maxlength="8">
-      </div>
-      <div class="field" style="flex:1; margin-bottom:0">
-        <label>产品名称</label>
-        <input id="batch-pname" placeholder="电容">
-      </div>
-    </div>
-  </div>
+  <div class="status" id="setup-status" style="display:none"></div>
 
-  <div class="status" id="batch-status" style="margin-bottom:14px"></div>
+  <button class="btn btn-blue"  onclick="setupCreate()">创建机器</button>
+  <button class="btn btn-green" id="setup-print-btn" onclick="setupPrintLabel()" disabled>打印机器标签</button>
+  <button class="btn btn-gray"  id="setup-write-btn" onclick="setupWriteNFC()" disabled>写入 NFC 卡</button>
 
-  <button class="btn btn-blue" id="batch-create-btn" onclick="createBatch()">创建批次</button>
-
-  <!-- 批次码 + 条码 -->
-  <div class="card" id="batch-result-card" style="display:none">
-    <div class="card-title">批次码</div>
+  <div class="card" id="setup-barcode-card" style="display:none; margin-top:4px">
+    <div class="card-title">标签预览</div>
     <div class="barcode-wrap">
-      <svg id="batch-barcode"></svg>
-      <div class="barcode-no" id="batch-no-text"></div>
+      <svg id="setup-barcode"></svg>
+      <div class="barcode-no" id="setup-barcode-no"></div>
     </div>
-    <div class="status" id="print-status" style="margin:10px 0; display:none"></div>
-    <div class="btn-row" style="margin-top:10px">
-      <button class="btn btn-green" onclick="doBatchPrint(1)">打印 1 张</button>
-      <button class="btn btn-green" onclick="doBatchPrint(3)">打印 3 张</button>
-      <button class="btn btn-green" onclick="doBatchPrint(5)">打印 5 张</button>
-    </div>
-    <button class="btn btn-gray" style="margin-top:8px" onclick="batchReset()">创建下一批次</button>
   </div>
 
 </div>
 
-<!-- ════════════════════ 调试 ════════════════════ -->
+<!-- ══════════════════════════════════════════════
+     页面 3：调试
+════════════════════════════════════════════════ -->
 <div class="page" id="page-debug">
 
   <div class="card">
-    <div class="card-title">扫码枪</div>
-    <div class="status" id="scan-status">等待初始化…</div>
-    <div class="btn-row">
-      <button class="btn btn-blue" onclick="startScan()">触发扫码</button>
-      <button class="btn btn-gray" onclick="stopScan()">停止</button>
-    </div>
-    <div class="status" id="scan-result" style="margin-top:8px; font-family:monospace; font-size:13px">扫码结果</div>
+    <div class="card-title">插件状态</div>
+    <div id="plugin-status-body" style="font-size:13px; line-height:2.2"></div>
   </div>
 
   <div class="card">
-    <div class="card-title">标签打印</div>
-    <div class="status" id="print-debug-status">等待连接打印机…</div>
-    <div class="field"><input id="debug-batch-no" placeholder="批次码" value="M01260604010001"></div>
-    <div class="btn-row">
-      <button class="btn btn-blue" onclick="debugPrint()">打印</button>
-      <button class="btn btn-gray" onclick="connectPrinter()">重连</button>
-    </div>
+    <div class="card-title">打印机</div>
+    <div class="status" id="debug-printer-status">未连接</div>
+    <button class="btn btn-gray" onclick="connectPrinter()">重连打印机</button>
   </div>
 
   <div class="card">
-    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center">
       <span>日志</span>
-      <button class="btn btn-gray" style="width:auto;padding:4px 10px;font-size:12px;margin:0" onclick="clearLog()">清空</button>
+      <button onclick="clearLog()" style="border:none;background:#e5e5ea;border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer">清空</button>
     </div>
     <div id="log-body"></div>
   </div>
 
 </div>
 
-<!-- JsBarcode CDN -->
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script src="plugins.js"></script>
 <script>
+'use strict';
 
-// ── 常量 ───────────────────────────────────────────────────────────────────
-const NFC_PREFIX = 'kaihang://nfc/';
-const API = '';   // 与服务端同源，相对路径
+const NFC_PREFIX  = 'kaihang://nfc/';
+const STATUS_MAP  = { idle: '空闲', running: '生产中', stopped: '停机' };
+const STATUS_CLS  = { idle: 'badge-idle', running: 'badge-running', stopped: 'badge-stopped' };
 
-// ── 日志 ───────────────────────────────────────────────────────────────────
+// ── 日志 ──────────────────────────────────────────────────────────────────────
 const logBody = document.getElementById('log-body');
-window.log = function(msg, type = 'plain') {
+window.log = (msg, type = 'plain') => {
   const t = new Date().toTimeString().slice(0, 8);
-  const d = document.createElement('div');
-  d.className = 'log-line ' + type;
-  d.textContent = `[${t}] ${msg}`;
-  logBody.appendChild(d);
+  const el = document.createElement('div');
+  el.className = 'log-line ' + type;
+  el.textContent = `[${t}] ${msg}`;
+  logBody.appendChild(el);
   logBody.scrollTop = logBody.scrollHeight;
-  console.log(`[${type}] ${msg}`);
 };
 window.clearLog = () => { logBody.innerHTML = ''; };
 window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
 window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
 
-// ── Tab ────────────────────────────────────────────────────────────────────
-const TABS = ['nfc-machine', 'batch', 'debug'];
+// ── Tab ────────────────────────────────────────────────────────────────────────
+const TABS = ['scan', 'setup', 'debug'];
 function switchTab(name) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', TABS[i] === name));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + name).classList.add('active');
-  if (name === 'batch') loadMachineOptions();
+  if (name === 'debug') refreshPluginStatus();
 }
 
-// ── API 工具 ───────────────────────────────────────────────────────────────
+// ── API ────────────────────────────────────────────────────────────────────────
 async function apiFetch(path, opts = {}) {
-  const res = await fetch(API + path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
   const data = await res.json();
   if (!res.ok) throw new Error(data.detail ?? `请求失败 ${res.status}`);
   return data;
 }
-
 function setStatus(id, msg, type = '') {
   const el = document.getElementById(id);
   el.textContent = msg;
-  el.className = 'status' + (type ? ' ' + type : '');
+  el.className   = 'status' + (type ? ' ' + type : '');
   el.style.display = '';
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// 机器 NFC
-// ══════════════════════════════════════════════════════════════════════════
-const { NFC } = window;
-let nfcListener = null;
-let nfcPhase = 'idle'; // idle | scanning | writing
+// ══════════════════════════════════════════════════════════════════════════════
+// 页面 1：扫描
+// ══════════════════════════════════════════════════════════════════════════════
+const { NFC, ScanPlugin, PrintPlugin } = window;
+let nfcScanListener  = null;
+let printListener    = null;
+let currentBatchNo   = '';
+let currentMachine   = null;
 
-function nfcMachineReset() {
-  nfcMachineCancel();
-  document.getElementById('machine-detail-card').style.display = 'none';
-  document.getElementById('new-machine-card').style.display = 'none';
-  setStatus('nfc-m-status', '点击按钮后靠近 NFC 标签', 'info');
+function scanReset() {
+  document.getElementById('machine-info-card').style.display  = 'none';
+  document.getElementById('batch-action-card').style.display  = 'none';
+  document.getElementById('scan-print-status').style.display  = 'none';
+  currentBatchNo = '';
+  currentMachine = null;
 }
 
-function nfcMachineCancel() {
-  if (nfcListener) { nfcListener.remove(); nfcListener = null; }
-  NFC?.removeAllListeners?.();
-  nfcPhase = 'idle';
-  document.getElementById('nfc-m-scan-btn').style.display = '';
-  document.getElementById('nfc-m-cancel-btn').style.display = 'none';
-}
-
-async function nfcMachineScan() {
-  nfcMachineCancel();
-  document.getElementById('machine-detail-card').style.display = 'none';
-  document.getElementById('new-machine-card').style.display = 'none';
-  nfcPhase = 'scanning';
-  document.getElementById('nfc-m-scan-btn').style.display = 'none';
-  document.getElementById('nfc-m-cancel-btn').style.display = '';
-  setStatus('nfc-m-status', '扫描中… 请靠近 NFC 标签', 'info');
-
+// 三种扫描方式都最终调用此函数
+async function onMachineCodeDetected(code) {
+  setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
+  scanReset();
   try {
-    nfcListener = await NFC.addListener('nfcTag', async (tag) => {
-      nfcMachineCancel();
+    const m = await apiFetch('/api/machines/code/' + encodeURIComponent(code));
+    currentMachine = m;
+
+    // 机器详情
+    document.getElementById('machine-info-body').innerHTML = `
+      <div class="info-row"><span class="lbl">名称</span><span class="val">${m.name}</span></div>
+      <div class="info-row"><span class="lbl">编号</span><span class="val">${m.code}</span></div>
+      <div class="info-row"><span class="lbl">状态</span><span class="val"><span class="badge ${STATUS_CLS[m.status]}">${STATUS_MAP[m.status]}</span></span></div>
+      <div class="info-row"><span class="lbl">当前产品</span><span class="val">${m.current_product_name ? m.current_product_name + '（' + m.current_product_type + '）' : '—'}</span></div>
+    `;
+    document.getElementById('machine-info-card').style.display = '';
+
+    // 批次
+    const batchCard = document.getElementById('batch-action-card');
+    batchCard.style.display = '';
+    if (m.latest_batch_no) {
+      currentBatchNo = m.latest_batch_no;
+      document.getElementById('batch-info-body').innerHTML = `
+        <div class="info-row"><span class="lbl">最新批次</span><span class="val" style="font-family:monospace">${m.latest_batch_no}</span></div>
+      `;
+      JsBarcode('#scan-barcode', m.latest_batch_no, {
+        format: 'CODE128', width: 2, height: 52, displayValue: false, margin: 6,
+      });
+      document.getElementById('scan-batch-no').textContent = m.latest_batch_no;
+      document.getElementById('batch-barcode-wrap').style.display = '';
+      document.getElementById('print-buttons').style.display = '';
+      initPrinter();
+    } else {
+      document.getElementById('batch-info-body').innerHTML = `<div style="color:#8e8e93;font-size:14px">暂无批次记录</div>`;
+      document.getElementById('batch-barcode-wrap').style.display = 'none';
+      document.getElementById('print-buttons').style.display = 'none';
+    }
+
+    setStatus('scan-hint', '查询成功', 'ok');
+    log('机器查询：' + code, 'ok');
+  } catch(e) {
+    setStatus('scan-hint', '查询失败：' + e.message, 'err');
+    log('查询失败：' + e.message, 'err');
+  }
+}
+
+// ── NFC ───────────────────────────────────────────────────────────────────────
+async function triggerNFC() {
+  if (nfcScanListener) { nfcScanListener.remove(); nfcScanListener = null; NFC?.removeAllListeners?.(); }
+  setStatus('scan-hint', '扫描中… 请靠近 NFC 标签', 'info');
+  try {
+    nfcScanListener = await NFC.addListener('nfcTag', async (tag) => {
+      nfcScanListener.remove(); nfcScanListener = null;
+      await NFC.removeAllListeners();
+
       const records = tag.messages?.[0]?.records ?? [];
       let machineCode = null;
-
       for (const r of records) {
         if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
           const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
@@ -291,267 +310,203 @@ async function nfcMachineScan() {
       }
 
       if (machineCode) {
-        setStatus('nfc-m-status', '识别到：' + machineCode + '，查询中…', 'info');
-        try {
-          const m = await apiFetch('/api/machines/code/' + encodeURIComponent(machineCode));
-          showMachineDetail(m);
-        } catch(e) {
-          setStatus('nfc-m-status', '查询失败：' + e.message, 'err');
-        }
+        await onMachineCodeDetected(machineCode);
       } else {
-        setStatus('nfc-m-status', '空白卡，请填写机器信息', 'warn');
-        document.getElementById('nm-code').value = '';
-        document.getElementById('nm-name').value = '';
-        document.getElementById('new-machine-card').style.display = '';
-        document.getElementById('nfc-m-scan-btn').style.display = '';
+        // 空白卡 → 跳转设置机器
+        log('空白卡，跳转设置机器', 'warn');
+        setStatus('scan-hint', '空白卡，已跳转到【设置机器】', 'warn');
+        switchTab('setup');
+        setStatus('setup-status', '检测到空白卡，请填写信息后写入', 'warn');
       }
     });
-    log('NFC 机器扫描监听已注册', 'info');
+    log('NFC 监听注册成功', 'info');
   } catch(e) {
-    setStatus('nfc-m-status', '启动失败：' + e.message, 'err');
-    document.getElementById('nfc-m-scan-btn').style.display = '';
-    document.getElementById('nfc-m-cancel-btn').style.display = 'none';
+    setStatus('scan-hint', 'NFC 启动失败：' + e.message, 'err');
+    log('NFC 启动失败：' + e.message, 'err');
   }
 }
 
-function showMachineDetail(m) {
-  const STATUS = { idle: '空闲', running: '生产中', stopped: '停机' };
-  const cls = { idle: 'badge-idle', running: 'badge-running', stopped: 'badge-stopped' };
-  document.getElementById('machine-detail-body').innerHTML = `
-    <div class="info-row"><span class="lbl">名称</span><span class="val">${m.name}</span></div>
-    <div class="info-row"><span class="lbl">编号</span><span class="val">${m.code}</span></div>
-    <div class="info-row"><span class="lbl">状态</span><span class="val"><span class="badge ${cls[m.status]}">${STATUS[m.status]}</span></span></div>
-    <div class="info-row"><span class="lbl">当前产品</span><span class="val">${m.current_product_name ? m.current_product_name + '（' + m.current_product_type + '）' : '—'}</span></div>
-    <div class="info-row"><span class="lbl">最新批次</span><span class="val">${m.latest_batch_no ?? '暂无'}</span></div>
-  `;
-  document.getElementById('machine-detail-card').style.display = '';
-  setStatus('nfc-m-status', '查询成功', 'ok');
-  document.getElementById('nfc-m-scan-btn').style.display = '';
-}
-
-async function createAndWrite() {
-  const code = document.getElementById('nm-code').value.trim();
-  const name = document.getElementById('nm-name').value.trim();
-  if (!code || !name) { setStatus('nfc-m-status', '编号和名称不能为空', 'err'); return; }
-
-  setStatus('nfc-m-status', '创建机器中…', 'info');
-  try {
-    await apiFetch('/api/machines', { method: 'POST', body: JSON.stringify({ code, name }) });
-    log('机器创建成功：' + code, 'ok');
-  } catch(e) {
-    if (!e.message.includes('已存在')) {
-      setStatus('nfc-m-status', '创建失败：' + e.message, 'err'); return;
-    }
-  }
-
-  // 写卡
-  document.getElementById('new-machine-card').style.display = 'none';
-  document.getElementById('nfc-m-cancel-btn').style.display = '';
-  document.getElementById('nfc-m-scan-btn').style.display = 'none';
-  setStatus('nfc-m-status', '请再次靠近 NFC 标签写入…', 'warn');
-
-  nfcMachineCancel();
-  nfcPhase = 'writing';
-  try {
-    nfcListener = await NFC.addListener('nfcTag', async () => {
-      nfcMachineCancel();
-      try {
-        const enc = new TextEncoder();
-        const uri = NFC_PREFIX + code;
-        const pl = new Uint8Array(1 + uri.length);
-        pl[0] = 0x00;
-        pl.set(enc.encode(uri), 1);
-        await NFC.write({
-          records: [
-            { tnf: 1, type: Array.from(enc.encode('U')), id: [], payload: Array.from(pl) },
-            { tnf: 4, type: Array.from(enc.encode('android.com:pkg')), id: [], payload: Array.from(enc.encode('com.kaihang.scanner')) },
-          ]
-        });
-        setStatus('nfc-m-status', '写入成功！机器 ' + code + ' 已绑定到卡片。', 'ok');
-        log('NFC 写卡成功：' + code, 'ok');
-        document.getElementById('nfc-m-scan-btn').style.display = '';
-      } catch(e) {
-        setStatus('nfc-m-status', '写卡失败：' + e.message, 'err');
-        document.getElementById('nfc-m-scan-btn').style.display = '';
-        document.getElementById('new-machine-card').style.display = '';
-      }
-    });
-  } catch(e) {
-    setStatus('nfc-m-status', '写卡监听失败：' + e.message, 'err');
-    document.getElementById('nfc-m-scan-btn').style.display = '';
+// ── 扫码枪 ────────────────────────────────────────────────────────────────────
+async function triggerScanGun() {
+  setStatus('scan-hint', '等待扫码枪扫描…', 'info');
+  try { await ScanPlugin.startScan(); } catch(e) {
+    setStatus('scan-hint', '扫码枪启动失败：' + e.message, 'err');
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// 批次录入
-// ══════════════════════════════════════════════════════════════════════════
-let machinesCache = [];
-let currentBatchNo = '';
-let printListener = null;
-
-async function loadMachineOptions() {
-  try {
-    machinesCache = await apiFetch('/api/machines');
-    const sel = document.getElementById('batch-machine-sel');
-    const cur = sel.value;
-    const STATUS = { idle: '空闲', running: '生产中', stopped: '停机' };
-    sel.innerHTML = '<option value="">— 请选择机器 —</option>' +
-      machinesCache.map(m => `<option value="${m.id}" ${m.id == cur ? 'selected' : ''}>${m.code} ${m.name} [${STATUS[m.status]}]</option>`).join('');
-    if (cur) onMachineSelect();
-  } catch(e) { log('加载机器列表失败：' + e.message, 'err'); }
+// ── 相机 ──────────────────────────────────────────────────────────────────────
+function triggerCamera() {
+  // TODO: 接入 ZXing 相机扫码
+  setStatus('scan-hint', '相机扫码开发中…', 'warn');
 }
 
-function onMachineSelect() {
-  const id = Number(document.getElementById('batch-machine-sel').value);
-  const m = machinesCache.find(m => m.id === id);
-  if (!m) return;
-  document.getElementById('batch-ptype').value = m.current_product_type ?? '';
-  document.getElementById('batch-pname').value = m.current_product_name ?? '';
-  const warn = document.getElementById('batch-machine-warn');
-  if (m.status !== 'running') {
-    warn.textContent = '该机器当前未在生产中，请确认后继续。';
-    warn.style.display = '';
-  } else {
-    warn.style.display = 'none';
-  }
-}
-
-async function createBatch() {
-  const machineId = Number(document.getElementById('batch-machine-sel').value);
-  const ptype = document.getElementById('batch-ptype').value.trim();
-  const pname = document.getElementById('batch-pname').value.trim();
-  if (!machineId) { setStatus('batch-status', '请选择机器', 'err'); return; }
-  if (!ptype || !pname) { setStatus('batch-status', '请填写产品类型', 'err'); return; }
-
-  setStatus('batch-status', '创建中…', 'info');
-  document.getElementById('batch-create-btn').disabled = true;
-
-  try {
-    const batch = await apiFetch('/api/batches', {
-      method: 'POST',
-      body: JSON.stringify({ machine_id: machineId, product_type: ptype, product_name: pname }),
-    });
-    currentBatchNo = batch.batch_no;
-    setStatus('batch-status', '批次创建成功', 'ok');
-    showBatchResult(batch.batch_no);
-    log('批次创建：' + batch.batch_no, 'ok');
-    initPrinter();
-  } catch(e) {
-    setStatus('batch-status', '创建失败：' + e.message, 'err');
-  } finally {
-    document.getElementById('batch-create-btn').disabled = false;
-  }
-}
-
-function showBatchResult(batchNo) {
-  document.getElementById('batch-no-text').textContent = batchNo;
-  JsBarcode('#batch-barcode', batchNo, {
-    format: 'CODE128', width: 2, height: 56, displayValue: true, fontSize: 13, margin: 8,
-  });
-  document.getElementById('batch-result-card').style.display = '';
-  document.getElementById('print-status').style.display = 'none';
-}
-
+// ── 打印 ──────────────────────────────────────────────────────────────────────
 async function initPrinter() {
   try {
     if (printListener) { printListener.remove(); printListener = null; }
     printListener = await PrintPlugin.addListener('printStatus', ({ status, connection }) => {
-      const ps = document.getElementById('print-status');
-      ps.style.display = '';
-      if (connection === 'connected') { ps.textContent = '打印机已就绪'; ps.className = 'status ok'; }
-      else if (connection === 'failed') { ps.textContent = '打印机连接失败'; ps.className = 'status err'; }
-      else if (status === 'PRINT_OK') { ps.textContent = '打印完成'; ps.className = 'status ok'; }
-      else if (status) { ps.textContent = status; ps.className = 'status'; }
+      const el = document.getElementById('scan-print-status');
+      el.style.display = '';
+      if (connection === 'connected')   { el.textContent = '打印机已就绪'; el.className = 'status ok'; }
+      else if (connection === 'failed') { el.textContent = '打印机连接失败'; el.className = 'status err'; }
+      else if (status === 'PRINT_OK')  { el.textContent = '打印完成'; el.className = 'status ok'; }
+      else if (status)                  { el.textContent = status; el.className = 'status'; }
     });
     await PrintPlugin.connect();
-  } catch { /* 非打印机设备 */ }
+  } catch { /* 非打印设备忽略 */ }
 }
 
-async function doBatchPrint(count) {
-  if (!currentBatchNo) return;
-  const m = machinesCache.find(m => m.id === Number(document.getElementById('batch-machine-sel').value));
-  const ps = document.getElementById('print-status');
-  ps.textContent = `发送 ${count} 张打印任务…`;
-  ps.className = 'status info';
-  ps.style.display = '';
+async function doPrint(count) {
+  if (!currentBatchNo || !currentMachine) return;
+  const el = document.getElementById('scan-print-status');
+  el.textContent = `发送 ${count} 张打印任务…`;
+  el.className   = 'status info';
+  el.style.display = '';
   try {
     for (let i = 0; i < count; i++) {
       await PrintPlugin.prepareToPrintLabel();
       await PrintPlugin.printBatchLabel({
-        batchNo: currentBatchNo,
-        machineId: m?.code,
-        productType: document.getElementById('batch-pname').value.trim(),
-        date: new Date().toLocaleDateString('zh', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\//g, ''),
+        batchNo:     currentBatchNo,
+        machineId:   currentMachine.code,
+        productType: currentMachine.current_product_name ?? '',
+        date: new Date().toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' }).replace(/\//g,''),
       });
     }
     log(`打印 ${count} 张：${currentBatchNo}`, 'ok');
   } catch(e) {
-    ps.textContent = '打印失败：' + e.message;
-    ps.className = 'status err';
+    el.textContent = '打印失败：' + e.message; el.className = 'status err';
     log('打印失败：' + e.message, 'err');
   }
 }
 
-function batchReset() {
-  currentBatchNo = '';
-  document.getElementById('batch-result-card').style.display = 'none';
-  document.getElementById('batch-status').textContent = '';
-  document.getElementById('batch-status').style.display = 'none';
+// ══════════════════════════════════════════════════════════════════════════════
+// 页面 2：设置机器
+// ══════════════════════════════════════════════════════════════════════════════
+let setupCode = '';
+let setupNfcListener = null;
+
+async function setupCreate() {
+  const code  = document.getElementById('setup-code').value.trim();
+  const name  = document.getElementById('setup-name').value.trim();
+  if (!code || !name) { setStatus('setup-status', '编号和名称不能为空', 'err'); return; }
+
+  setStatus('setup-status', '创建中…', 'info');
+  try {
+    await apiFetch('/api/machines', { method: 'POST', body: JSON.stringify({ code, name }) });
+    setupCode = code;
+    setStatus('setup-status', `机器 ${code} 创建成功`, 'ok');
+    log('机器创建：' + code, 'ok');
+
+    // 标签预览
+    JsBarcode('#setup-barcode', code, { format:'CODE128', width:2.5, height:60, displayValue:true, fontSize:14, margin:8 });
+    document.getElementById('setup-barcode-no').textContent = code + '  ' + name;
+    document.getElementById('setup-barcode-card').style.display = '';
+    document.getElementById('setup-print-btn').disabled = false;
+    document.getElementById('setup-write-btn').disabled = false;
+  } catch(e) {
+    setStatus('setup-status', '创建失败：' + e.message, 'err');
+    log('创建失败：' + e.message, 'err');
+  }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-// 调试页
-// ══════════════════════════════════════════════════════════════════════════
-const { ScanPlugin, PrintPlugin } = window;
-let scanListener = null;
+async function setupPrintLabel() {
+  if (!setupCode) return;
+  setStatus('setup-status', '发送打印任务…', 'info');
+  try {
+    await PrintPlugin.prepareToPrintLabel();
+    await PrintPlugin.printBatchLabel({
+      batchNo: setupCode, machineId: setupCode,
+      productType: document.getElementById('setup-pname').value.trim() || '—',
+      date: new Date().toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' }).replace(/\//g,''),
+    });
+    setStatus('setup-status', '打印任务已发送', 'ok');
+  } catch(e) { setStatus('setup-status', '打印失败：' + e.message, 'err'); }
+}
+
+async function setupWriteNFC() {
+  if (!setupCode) return;
+  if (setupNfcListener) { setupNfcListener.remove(); setupNfcListener = null; NFC?.removeAllListeners?.(); }
+  setStatus('setup-status', '请靠近 NFC 标签写入…', 'warn');
+  document.getElementById('setup-write-btn').disabled = true;
+
+  try {
+    setupNfcListener = await NFC.addListener('nfcTag', async () => {
+      setupNfcListener.remove(); setupNfcListener = null;
+      await NFC.removeAllListeners();
+      try {
+        const enc = new TextEncoder();
+        const uri = NFC_PREFIX + setupCode;
+        const pl  = new Uint8Array(1 + uri.length);
+        pl[0] = 0x00;
+        pl.set(enc.encode(uri), 1);
+        await NFC.write({
+          records: [
+            { tnf: 1, type: Array.from(enc.encode('U')),               id: [], payload: Array.from(pl) },
+            { tnf: 4, type: Array.from(enc.encode('android.com:pkg')), id: [], payload: Array.from(enc.encode('com.kaihang.scanner')) },
+          ]
+        });
+        setStatus('setup-status', `写入成功！机器 ${setupCode} 已绑定到卡片。`, 'ok');
+        log('NFC 写卡成功：' + setupCode, 'ok');
+      } catch(e) {
+        setStatus('setup-status', '写入失败：' + e.message, 'err');
+        log('NFC 写卡失败：' + e.message, 'err');
+      }
+      document.getElementById('setup-write-btn').disabled = false;
+    });
+    log('NFC 写卡监听注册：' + setupCode, 'info');
+  } catch(e) {
+    setStatus('setup-status', 'NFC 监听失败：' + e.message, 'err');
+    document.getElementById('setup-write-btn').disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 页面 3：调试
+// ══════════════════════════════════════════════════════════════════════════════
 let debugPrintListener = null;
 
-async function initScan() {
-  try {
-    scanListener = await ScanPlugin.addListener('scanResult', ({ value }) => {
-      log('扫码：' + value, 'ok');
-      setStatus('scan-result', value, 'ok');
-      setStatus('scan-status', '扫码成功', 'ok');
-    });
-    setStatus('scan-status', '监听中', 'info');
-  } catch(e) { setStatus('scan-status', '初始化失败：' + e.message, 'err'); }
+function refreshPluginStatus() {
+  document.getElementById('plugin-status-body').innerHTML = [
+    ['ScanPlugin',  !!window.ScanPlugin],
+    ['PrintPlugin', !!window.PrintPlugin],
+    ['NFC',         !!window.NFC],
+    ['Platform',    window.Capacitor?.getPlatform?.() ?? 'unknown'],
+  ].map(([k, v]) => typeof v === 'boolean'
+    ? `<span style="color:${v?'#30d158':'#ff453a'}">${v?'✓':'✗'} ${k}</span><br>`
+    : `<span style="color:#64d2ff">● ${k}: ${v}</span><br>`
+  ).join('');
 }
 
-window.startScan = async () => { try { await ScanPlugin.startScan(); } catch(e) { log('startScan 失败：' + e.message, 'err'); } };
-window.stopScan  = async () => { await ScanPlugin.stopScan(); setStatus('scan-status', '已停止'); };
-
 async function connectPrinter() {
-  setStatus('print-debug-status', '连接中…', 'info');
+  setStatus('debug-printer-status', '连接中…', 'info');
   try {
     if (debugPrintListener) { debugPrintListener.remove(); debugPrintListener = null; }
     debugPrintListener = await PrintPlugin.addListener('printStatus', ({ status, connection }) => {
+      if (connection === 'connected')   setStatus('debug-printer-status', '已连接', 'ok');
+      else if (connection === 'failed') setStatus('debug-printer-status', '连接失败', 'err');
+      else if (status) setStatus('debug-printer-status', status, status.includes('OK') ? 'ok' : 'warn');
       log('printStatus: ' + JSON.stringify({ status, connection }), 'info');
-      if (connection === 'connected') setStatus('print-debug-status', '已连接', 'ok');
-      else if (connection === 'failed') setStatus('print-debug-status', '连接失败', 'err');
-      else if (status) setStatus('print-debug-status', status, status.includes('OK') ? 'ok' : 'warn');
     });
     await PrintPlugin.connect();
-  } catch(e) { setStatus('print-debug-status', '连接失败：' + e.message, 'err'); }
+  } catch(e) { setStatus('debug-printer-status', '失败：' + e.message, 'err'); }
 }
 
-async function debugPrint() {
-  const batchNo = document.getElementById('debug-batch-no').value.trim();
-  if (!batchNo) return;
-  try {
-    await PrintPlugin.prepareToPrintLabel();
-    await PrintPlugin.printBatchLabel({ batchNo, machineId: 'M01', productType: '测试', date: '260604' });
-  } catch(e) { log('调试打印失败：' + e.message, 'err'); }
-}
-
-// ── 启动 ───────────────────────────────────────────────────────────────────
-log('platform=' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
-log('ScanPlugin=' + (window.ScanPlugin ? 'ok' : 'missing'), window.ScanPlugin ? 'ok' : 'err');
+// ── 初始化 ────────────────────────────────────────────────────────────────────
+log('platform='    + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
+log('ScanPlugin='  + (window.ScanPlugin  ? 'ok' : 'missing'), window.ScanPlugin  ? 'ok' : 'err');
 log('PrintPlugin=' + (window.PrintPlugin ? 'ok' : 'missing'), window.PrintPlugin ? 'ok' : 'err');
-log('NFC=' + (window.NFC ? 'ok' : 'missing'), window.NFC ? 'ok' : 'err');
+log('NFC='         + (window.NFC         ? 'ok' : 'missing'), window.NFC         ? 'ok' : 'err');
 
-if (ScanPlugin) initScan();
+// 扫码枪结果 → 当作机器编号处理
+if (ScanPlugin) {
+  ScanPlugin.addListener('scanResult', ({ value }) => {
+    log('扫码枪：' + value, 'ok');
+    onMachineCodeDetected(value);
+  }).catch(e => log('扫码枪监听失败：' + e.message, 'err'));
+}
+
 connectPrinter();
-
+refreshPluginStatus();
 </script>
 </body>
 </html>
