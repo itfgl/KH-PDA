@@ -445,6 +445,12 @@
   window.startCamScan = async () => {
     stopCamScan();
     try {
+      // 检查 mediaDevices 是否可用
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setStatus('cam-status', '⚠️ 此环境不支持相机（需 HTTPS 或 Capacitor）', 'err');
+        log('navigator.mediaDevices.getUserMedia 不可用', 'err');
+        return;
+      }
       setStatus('cam-status', '请求相机权限…', 'info');
       camStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }

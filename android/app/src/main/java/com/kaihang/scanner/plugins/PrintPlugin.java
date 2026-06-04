@@ -41,6 +41,7 @@ public class PrintPlugin extends Plugin {
                 }
             },
             (result, feedbackBytes, flag) -> {
+                android.util.Log.d("PrintPlugin", "printCallback: " + result.name() + " flag=" + flag);
                 JSObject data = new JSObject();
                 data.put("status", result.name());
                 if (flag != null) data.put("flag", flag);
@@ -69,19 +70,29 @@ public class PrintPlugin extends Plugin {
 
         if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
 
-        Bitmap barcode = BarcodeCreater.createBarcode(
-            getContext(), batchNo, 364, 80, false, 1  // 加高：80 点
-        );
+        new Thread(() -> {
+            try {
+                Bitmap barcode = BarcodeCreater.createBarcode(
+                    getContext(), batchNo, 364, 80, false, 1
+                );
+                if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
-        Bitmap label = new AbsoluteLayoutBitmap(384, 240)
-            .addBmp(barcode, 10, 0)
-            .addText(batchNo, 22, 10, 96)
-            .addText("机器：" + machineId + "  日期：" + date, 20, 10, 124)
-            .addText("品类：" + productType, 20, 10, 152)
-            .getBitmap();
+                Bitmap label = new AbsoluteLayoutBitmap(384, 240)
+                    .addBmp(barcode, 10, 0)
+                    .addText(batchNo, 22, 10, 96)
+                    .addText("机器：" + machineId + "  日期：" + date, 20, 10, 124)
+                    .addText("品类：" + productType, 20, 10, 152)
+                    .getBitmap();
+                if (label == null) { call.reject("label bitmap null"); return; }
 
-        Printer.print(new BitmapData(label, 15, 0), 16, "batch_" + batchNo, false);
-        call.resolve();
+                android.util.Log.d("PrintPlugin", "printBatchLabel → Printer.print()");
+                Printer.print(new BitmapData(label, 15, 0), 16, "batch_" + batchNo, false);
+                call.resolve();
+            } catch (Exception e) {
+                android.util.Log.e("PrintPlugin", "printBatchLabel crash", e);
+                call.reject("printBatchLabel error: " + e.getMessage(), e);
+            }
+        }).start();
     }
 
     /**

@@ -1,11 +1,8 @@
 package com.kaihang.scanner;
 
 import android.content.Intent;
-import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
-import com.getcapacitor.BridgeWebChromeClient;
 import com.getcapacitor.WebViewListener;
 import com.kaihang.scanner.plugins.KaihangNfcPlugin;
 import com.kaihang.scanner.plugins.PrintPlugin;
@@ -19,19 +16,25 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PrintPlugin.class);
         registerPlugin(KaihangNfcPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // 全局崩溃拦截：将异常信息转发到 JS 日志
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            android.util.Log.e("KaihangCrash", "Uncaught exception on " + thread.getName(), throwable);
+            try {
+                // 取前 400 字符避免 JS 字符串过长
+                String msg = throwable.toString().replace("'", "\\'").replace("\n", " ");
+                if (msg.length() > 400) msg = msg.substring(0, 400) + "…";
+                final String script = "window.log && window.log('CRASH: " + msg + "', 'err')";
+                runOnUiThread(() -> {
+                    if (bridge != null) bridge.getWebView().evaluateJavascript(script, null);
+                });
+            } catch (Exception ignored) {}
+        });
     }
 
     @Override
     protected void load() {
         super.load();
-
-        // 让 WebView 的 getUserMedia 能拿到相机权限
-        bridge.getWebView().setWebChromeClient(new BridgeWebChromeClient(bridge) {
-            @Override
-            public void onPermissionRequest(PermissionRequest request) {
-                request.grant(request.getResources());
-            }
-        });
 
         // 所有 fetch/XHR 请求自动附加 X-Client-Type: capacitor 头，便于服务端区分客户端类型
         bridge.addWebViewListener(new WebViewListener() {
