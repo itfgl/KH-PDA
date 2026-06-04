@@ -303,14 +303,52 @@
   const logBody = document.getElementById('log-body');
   window.log = (msg, type = 'plain') => {
     const t = new Date().toTimeString().slice(0, 8);
+    const line = `[${t}] ${msg}`;
     const el = document.createElement('div');
     el.className = 'log-line ' + type;
-    el.textContent = `[${t}] ${msg}`;
+    el.textContent = line;
     logBody.appendChild(el);
     logBody.scrollTop = logBody.scrollHeight;
     console.log(`[${type}] ${msg}`);
+    persistLog(line);
   };
-  window.clearLog = () => logBody.innerHTML = '';
+
+  // 页面加载时恢复上次日志（崩溃后重开能看到）
+  (function restoreLog() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+      if (!saved.length) return;
+      const sep = document.createElement('div');
+      sep.className = 'log-line warn';
+      sep.textContent = `── 以下为上次会话日志（共 ${saved.length} 条）──`;
+      logBody.appendChild(sep);
+      saved.forEach(line => {
+        const el = document.createElement('div');
+        el.className = 'log-line plain';
+        el.textContent = line;
+        logBody.appendChild(el);
+      });
+      const sep2 = document.createElement('div');
+      sep2.className = 'log-line warn';
+      sep2.textContent = '── 当前会话开始 ──';
+      logBody.appendChild(sep2);
+    } catch(_) {}
+  })();
+  // 持久化日志到 localStorage，下次打开可以看到上次崩溃信息
+  const LS_KEY = 'kh_log';
+  function persistLog(line) {
+    try {
+      const prev = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+      prev.push(line);
+      if (prev.length > 200) prev.splice(0, prev.length - 200); // 最多保留 200 条
+      localStorage.setItem(LS_KEY, JSON.stringify(prev));
+    } catch(_) {}
+  }
+
+  window.clearLog = () => {
+    logBody.innerHTML = '';
+    try { localStorage.removeItem(LS_KEY); } catch(_) {}
+  };
 
   function fallbackCopy(text) {
     const ta = document.createElement('textarea');
