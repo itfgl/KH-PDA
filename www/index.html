@@ -253,103 +253,112 @@
   };
 
   // ── NFC ───────────────────────────────────────────────
-  // 正确 API：startScanning() 激活前台派发，事件名 nfcEvent
   let nfcEventListener = null;
-  let nfcMode = null; // 'read' | 'write'
+  let nfcMode = null; // 'read' | 'write' | null(待机)
+
+  // 页面加载即启动 scanning，前台时始终拦截 NFC 不弹 chooser
+  async function nfcInit() {
+    try {
+      const status = await NFC.getStatus();
+      log(`NFC 状态: ${status.status}`, status.status === 'NFC_OK' ? 'ok' : 'warn');
+      if (status.status !== 'NFC_OK') {
+        setStatus('nfc-status', `NFC 不可用: ${status.status}`, 'err');
+        return;
+      }
+      // 注册统一事件处理
+      nfcEventListener = await NFC.addListener('nfcEvent', handleNfcEvent);
+      await NFC.startScanning();
+      log('NFC 前台拦截已激活（startScanning）', 'ok');
+      setStatus('nfc-status', '就绪，请选择操作', '');
+    } catch(e) {
+      log('NFC 初始化失败: ' + e.message, 'err');
+      setStatus('nfc-status', 'NFC 初始化失败: ' + e.message, 'err');
+    }
+  }
+
+  async function handleNfcEvent({ type, tag }) {
+    log(`nfcEvent type=${type} mode=${nfcMode} techTypes=${JSON.stringify(tag.techTypes)}`, 'info');
+    if (nfcMode === 'read') {
+      try {
+        const records = tag.ndefMessage ?? [];
+        let found = null;
+        for (const r of records) {
+          if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
+            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+            found = uri.startsWith(NFC_PREFIX) ? uri.replace(NFC_PREFIX, '') : uri;
+            break;
+          }
+        }
+        const display = found
+          ?? (records.length ? JSON.stringify(records) : `空卡 id=${JSON.stringify(tag.id)}`);
+        document.getElementById('nfc-result').textContent = display;
+        setStatus('nfc-status', found ? '读取成功（凯航数据）' : '读取成功（非凯航卡）', 'ok');
+        log('读取结果: ' + display, 'ok');
+      } catch(e) {
+        log('NFC 读取解析失败: ' + e.message, 'err');
+      }
+      nfcMode = null;
+      setStatus('nfc-status', '就绪，请选择操作', '');
+    } else if (nfcMode === 'write') {
+      const content = document.getElementById('nfc-write-data').value.trim();
+      log(`开始写入内容: ${content}`, 'info');
+      try {
+        const encoder = new TextEncoder();
+        const uri = NFC_PREFIX + content;
+        const uriPayload = new Uint8Array(1 + uri.length);
+        uriPayload[0] = 0x00;
+        uriPayload.set(encoder.encode(uri), 1);
+        const writeData = {
+          allowFormat: true,
+          records: [
+            { tnf: 1, type: Array.from(encoder.encode('U')), id: [], payload: Array.from(uriPayload) },
+            { tnf: 4, type: Array.from(encoder.encode('android.com:pkg')), id: [], payload: Array.from(encoder.encode('com.kaihang.scanner')) },
+          ]
+        };
+        log('write 参数: ' + JSON.stringify(writeData).slice(0, 150), 'info');
+        await NFC.write(writeData);
+        setStatus('nfc-status', '写入成功！', 'ok');
+        log('NFC 写入成功', 'ok');
+      } catch(e) {
+        log('NFC 写入失败: ' + e.message + ' | ' + JSON.stringify(e), 'err');
+        setStatus('nfc-status', '写入失败：' + e.message, 'err');
+      }
+      nfcMode = null;
+      setStatus('nfc-status', '就绪，请选择操作', '');
+    }
+    // 待机模式：tag 被检测到但没有操作，只记录日志
+  }
 
   async function cancelNfc() {
     nfcMode = null;
-    if (nfcEventListener) { nfcEventListener.remove(); nfcEventListener = null; }
-    try { await NFC.stopScanning(); } catch(_) {}
   }
 
-  window.nfcCancel = async () => {
-    await cancelNfc();
-    setStatus('nfc-status', '已停止');
-    log('NFC 已停止', 'info');
+  window.nfcCancel = () => {
+    nfcMode = null;
+    setStatus('nfc-status', '就绪，请选择操作', '');
+    log('NFC 模式已取消（scanning 保持激活）', 'info');
   };
 
-  window.nfcRead = async () => {
-    log('nfcRead() 开始', 'info');
-    await cancelNfc();
+  window.nfcRead = () => {
     nfcMode = 'read';
-    setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
     document.getElementById('nfc-result').textContent = '等待读取…';
-    try {
-      // 先注册事件，再 startScanning 激活前台派发
-      nfcEventListener = await NFC.addListener('nfcEvent', ({ type, tag }) => {
-        if (nfcMode !== 'read') return;
-        log(`nfcEvent type=${type} tag=${JSON.stringify(tag).slice(0, 150)}`, 'ok');
-        try {
-          const records = tag.ndefMessage ?? [];
-          let found = null;
-          for (const r of records) {
-            if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
-              const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-              found = uri.startsWith(NFC_PREFIX) ? uri.replace(NFC_PREFIX, '') : uri;
-              break;
-            }
-          }
-          const display = found ?? (records.length ? JSON.stringify(records) : `空卡 techTypes=${JSON.stringify(tag.techTypes)}`);
-          document.getElementById('nfc-result').textContent = display;
-          setStatus('nfc-status', found ? '读取成功（凯航数据）' : '读取成功（非凯航卡）', 'ok');
-        } catch (e) {
-          log('NFC 解析失败: ' + e.message, 'err');
-          setStatus('nfc-status', '解析失败：' + e.message, 'err');
-        }
-        cancelNfc();
-      });
-      await NFC.startScanning();
-      log('NFC startScanning() 已启动，前台派发激活', 'ok');
-    } catch(e) {
-      log('nfcRead 失败: ' + e.message, 'err');
-      setStatus('nfc-status', '启动失败：' + e.message, 'err');
-    }
+    setStatus('nfc-status', '扫描中… 请贴近 NFC 标签', 'info');
+    log('nfcRead() 模式已设置，请贴卡', 'info');
   };
 
-  window.nfcWrite = async () => {
+  window.nfcWrite = () => {
     const content = document.getElementById('nfc-write-data').value.trim();
     if (!content) { alert('请填写写入内容'); return; }
-    log(`nfcWrite() content=${content}`, 'info');
-    await cancelNfc();
     nfcMode = 'write';
-    setStatus('nfc-status', '准备写入… 请贴近 NFC 标签', 'info');
-    try {
-      nfcEventListener = await NFC.addListener('nfcEvent', async ({ type, tag }) => {
-        if (nfcMode !== 'write') return;
-        log(`nfcEvent(write) type=${type}`, 'info');
-        try {
-          const encoder = new TextEncoder();
-          const uri = NFC_PREFIX + content;
-          const uriPayload = new Uint8Array(1 + uri.length);
-          uriPayload[0] = 0x00;
-          uriPayload.set(encoder.encode(uri), 1);
-          await NFC.write({
-            records: [
-              { tnf: 1, type: Array.from(encoder.encode('U')), id: [], payload: Array.from(uriPayload) },
-              { tnf: 4, type: Array.from(encoder.encode('android.com:pkg')), id: [], payload: Array.from(encoder.encode('com.kaihang.scanner')) },
-            ]
-          });
-          log('NFC 写入成功', 'ok');
-          setStatus('nfc-status', '写入成功！', 'ok');
-        } catch (e) {
-          log('NFC 写入失败: ' + e.message, 'err');
-          setStatus('nfc-status', '写入失败：' + e.message, 'err');
-        }
-        cancelNfc();
-      });
-      await NFC.startScanning();
-      log('NFC startScanning() 已启动（写入模式）', 'ok');
-    } catch(e) {
-      log('nfcWrite 失败: ' + e.message, 'err');
-      setStatus('nfc-status', '启动失败：' + e.message, 'err');
-    }
+    setStatus('nfc-status', `准备写入 [${content}]… 请贴近 NFC 标签`, 'info');
+    log(`nfcWrite() 模式已设置 content=${content}，请贴卡`, 'info');
   };
 
   // ── 启动 ──────────────────────────────────────────────
   log('页面初始化开始', 'info');
   if (ScanPlugin)  initScan();
   if (PrintPlugin) connectPrinter();
+  if (NFC)         nfcInit();
 </script>
 
 </body>
