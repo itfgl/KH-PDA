@@ -25,12 +25,34 @@
  */
 import { emit } from './events.js';
 
-const NFC_PREFIX = 'kaihang://nfc/';
+const NFC_PREFIX  = 'kaihang://nfc/';
+const OP_TIMEOUT  = 30_000; // 30s 无贴卡自动取消
+
 let _plugin  = null;
 let _mode    = 'scan'; // 'scan' | 'write' | 'clear'
+let _opTimer = null;
 
 export function getMode() { return _mode; }
-export function setMode(m) { _mode = m; }
+
+function setMode(m) {
+  _mode = m;
+  emit('nfc:mode', { mode: m }); // 通知 UI 更新调试状态
+}
+
+// 超时保护：若 N 秒内没有贴卡，自动取消 write/clear
+function armTimeout(rejectFn) {
+  clearTimeout(_opTimer);
+  _opTimer = setTimeout(() => {
+    if (_mode !== 'scan') {
+      setMode('scan');
+      rejectFn(new Error('操作超时（30s 未检测到卡片）'));
+    }
+  }, OP_TIMEOUT);
+}
+function disarmTimeout() {
+  clearTimeout(_opTimer);
+  _opTimer = null;
+}
 
 function extractCode(event) {
   if (event.ndefMessage) {
@@ -65,14 +87,16 @@ export async function init(KaihangNfc) {
 export function writeTag(data) {
   return new Promise(async (resolve, reject) => {
     if (!_plugin) { reject(new Error('NFC 未初始化')); return; }
-    _mode = 'write';
+    setMode('write');
+    armTimeout(reject);
     let listener = null;
     try {
       listener = await _plugin.addListener('nfcEvent', async (event) => {
+        disarmTimeout();
         listener.remove(); listener = null;
-        _mode = 'scan';
+        setMode('scan');
         try {
-          if (event.isNdef)             await _plugin.writeNdef({ data, allowFormat: true });
+          if (event.isNdef)                  await _plugin.writeNdef({ data, allowFormat: true });
           else if (event.isMifareUltralight) await _plugin.writeMifareRaw({ data });
           else throw new Error('不支持的卡类型');
           emit('nfc:written', {});
@@ -83,7 +107,7 @@ export function writeTag(data) {
         }
       });
     } catch(e) {
-      _mode = 'scan'; reject(e);
+      disarmTimeout(); setMode('scan'); reject(e);
     }
   });
 }
@@ -91,12 +115,14 @@ export function writeTag(data) {
 export function clearTag() {
   return new Promise(async (resolve, reject) => {
     if (!_plugin) { reject(new Error('NFC 未初始化')); return; }
-    _mode = 'clear';
+    setMode('clear');
+    armTimeout(reject);
     let listener = null;
     try {
       listener = await _plugin.addListener('nfcEvent', async () => {
+        disarmTimeout();
         listener.remove(); listener = null;
-        _mode = 'scan';
+        setMode('scan');
         try {
           await _plugin.clearTag();
           emit('nfc:cleared', {});
@@ -107,7 +133,7 @@ export function clearTag() {
         }
       });
     } catch(e) {
-      _mode = 'scan'; reject(e);
+      disarmTimeout(); setMode('scan'); reject(e);
     }
   });
 }

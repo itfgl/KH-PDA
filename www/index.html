@@ -267,6 +267,8 @@ function switchTab(name) {
   if (name === 'debug') refreshDebug();
   // 离开扫描页：停相机，重置扫码枪状态
   if (name !== 'scan') { stopCamera(); Scanner.reset(); }
+  // 进入扫描页：恢复默认提示
+  if (name === 'scan') setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
 }
 
 // ── 工具 ──────────────────────────────────────────────────────────────────────
@@ -307,16 +309,20 @@ Events.on('nfc:blank', () => {
 Events.on('nfc:written', () => {
   setStatus('setup-hint', `写入成功！机器 ${_setupCode} 已绑定到卡片。`, 'ok');
   log('NFC 写卡成功：' + _setupCode, 'ok');
-  document.getElementById('s-write-btn').disabled = false;
+  document.getElementById('s-write-btn').disabled = false; // 写完恢复按钮
 });
 Events.on('nfc:cleared', () => {
   setStatus('debug-nfc', '卡片已清空，mode=scan', 'ok');
   log('NFC 卡片已清空', 'ok');
 });
+Events.on('nfc:mode',  ({ mode }) => {
+  const labels = { scan:'监听中', write:'等待写卡…', clear:'等待清卡…' };
+  setStatus('debug-nfc', `${labels[mode]||mode} mode=${mode}`, mode==='scan'?'ok':'warn');
+});
 Events.on('nfc:error', ({ msg }) => {
   log('NFC 错误：' + msg, 'err');
   setStatus('debug-nfc', 'NFC 错误：' + msg, 'err');
-  document.getElementById('s-write-btn').disabled = false;
+  document.getElementById('s-write-btn').disabled = false; // 出错也恢复按钮
 });
 
 // ── 扫码枪事件 ────────────────────────────────────────────────────────────────
@@ -325,8 +331,11 @@ Events.on('scanner:result', ({ value }) => log('扫码枪：' + value, 'ok'));
 
 // ── 机器 / 批次事件 ───────────────────────────────────────────────────────────
 Events.on('machine:loading', ({ code }) => {
+  // 重置上次结果，防止 doPrint() 使用旧批次
+  _currentBatch = null; _currentMachine = null;
   setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
   hide('machine-card'); hide('batch-card');
+  stopCamera(); // 任何方式识别到机器码后停相机
   switchTab('scan');
 });
 Events.on('machine:loaded', ({ machine: m }) => {

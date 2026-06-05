@@ -43,5 +43,6 @@ export async function reset() {
 
 export async function printBatch(params) {
   if (!_plugin) throw new Error('打印机未初始化');
+  if (!_connected) throw new Error('打印机未连接，请先重连');
   await _plugin.printBatchLabel(params);
 }
