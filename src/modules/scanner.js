@@ -22,6 +22,8 @@ export async function init(ScanPlugin) {
   try {
     await _plugin.addListener('scanResult', ({ value }) => {
       emit('scanner:result', { value });
+      // 扫完即重置状态，不留在"等待扫码枪…"
+      emit('scanner:status', { msg: '就绪', type: '' });
     });
     _inited = true;
     emit('scanner:status', { msg: '扫码枪就绪', type: 'ok' });
