@@ -680,10 +680,11 @@ function stopCamera() {
 // ── 调试页 ────────────────────────────────────────────────────────────────────
 function refreshDebug() {
   document.getElementById('debug-plugins').innerHTML = [
+    ['Bridge',      window.BRIDGE_MODE ?? 'unknown'],
     ['ScanPlugin',  !!window.ScanPlugin],
     ['PrintPlugin', !!window.PrintPlugin],
     ['KaihangNfc',  !!window.KaihangNfc  ? `ok (mode=${NFC.getMode()})` : false],
-    ['Platform',    window.Capacitor?.getPlatform?.() ?? 'unknown'],
+    ['Platform',    window.Capacitor?.getPlatform?.() ?? (window.PDAJsBridge ? 'X8-PDA' : 'unknown')],
   ].map(([k,v]) => typeof v === 'boolean'
     ? `<span style="color:${v?'#30d158':'#ff453a'}">${v?'✓':'✗'} ${k}</span><br>`
     : `<span style="color:#64d2ff">● ${k}: ${v}</span><br>`
