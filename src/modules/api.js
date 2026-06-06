@@ -17,6 +17,10 @@ export const getMachineByCode = (code) =>
 export const getBatchByNo = (batchNo) =>
   apiFetch('/api/batches/' + encodeURIComponent(batchNo));
 
+/** 查某台机器的最近批次列表（按创建时间倒序） */
+export const getBatchesByMachine = (machineId) =>
+  apiFetch('/api/batches?machine_id=' + machineId);
+
 export const createBatch = ({ machine_id, product_type, product_name }) =>
   apiFetch('/api/batches', {
     method: 'POST',

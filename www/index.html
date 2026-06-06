@@ -106,7 +106,7 @@
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('scan')">扫描</button>
-  <button class="tab-btn"        onclick="switchTab('setup')">设置机器</button>
+  <button class="tab-btn"        onclick="switchTab('setup')">绑定 NFC</button>
   <button class="tab-btn"        onclick="switchTab('debug')">调试</button>
 </div>
 
@@ -151,21 +151,27 @@
         <button class="btn btn-green" onclick="doPrint(3)">打印 3 张</button>
         <button class="btn btn-green" onclick="doPrint(5)">打印 5 张</button>
       </div>
+      <button class="btn btn-gray" onclick="toggleBatchList()" id="switch-batch-btn" style="margin-top:6px">
+        切换批次 ▾
+      </button>
     </div>
+    <!-- 批次选择列表，点击后收起 -->
+    <div id="batch-list" style="display:none; margin-top:8px"></div>
   </div>
 </div>
 
-<!-- ══ 设置页 ══ -->
+<!-- ══ 绑定 NFC 页 ══ -->
 <div class="page" id="page-setup">
   <div class="card">
-    <div class="card-title">机器信息</div>
-    <div class="field"><label>机器编号（如 M01）</label><input id="s-code" placeholder="M01" maxlength="8"></div>
-    <div class="field"><label>机器名称</label><input id="s-name" placeholder="1号生产线"></div>
-    <div class="field"><label>产品类型码</label><input id="s-ptype" placeholder="01" maxlength="8"></div>
-    <div class="field"><label>产品名称</label><input id="s-pname" placeholder="电容"></div>
+    <div class="card-title-row">
+      <span class="card-title">选择机器</span>
+      <button class="btn-sm btn-gray" onclick="loadMachineList()">刷新</button>
+    </div>
+    <div id="s-machine-list">
+      <div style="color:#8e8e93;font-size:13px;padding:6px 0">加载中…</div>
+    </div>
   </div>
   <div class="status" id="setup-hint" style="display:none"></div>
-  <button class="btn btn-blue"  onclick="setupCreate()">创建机器</button>
   <button class="btn btn-green" id="s-print-btn" onclick="setupPrint()" disabled>打印机器标签</button>
   <button class="btn btn-gray"  id="s-write-btn" onclick="setupWrite()" disabled>写入 NFC 卡</button>
   <div class="card" id="s-barcode-card" style="display:none; margin-top:4px">
@@ -270,6 +276,7 @@ function switchTab(name) {
     document.getElementById('page-' + t).classList.toggle('active', t === name);
   });
   if (name === 'debug') refreshDebug();
+  if (name === 'setup') loadMachineList();
   // 离开扫描页：停相机，重置扫码枪状态
   if (name !== 'scan') { stopCamera(); Scanner.reset(); }
   // 进入扫描页：恢复默认提示
@@ -306,10 +313,10 @@ Events.on('nfc:ready', () => {
   log('NFC 全局监听已启动', 'ok');
 });
 Events.on('nfc:blank', () => {
-  log('空白卡，跳转设置机器', 'warn');
-  setStatus('scan-hint', '空白卡，跳转到【设置机器】', 'warn');
+  log('空白卡，跳转绑定 NFC', 'warn');
+  setStatus('scan-hint', '空白卡，请在【绑定 NFC】选择机器后写入', 'warn');
   switchTab('setup');
-  setStatus('setup-hint', '检测到空白卡，请填写信息后写入', 'warn');
+  setStatus('setup-hint', '检测到空白卡，选择机器后点击写入', 'warn');
 });
 Events.on('nfc:written', () => {
   setStatus('setup-hint', `写入成功！机器 ${_setupCode} 已绑定到卡片。`, 'ok');
@@ -366,24 +373,7 @@ Events.on('machine:error', ({ msg }) => {
   log('机器查询失败：' + msg, 'err');
 });
 
-Events.on('batch:creating', () => {
-  setStatus('scan-hint', '生产中，正在创建批次…', 'info');
-  document.getElementById('batch-body').innerHTML =
-    '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次创建中…</div>';
-  hide('barcode-wrap'); hide('print-btns');
-});
-
-// 新批次创建完成 → 渲染 + 自动打印 1 张
-Events.on('batch:created', ({ batch, machine }) => {
-  _currentBatch   = batch;
-  _currentMachine = machine;
-  renderBatch(batch, true);
-  setStatus('scan-hint', `✅ 批次 ${batch.batch_no} 已创建`, 'ok');
-  log('批次创建：' + batch.batch_no, 'ok');
-  doPrint(1);
-});
-
-// 已有批次加载完成（created / inspecting 状态）
+// 批次加载完成
 Events.on('batch:loaded', ({ batch, machine }) => {
   _currentBatch   = batch;
   _currentMachine = machine;
@@ -464,6 +454,68 @@ function renderBatch(batch, isNew) {
   show('barcode-wrap'); show('print-btns');
 }
 
+// ── 切换批次 ──────────────────────────────────────────────────────────────────
+let _batchListOpen = false;
+
+async function toggleBatchList() {
+  const el  = document.getElementById('batch-list');
+  const btn = document.getElementById('switch-batch-btn');
+  if (_batchListOpen) {
+    _batchListOpen = false;
+    el.style.display = 'none';
+    btn.textContent = '切换批次 ▾';
+    return;
+  }
+  if (!_currentMachine) return;
+  _batchListOpen = true;
+  btn.textContent = '切换批次 ▴';
+  el.style.display = '';
+  el.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">加载中…</div>';
+
+  try {
+    const list = await API.getBatchesByMachine(_currentMachine.id);
+    if (!list.length) {
+      el.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">暂无批次记录</div>';
+      return;
+    }
+    el.innerHTML = list.map(b => {
+      const isActive = _currentBatch && b.batch_no === _currentBatch.batch_no;
+      const statusLabel = BATCH_STATUS[b.status] || b.status;
+      const statusCls   = BATCH_STATUS_CLS[b.status] || '';
+      return `
+        <div onclick="selectBatch(${JSON.stringify(b.batch_no)})"
+          style="display:flex;justify-content:space-between;align-items:center;
+                 padding:10px 10px;border-radius:8px;margin-bottom:4px;cursor:pointer;
+                 background:${isActive ? '#e8f4fd' : '#f9f9f9'};
+                 border:1px solid ${isActive ? '#007aff' : '#e5e5ea'}">
+          <span style="font-family:monospace;font-size:13px;${isActive ? 'color:#007aff;font-weight:600' : ''}">
+            ${b.batch_no}
+          </span>
+          <span class="badge ${statusCls}" style="flex-shrink:0;margin-left:8px">${statusLabel}</span>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = `<div style="color:#991b1b;font-size:13px;padding:6px 0">加载失败：${e.message}</div>`;
+    log('批次列表加载失败：' + e.message, 'err');
+  }
+}
+
+async function selectBatch(batchNo) {
+  if (!_currentMachine) return;
+  try {
+    const batch = await API.getBatchByNo(batchNo);
+    _currentBatch = batch;
+    renderBatch(batch, false);
+    setStatus('scan-hint', `已切换：${batch.batch_no}`, 'ok');
+    log('手动切换批次：' + batch.batch_no, 'ok');
+    // 收起列表
+    _batchListOpen = true; // toggleBatchList 会把它翻转为 false
+    toggleBatchList();
+  } catch(e) {
+    log('切换批次失败：' + e.message, 'err');
+  }
+}
+
 async function doPrint(count) {
   if (!_currentBatch || !_currentMachine) return;
   setStatus('print-status', `发送 ${count} 张打印任务…`, 'info');
@@ -485,36 +537,69 @@ async function doPrint(count) {
   }
 }
 
-// ── 设置页 ────────────────────────────────────────────────────────────────────
-let _setupCode = '';
-async function setupCreate() {
-  const code = document.getElementById('s-code').value.trim();
-  const name = document.getElementById('s-name').value.trim();
-  if (!code || !name) { setStatus('setup-hint', '编号和名称不能为空', 'err'); return; }
-  setStatus('setup-hint', '创建中…', 'info');
+// ── 绑定 NFC 页 ──────────────────────────────────────────────────────────────
+let _setupCode    = '';
+let _setupMachine = null;
+let _machineListCache = [];
+
+async function loadMachineList() {
+  const list = document.getElementById('s-machine-list');
+  if (!list) return;
+  list.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">加载中…</div>';
   try {
-    await API.apiFetch('/api/machines', { method:'POST', body: JSON.stringify({ code, name }) });
-    _setupCode = code;
-    setStatus('setup-hint', `机器 ${code} 创建成功`, 'ok');
-    JsBarcode('#s-barcode', code, { format:'CODE128', width:2.5, height:60, displayValue:true, fontSize:14, margin:8 });
-    document.getElementById('s-barcode-no').textContent = code + '  ' + name;
-    show('s-barcode-card');
-    document.getElementById('s-print-btn').disabled = false;
-    document.getElementById('s-write-btn').disabled = false;
-    log('机器创建：' + code, 'ok');
-  } catch(e) { setStatus('setup-hint', '创建失败：' + e.message, 'err'); }
+    _machineListCache = await API.apiFetch('/api/machines');
+    if (!_machineListCache.length) {
+      list.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">暂无机器，请联系管理员添加</div>';
+      return;
+    }
+    list.innerHTML = _machineListCache.map((m, i) => {
+      const active = _setupCode === m.code;
+      return `
+        <div onclick="selectSetupMachine(${i})"
+          style="display:flex;justify-content:space-between;align-items:center;
+                 padding:10px 12px;border-radius:8px;margin-bottom:6px;cursor:pointer;
+                 background:${active ? '#e8f4fd' : '#f9f9f9'};
+                 border:1px solid ${active ? '#007aff' : '#e5e5ea'}">
+          <div>
+            <div style="font-weight:600;font-size:14px;${active ? 'color:#007aff' : ''}">${m.name}</div>
+            <div style="font-size:12px;color:#8e8e93;margin-top:2px">
+              ${m.code}${m.current_product_name ? ' · ' + m.current_product_name : ''}
+            </div>
+          </div>
+          <span class="badge ${STATUS_CLS[m.status] || ''}">${STATUS_MAP[m.status] || m.status}</span>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<div style="color:#991b1b;font-size:13px;padding:6px 0">加载失败：${e.message}</div>`;
+    log('机器列表加载失败：' + e.message, 'err');
+  }
+}
+
+function selectSetupMachine(idx) {
+  const m = _machineListCache[idx];
+  if (!m) return;
+  _setupCode    = m.code;
+  _setupMachine = m;
+  setStatus('setup-hint', `已选择：${m.name}（${m.code}）`, 'ok');
+  JsBarcode('#s-barcode', m.code, { format:'CODE128', width:2.5, height:60, displayValue:true, fontSize:14, margin:8 });
+  document.getElementById('s-barcode-no').textContent = m.code + '  ' + m.name;
+  show('s-barcode-card');
+  document.getElementById('s-print-btn').disabled = false;
+  document.getElementById('s-write-btn').disabled = false;
+  log('选择机器：' + m.code, 'info');
+  // 刷新列表高亮
+  loadMachineList();
 }
 
 async function setupPrint() {
-  if (!_setupCode) return;
+  if (!_setupCode || !_setupMachine) return;
   try {
     const date = new Date()
       .toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' })
       .replace(/\//g, '');
-    // 机器标签使用 printMachineQR（二维码），内容：machineId|productType|date
     await Printer.printMachineLabel({
       machineId:   _setupCode,
-      productType: document.getElementById('s-pname').value.trim() || '—',
+      productType: _setupMachine.current_product_name || _setupMachine.current_product_type || '—',
       date,
     });
     setStatus('setup-hint', '打印任务已发送', 'ok');
