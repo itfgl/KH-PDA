@@ -41,8 +41,29 @@ export async function reset() {
   emit('printer:status', { connection: 'reset' });
 }
 
+/**
+ * 打印批次标签（一维码）
+ * @param {{ batchNo, machineId, productType, date }} params
+ *   - batchNo     15位批次码
+ *   - machineId   机器编号（3位，如 M05）
+ *   - productType 产品名称（人可读，如"电容"）
+ *   - date        YYMMDD（从批次码中提取：batchNo.slice(3,9)）
+ */
 export async function printBatch(params) {
   if (!_plugin) throw new Error('打印机未初始化');
   if (!_connected) throw new Error('打印机未连接，请先重连');
+  await _plugin.prepareToPrintLabel();
   await _plugin.printBatchLabel(params);
+}
+
+/**
+ * 打印机器标签（二维码）
+ * 用于设置页绑定机器 NFC 时同步打印一张机器标识标签。
+ * @param {{ machineId, productType, date }} params
+ */
+export async function printMachineLabel(params) {
+  if (!_plugin) throw new Error('打印机未初始化');
+  if (!_connected) throw new Error('打印机未连接，请先重连');
+  await _plugin.prepareToPrintLabel();
+  await _plugin.printMachineQR(params);
 }

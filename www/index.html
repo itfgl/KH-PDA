@@ -58,9 +58,14 @@
     .info-row .lbl { color: #8e8e93; }
     .info-row .val { font-weight: 500; text-align: right; max-width: 65%; }
     .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .badge-idle    { background: #e5e5ea; color: #6e6e73; }
-    .badge-running { background: #fef3c7; color: #92400e; }
-    .badge-stopped { background: #fee2e2; color: #991b1b; }
+    .badge-idle       { background: #e5e5ea; color: #6e6e73; }
+    .badge-running    { background: #fef3c7; color: #92400e; }
+    .badge-stopped    { background: #fee2e2; color: #991b1b; }
+    /* 批次状态 */
+    .badge-created    { background: #dbeafe; color: #1e40af; }
+    .badge-inspecting { background: #fef3c7; color: #92400e; }
+    .badge-done       { background: #d1fae5; color: #065f46; }
+    .badge-failed     { background: #fee2e2; color: #991b1b; }
 
     .barcode-wrap { text-align: center; padding: 8px 0; }
     .barcode-wrap svg { max-width: 100%; }
@@ -348,13 +353,12 @@ Events.on('machine:loaded', ({ machine: m }) => {
       <span class="val">${m.current_product_name ? m.current_product_name+'（'+m.current_product_type+'）' : '—'}</span></div>
   `;
   show('machine-card');
-
-  if (m.status !== 'running') {
-    // 非生产中：展示最新批次（只读）
-    showBatchInfo(m.latest_batch_no, false);
-    setStatus('scan-hint', STATUS_MAP[m.status], 'warn');
-  }
-  // running 时等 batch:created / batch:error
+  // 显示批次占位，等待 batch:loaded / batch:created / batch:none
+  show('batch-card');
+  document.getElementById('batch-body').innerHTML =
+    '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次查询中…</div>';
+  hide('barcode-wrap'); hide('print-btns'); hide('print-status');
+  setStatus('scan-hint', '机器 ' + m.code + '，获取批次…', 'info');
   log('机器：' + m.code + ' status=' + m.status, 'ok');
 });
 Events.on('machine:error', ({ msg }) => {
@@ -364,22 +368,45 @@ Events.on('machine:error', ({ msg }) => {
 
 Events.on('batch:creating', () => {
   setStatus('scan-hint', '生产中，正在创建批次…', 'info');
-  show('batch-card');
-  document.getElementById('batch-body').innerHTML = '<div style="color:#8e8e93;font-size:14px">批次创建中…</div>';
+  document.getElementById('batch-body').innerHTML =
+    '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次创建中…</div>';
   hide('barcode-wrap'); hide('print-btns');
 });
+
+// 新批次创建完成 → 渲染 + 自动打印 1 张
 Events.on('batch:created', ({ batch, machine }) => {
   _currentBatch   = batch;
   _currentMachine = machine;
-  showBatchInfo(batch.batch_no, true);
+  renderBatch(batch, true);
   setStatus('scan-hint', `✅ 批次 ${batch.batch_no} 已创建`, 'ok');
   log('批次创建：' + batch.batch_no, 'ok');
-  // 自动打印 1 张
   doPrint(1);
 });
+
+// 已有批次加载完成（created / inspecting 状态）
+Events.on('batch:loaded', ({ batch, machine }) => {
+  _currentBatch   = batch;
+  _currentMachine = machine;
+  renderBatch(batch, false);
+  const statusLabel = BATCH_STATUS[batch.status] || batch.status;
+  setStatus('scan-hint', `批次 ${batch.batch_no}（${statusLabel}）`, 'ok');
+  log('批次：' + batch.batch_no + ' status=' + batch.status, 'ok');
+});
+
+// 无批次且不会自动创建（机器非运行状态）
+Events.on('batch:none', ({ machine }) => {
+  document.getElementById('batch-body').innerHTML =
+    '<div style="color:#8e8e93;font-size:14px;padding:4px 0">暂无批次记录</div>';
+  hide('barcode-wrap'); hide('print-btns');
+  setStatus('scan-hint', '机器 ' + machine.code + ' 暂无批次', 'warn');
+  log('机器 ' + machine.code + ' 暂无批次', 'warn');
+});
+
 Events.on('batch:error', ({ msg }) => {
-  setStatus('scan-hint', '批次创建失败：' + msg, 'err');
-  log('批次创建失败：' + msg, 'err');
+  setStatus('scan-hint', '批次操作失败：' + msg, 'err');
+  log('批次错误：' + msg, 'err');
+  document.getElementById('batch-body').innerHTML =
+    `<div style="color:#991b1b;font-size:14px;padding:4px 0">${msg}</div>`;
 });
 
 // ── 打印机事件 ────────────────────────────────────────────────────────────────
@@ -406,20 +433,34 @@ Events.on('printer:status', ({ connection, status, error }) => {
 let _currentBatch   = null;
 let _currentMachine = null;
 
-function showBatchInfo(batchNo, isNew) {
+// 批次状态映射
+const BATCH_STATUS     = { created:'已创建', inspecting:'质检中', done:'已完成', failed:'已失败' };
+const BATCH_STATUS_CLS = { created:'badge-created', inspecting:'badge-inspecting', done:'badge-done', failed:'badge-failed' };
+
+/**
+ * 渲染批次卡片（需要完整的 batch 对象，含 product_name / product_type / status）
+ * @param {object} batch  服务端 BatchDetailOut
+ * @param {boolean} isNew 是否刚创建（影响提示文字颜色）
+ */
+function renderBatch(batch, isNew) {
   show('batch-card');
-  if (!batchNo) {
-    document.getElementById('batch-body').innerHTML = '<div style="color:#8e8e93;font-size:14px">暂无批次记录</div>';
-    hide('barcode-wrap'); hide('print-btns');
-    return;
-  }
+  const statusLabel = BATCH_STATUS[batch.status] || batch.status;
+  const statusCls   = BATCH_STATUS_CLS[batch.status] || '';
   document.getElementById('batch-body').innerHTML = `
     <div class="info-row">
       <span class="lbl">${isNew ? '新批次' : '最新批次'}</span>
-      <span class="val" style="font-family:monospace;${isNew?'color:#007aff':''}">${batchNo}</span>
+      <span class="val" style="font-family:monospace;${isNew ? 'color:#007aff' : ''}">${batch.batch_no}</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">产品</span>
+      <span class="val">${batch.product_name}（${batch.product_type}）</span>
+    </div>
+    <div class="info-row">
+      <span class="lbl">状态</span>
+      <span class="val"><span class="badge ${statusCls}">${statusLabel}</span></span>
     </div>`;
-  JsBarcode('#batch-barcode', batchNo, { format:'CODE128', width:2, height:52, displayValue:false, margin:6 });
-  document.getElementById('batch-no-text').textContent = batchNo;
+  JsBarcode('#batch-barcode', batch.batch_no, { format:'CODE128', width:2, height:52, displayValue:false, margin:6 });
+  document.getElementById('batch-no-text').textContent = batch.batch_no;
   show('barcode-wrap'); show('print-btns');
 }
 
@@ -428,11 +469,13 @@ async function doPrint(count) {
   setStatus('print-status', `发送 ${count} 张打印任务…`, 'info');
   show('print-status');
   try {
+    // 日期从批次码中直接提取，格式 YYMMDD，位于第 4~9 位
+    // 例：M05260604030012 → 260604
     const p = {
       batchNo:     _currentBatch.batch_no,
       machineId:   _currentMachine.code,
-      productType: _currentMachine.current_product_name || _currentMachine.current_product_type || '',
-      date: new Date().toLocaleDateString('zh',{year:'2-digit',month:'2-digit',day:'2-digit'}).replace(/\//g,''),
+      productType: _currentBatch.product_name,          // 批次自带，不依赖机器当前状态
+      date:        _currentBatch.batch_no.slice(3, 9),  // 批次创建当日的 YYMMDD
     };
     for (let i = 0; i < count; i++) await Printer.printBatch(p);
     log(`打印 ${count} 张：${_currentBatch.batch_no}`, 'ok');
@@ -465,10 +508,14 @@ async function setupCreate() {
 async function setupPrint() {
   if (!_setupCode) return;
   try {
-    await Printer.printBatch({
-      batchNo: _setupCode, machineId: _setupCode,
+    const date = new Date()
+      .toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' })
+      .replace(/\//g, '');
+    // 机器标签使用 printMachineQR（二维码），内容：machineId|productType|date
+    await Printer.printMachineLabel({
+      machineId:   _setupCode,
       productType: document.getElementById('s-pname').value.trim() || '—',
-      date: new Date().toLocaleDateString('zh',{year:'2-digit',month:'2-digit',day:'2-digit'}).replace(/\//g,''),
+      date,
     });
     setStatus('setup-hint', '打印任务已发送', 'ok');
   } catch(e) { setStatus('setup-hint', '打印失败：' + e.message, 'err'); }
