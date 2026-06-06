@@ -177,7 +177,7 @@
   <div class="card" id="s-barcode-card" style="display:none; margin-top:4px">
     <div class="card-title">标签预览</div>
     <div class="barcode-wrap">
-      <svg id="s-barcode"></svg>
+      <canvas id="s-qrcode" style="display: block; margin: 0 auto; width: 160px; height: 160px;"></canvas>
       <div class="barcode-no" id="s-barcode-no"></div>
     </div>
   </div>
@@ -221,6 +221,7 @@
   [FIX] plugins.js 由 Vite IIFE 构建，不要改 type="module"，详见 HTML_RULES.md
 -->
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
 <script src="plugins.js"></script>
 <script>
 'use strict';
@@ -580,8 +581,16 @@ function selectSetupMachine(idx) {
   if (!m) return;
   _setupCode    = m.code;
   _setupMachine = m;
-  setStatus('setup-hint', `已选择：${m.name}（${m.code}）`, 'ok');
-  JsBarcode('#s-barcode', m.code, { format:'CODE128', width:2.5, height:60, displayValue:true, fontSize:14, margin:8 });
+  setStatus('setup-hint', '已选择：' + m.name + '（' + m.code + '）', 'ok');
+  const date = new Date()
+    .toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' })
+    .replace(/\//g, '');
+  const qrContent = `${m.code}|${m.current_product_name || m.current_product_type || '—'}|${date}`;
+  new QRious({
+    element: document.getElementById('s-qrcode'),
+    value: qrContent,
+    size: 200
+  });
   document.getElementById('s-barcode-no').textContent = m.code + '  ' + m.name;
   show('s-barcode-card');
   document.getElementById('s-print-btn').disabled = false;

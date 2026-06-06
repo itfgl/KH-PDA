@@ -99,7 +99,6 @@ export default function BatchEntryPage() {
     setPrintStatus('发送打印任务…');
     try {
       for (let i = 0; i < count; i++) {
-        await PrintPlugin.prepareToPrintLabel();
         await PrintPlugin.printBatchLabel({
           batchNo,
           machineId: m?.code,

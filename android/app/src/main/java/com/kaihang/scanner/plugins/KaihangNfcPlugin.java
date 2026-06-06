@@ -63,7 +63,7 @@ public class KaihangNfcPlugin extends Plugin {
         event.put("isNdef", hasNdef);
         event.put("isMifareUltralight", hasMifare);
 
-        // 尝试读取 NDEF 数据
+        // 尝试读取 NDEF 数据（缓存读取，无需 connect，不占用通道）
         if (hasNdef) {
             Ndef ndef = Ndef.get(tag);
             if (ndef != null) {
@@ -83,10 +83,15 @@ public class KaihangNfcPlugin extends Plugin {
             }
         }
 
-        // 尝试读取 MifareUltralight 原始数据
+        // MifareUltralight 原始读取需要独占通道，交给 executor 串行执行，
+        // 避免与 writeMifareRaw / readMifareRaw 并发 connect 导致 IOException
         if (hasMifare && !hasNdef) {
-            MifareUltralight ul = MifareUltralight.get(tag);
-            if (ul != null) {
+            executor.execute(() -> {
+                MifareUltralight ul = MifareUltralight.get(tag);
+                if (ul == null) {
+                    notifyListeners("nfcEvent", event);
+                    return;
+                }
                 try {
                     ul.connect();
                     byte[] first = ul.readPages(DATA_START_PAGE);
@@ -118,7 +123,9 @@ public class KaihangNfcPlugin extends Plugin {
                 } catch (IOException e) {
                     // 读取失败不影响事件派发
                 }
-            }
+                notifyListeners("nfcEvent", event);
+            });
+            return; // 事件由 executor 内派发
         }
 
         notifyListeners("nfcEvent", event);
@@ -142,8 +149,8 @@ public class KaihangNfcPlugin extends Plugin {
     @Override
     protected void handleOnResume() {
         super.handleOnResume();
-        // 从后台回来或锁屏解锁后重新激活 reader mode
-        if (adapter != null && adapter.isEnabled()) {
+        // 从后台回来或锁屏解锁后重新激活 reader mode，但仅在 scanningRequested=true 时
+        if (scanningRequested && adapter != null && adapter.isEnabled()) {
             enableReader();
             android.util.Log.d("KaihangNfc", "NFC reader mode re-enabled on resume");
         }
@@ -197,9 +204,11 @@ public class KaihangNfcPlugin extends Plugin {
                     android.util.Log.d("KaihangNfc", "clearTag: Mifare pages zeroed");
                 }
 
+                lastTag.set(null);
                 if (cleared) { call.resolve(); }
                 else { call.reject("Tag type not supported for clear"); }
             } catch (Exception e) {
+                lastTag.set(null);
                 call.reject("clearTag failed: " + e.getMessage(), e);
             }
         });
@@ -208,6 +217,13 @@ public class KaihangNfcPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
+        // 先禁用 Reader Mode，阻止新的 tag 进入 readerCallback / executor 队列
+        if (adapter != null) {
+            try { adapter.disableReaderMode(getActivity()); } catch (Exception ignored) {}
+        }
+        // 清除悬挂的 tag 引用
+        lastTag.set(null);
+        // 关闭 executor；已入队但未开始的任务不再执行，正在执行的任务收到中断信号
         executor.shutdownNow();
     }
 
@@ -232,6 +248,7 @@ public class KaihangNfcPlugin extends Plugin {
     @PluginMethod
     public void stopScanning(PluginCall call) {
         scanningRequested = false;
+        lastTag.set(null);
         if (adapter != null) {
             try { adapter.disableReaderMode(getActivity()); } catch (Exception ignored) {}
         }
@@ -268,6 +285,7 @@ public class KaihangNfcPlugin extends Plugin {
                     ndef.connect();
                     ndef.writeNdefMessage(message);
                     ndef.close();
+                    lastTag.set(null);
                     call.resolve();
                     return;
                 }
@@ -278,13 +296,16 @@ public class KaihangNfcPlugin extends Plugin {
                         formatable.connect();
                         formatable.format(message);
                         formatable.close();
+                        lastTag.set(null);
                         call.resolve();
                         return;
                     }
                 }
 
+                lastTag.set(null);
                 call.reject("Tag does not support NDEF");
             } catch (Exception e) {
+                lastTag.set(null);
                 call.reject("NDEF write failed: " + e.getMessage(), e);
             }
         });
@@ -325,8 +346,10 @@ public class KaihangNfcPlugin extends Plugin {
                     ul.writePage(DATA_START_PAGE + (i / 4), Arrays.copyOfRange(buf, i, i + 4));
                 }
                 ul.close();
+                lastTag.set(null);
                 call.resolve();
             } catch (IOException e) {
+                lastTag.set(null);
                 call.reject("MifareUltralight write failed: " + e.getMessage(), e);
             }
         });
@@ -349,6 +372,7 @@ public class KaihangNfcPlugin extends Plugin {
                 JSObject result = new JSObject();
                 if (first[0] != MAGIC[0] || first[1] != MAGIC[1]) {
                     ul.close();
+                    lastTag.set(null);
                     result.put("data", "");
                     result.put("isKaihang", false);
                     result.put("raw", bytesToJSArray(first));
@@ -381,8 +405,10 @@ public class KaihangNfcPlugin extends Plugin {
                 String data = new String(buf, 4, len, StandardCharsets.UTF_8);
                 result.put("data", data);
                 result.put("isKaihang", true);
+                lastTag.set(null);
                 call.resolve(result);
             } catch (IOException e) {
+                lastTag.set(null);
                 call.reject("MifareUltralight read failed: " + e.getMessage(), e);
             }
         });

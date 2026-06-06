@@ -22,25 +22,54 @@ import com.uc.pdasdk.utils.BarcodeCreater;
 public class PrintPlugin extends Plugin {
 
     private static final String EVENT_STATUS = "printStatus";
+    private boolean isConnected  = false;
+    private boolean isConnecting = false;
+    private volatile boolean destroyed = false;
 
     @PluginMethod
     public void connect(PluginCall call) {
+        if (isConnected) {
+            JSObject data = new JSObject();
+            data.put("connection", "connected");
+            notifyListeners(EVENT_STATUS, data);
+            call.resolve();
+            return;
+        }
+        if (isConnecting) {
+            call.resolve();
+            return;
+        }
+        isConnecting = true;
         Printer.connect(
             getActivity(),
             new Handler(Looper.getMainLooper()) {
                 @Override
                 public void handleMessage(@NonNull Message msg) {
+                    if (destroyed) return;
                     JSObject data = new JSObject();
                     switch (msg.what) {
-                        case 101: data.put("connection", "connected"); break;
-                        case 102: data.put("connection", "failed");    break;
-                        case 103: data.put("connection", "closed");    break;
+                        case 101:
+                            isConnecting = false;
+                            isConnected = true;
+                            data.put("connection", "connected");
+                            break;
+                        case 102:
+                            isConnecting = false;
+                            isConnected = false;
+                            data.put("connection", "failed");
+                            break;
+                        case 103:
+                            isConnecting = false;
+                            isConnected = false;
+                            data.put("connection", "closed");
+                            break;
                         default:  return;
                     }
                     notifyListeners(EVENT_STATUS, data);
                 }
             },
             (result, feedbackBytes, flag) -> {
+                if (destroyed) return;
                 android.util.Log.d("PrintPlugin", "printCallback: " + result.name() + " flag=" + flag);
                 JSObject data = new JSObject();
                 data.put("status", result.name());
@@ -53,6 +82,20 @@ public class PrintPlugin extends Plugin {
 
     @PluginMethod
     public void prepareToPrintLabel(PluginCall call) {
+        Printer.prepareToPrintLabel();
+        call.resolve();
+    }
+
+    /**
+     * 检测黑标（标签间隙检测）
+     * 每张标签打印完成（收到 printStatus.status == "PRINT_OK" 事件）后调用，
+     * 走纸到下一张标签的起始位置，准备打印下一张。
+     * 底层与 prepareToPrintLabel 调用相同 SDK 方法，回调同样走 printStatus 事件：
+     *   PREPARE_LABEL_OK → 已就绪，可继续打印
+     *   PREPARE_LABEL_BLACK_FLAG_NOT_FOUND → 未检测到标签间隙，需人工处理
+     */
+    @PluginMethod
+    public void checkBlack(PluginCall call) {
         Printer.prepareToPrintLabel();
         call.resolve();
     }
@@ -144,6 +187,10 @@ public class PrintPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        // 先标记 destroyed，阻止异步 103 回调和 printCallback 在销毁后继续调用 notifyListeners
+        destroyed = true;
+        isConnected = false;
+        isConnecting = false;
         Printer.close(getActivity());
     }
 }
