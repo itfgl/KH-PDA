@@ -4,10 +4,10 @@ chcp 65001 >nul
 
 set REMOTE_USER=root
 set REMOTE_HOST=115.29.178.34
-set REMOTE_PATH=/root/scanner/server/static
+set REMOTE_PATH=/root/scanner/server/h5
 set REMOTE_PORT=22
 
-set LOCAL_STATIC=..\server\static
+set LOCAL_STATIC=..\server\h5
 
 echo [1/3] Building plugins.js ...
 call npm run build
