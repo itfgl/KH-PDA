@@ -68,6 +68,8 @@ public class ScanPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        // 先停止扫描，防止 App 退出后扫码枪仍处于触发状态（激光亮着）
+        try { getContext().sendBroadcast(new Intent(ACTION_STOP)); } catch (Exception ignored) {}
         if (receiverRegistered && scanReceiver != null) {
             getContext().unregisterReceiver(scanReceiver);
             receiverRegistered = false;

@@ -18,6 +18,9 @@ import com.uc.pdasdk.print.Printer;
 import com.uc.pdasdk.utils.AbsoluteLayoutBitmap;
 import com.uc.pdasdk.utils.BarcodeCreater;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 @CapacitorPlugin(name = "PrintPlugin")
 public class PrintPlugin extends Plugin {
 
@@ -25,6 +28,8 @@ public class PrintPlugin extends Plugin {
     private boolean isConnected  = false;
     private boolean isConnecting = false;
     private volatile boolean destroyed = false;
+    // 串行执行打印位图生成任务，destroy 时统一 shutdownNow 中断
+    private final ExecutorService printExecutor = Executors.newSingleThreadExecutor();
 
     @PluginMethod
     public void connect(PluginCall call) {
@@ -113,7 +118,8 @@ public class PrintPlugin extends Plugin {
 
         if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
 
-        new Thread(() -> {
+        printExecutor.execute(() -> {
+            if (destroyed) { call.reject("printer destroyed"); return; }
             try {
                 Bitmap barcode = BarcodeCreater.createBarcode(
                     getContext(), batchNo, 364, 80, false, 1
@@ -128,6 +134,7 @@ public class PrintPlugin extends Plugin {
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 
+                if (destroyed) { call.reject("printer destroyed"); return; }
                 android.util.Log.d("PrintPlugin", "printBatchLabel → Printer.print()");
                 Printer.print(new BitmapData(label, 15, 0), 16, "batch_" + batchNo, false);
                 call.resolve();
@@ -135,7 +142,7 @@ public class PrintPlugin extends Plugin {
                 android.util.Log.e("PrintPlugin", "printBatchLabel crash", e);
                 call.reject("printBatchLabel error: " + e.getMessage(), e);
             }
-        }).start();
+        });
     }
 
     /**
@@ -151,8 +158,8 @@ public class PrintPlugin extends Plugin {
 
         if (machineId.isEmpty()) { call.reject("machineId is required"); return; }
 
-        // 后台线程执行，避免主线程 ANR
-        new Thread(() -> {
+        printExecutor.execute(() -> {
+            if (destroyed) { call.reject("printer destroyed"); return; }
             try {
                 String qrContent = machineId + "|" + productType + "|" + date;
 
@@ -177,20 +184,25 @@ public class PrintPlugin extends Plugin {
                     return;
                 }
 
+                if (destroyed) { call.reject("printer destroyed"); return; }
                 Printer.print(new BitmapData(label, 15, 0), 16, "machine_qr_" + machineId, false);
                 call.resolve();
             } catch (Exception e) {
                 call.reject("printMachineQR error: " + e.getMessage(), e);
             }
-        }).start();
+        });
     }
 
     @Override
     protected void handleOnDestroy() {
-        // 先标记 destroyed，阻止异步 103 回调和 printCallback 在销毁后继续调用 notifyListeners
+        // 先标记 destroyed，阻止异步回调（103 / printCallback）在销毁后调用 notifyListeners，
+        // 同时让 printExecutor 里正在等待的任务检查 destroyed 后提前退出
         destroyed = true;
         isConnected = false;
         isConnecting = false;
+        // 中断位图生成 / 打印任务
+        printExecutor.shutdownNow();
+        // 关闭打印机连接
         Printer.close(getActivity());
     }
 }
