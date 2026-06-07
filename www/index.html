@@ -882,33 +882,15 @@ function startApkDownload(url, expectedVersionCode) {
   }).then(listener => {
     window.UpdatePlugin.downloadAndInstallApk({ url: absoluteUrl })
       .then(() => {
-        log('APK 下载完成，请点击通知栏安装', 'ok');
+        log('APK 下载完成，即将退出', 'ok');
         listener.remove();
         bar.style.width = '100%';
-        text.textContent = '下载完成！请下拉通知栏点击安装';
-
-        // 安装器关闭后 App 回到前台，主动查版本决定下一步：
-        // 情况A：新版装好但旧进程没被杀（本设备行为）→ 查到新版 → 重启进程
-        // 情况B：安装取消或失败 → 版本未变 → 提示重试
-        function onResumeFromInstaller() {
-          if (document.visibilityState !== 'visible') return;
-          document.removeEventListener('visibilitychange', onResumeFromInstaller);
-          window.UpdatePlugin.getVersionInfo().then(info => {
-            if (info.versionCode >= expectedVersionCode) {
-              log('新版本已安装，正在重启...', 'ok');
-              window.UpdatePlugin.restartApp();
-            } else {
-              overlay.style.display = 'none';
-              _updateStarted = false;
-              log('安装未完成（取消或失败），可重新点击检查更新', 'warn');
-              alert('安装未完成，如需更新请再次点击「检查更新」');
-            }
-          }).catch(() => {
-            overlay.style.display = 'none';
-            _updateStarted = false;
-          });
-        }
-        document.addEventListener('visibilitychange', onResumeFromInstaller);
+        text.textContent = '下载完成，请在通知栏点击安装…';
+        // 稍等让用户看到提示，主动退出 App
+        // DownloadManager 已完成下载，安装通知在通知栏，退出后用户点通知即可安装
+        setTimeout(() => {
+          window.UpdatePlugin?.exitApp?.();
+        }, 1500);
       })
       .catch(err => {
         log('下载 APK 失败: ' + err.message, 'err');

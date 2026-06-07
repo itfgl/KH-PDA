@@ -124,6 +124,12 @@ public class UpdatePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void exitApp(PluginCall call) {
+        call.resolve();
+        android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
+    @PluginMethod
     public void restartApp(PluginCall call) {
         Intent intent = getContext().getPackageManager()
             .getLaunchIntentForPackage(getContext().getPackageName());
