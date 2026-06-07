@@ -670,20 +670,8 @@ refreshDebug();
 // ── 自动更新相关逻辑 ─────────────────────────────────────────────────────────
 const SERVER_BASE = 'http://115.29.178.34:2973';
 
-// 防止同一 session 内重复触发更新弹窗（页面 reload 后也通过 sessionStorage 保持）
-let _updateInProgress = false;
-
-function _isInstallPending() {
-  return _updateInProgress || sessionStorage.getItem('apkInstallPending') === '1';
-}
-function _setInstallPending() {
-  _updateInProgress = true;
-  sessionStorage.setItem('apkInstallPending', '1');
-}
-function _clearInstallPending() {
-  _updateInProgress = false;
-  sessionStorage.removeItem('apkInstallPending');
-}
+// 内存标志：防同一次 JS 会话内重复触发（不持久化，靠 versionCode 比较来彻底终止循环）
+let _updateStarted = false;
 
 async function triggerAppUpdate() {
   if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) {
@@ -708,12 +696,11 @@ async function triggerAppUpdate() {
     if (serverInfo.versionCode > localInfo.versionCode) {
       const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
       if (ok) {
-        _setInstallPending();
+        _updateStarted = true;
         startApkDownload(serverInfo.apkUrl);
       }
     } else {
       log('已是最新版本', 'ok');
-      _clearInstallPending(); // 新版已运行，清除标志
       alert(`当前已是最新版本 (v${localInfo.versionName})`);
     }
   } catch (e) {
@@ -724,8 +711,7 @@ async function triggerAppUpdate() {
 
 async function autoCheckUpdate() {
   if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) return;
-  // 已触发过安装流程（本次 session 或上次页面 reload 前），不重复弹窗
-  if (_isInstallPending()) return;
+  if (_updateStarted) return; // 本次会话已触发，不重复
   try {
     const localInfo = await window.UpdatePlugin.getVersionInfo();
     const res = await fetch(SERVER_BASE + '/api/app/version');
@@ -733,16 +719,13 @@ async function autoCheckUpdate() {
     const serverInfo = await res.json();
     if (serverInfo.versionCode > localInfo.versionCode) {
       setTimeout(() => {
-        if (_isInstallPending()) return; // timeout 期间已被手动触发，放弃
+        if (_updateStarted) return;
         const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载并升级？`);
         if (ok) {
-          _setInstallPending();
+          _updateStarted = true;
           startApkDownload(serverInfo.apkUrl);
         }
       }, 1500);
-    } else {
-      // 本地版本 >= 服务器版本，说明新 APK 已装好并重启，清除遗留标志
-      _clearInstallPending();
     }
   } catch (e) {
     console.error('Auto check update failed', e);
@@ -788,7 +771,7 @@ function startApkDownload(url) {
         alert('下载 APK 失败: ' + err.message);
         listener.remove();
         overlay.style.display = 'none';
-        _clearInstallPending(); // 下载失败，允许重新触发
+        _clearInstallPending(); // 下载失败，清除标志，允许重新触发
       });
   });
 }
