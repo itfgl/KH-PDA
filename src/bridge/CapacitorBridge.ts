@@ -136,6 +136,8 @@ export interface UpdatePlugin {
   getVersionInfo(): Promise<{ versionCode: number; versionName: string }>;
   /** 从指定 URL 下载并安装 APK */
   downloadAndInstallApk(options: { url: string }): Promise<void>;
+  /** 杀掉当前进程并重启 App（安装新版后旧进程未被杀时调用） */
+  restartApp(): Promise<void>;
   /** 监听下载进度 */
   addListener(
     event: 'downloadProgress',

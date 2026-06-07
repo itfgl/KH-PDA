@@ -64,8 +64,9 @@ public class UpdatePlugin extends Plugin {
                 int fileLength = connection.getContentLength();
                 InputStream input = connection.getInputStream();
 
-                // Save to app's cache directory (internal cache, safe, doesn't need external storage permission)
-                File cacheDir = getContext().getCacheDir();
+                // 用外部缓存目录：安装器在后台读取时不依赖 ContentProvider 响应，更可靠
+                File cacheDir = getContext().getExternalCacheDir();
+                if (cacheDir == null) cacheDir = getContext().getCacheDir(); // 降级
                 File apkFile = new File(cacheDir, "update.apk");
                 if (apkFile.exists()) {
                     apkFile.delete();
@@ -105,6 +106,19 @@ public class UpdatePlugin extends Plugin {
                 call.reject("下载或安装 APK 失败: " + e.getMessage());
             }
         }).start();
+    }
+
+    @PluginMethod
+    public void restartApp(PluginCall call) {
+        // 杀掉当前进程，让系统以新版 APK 重新启动
+        Intent intent = getContext().getPackageManager()
+            .getLaunchIntentForPackage(getContext().getPackageName());
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+        }
+        call.resolve();
+        android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     private void installApk(File file) {

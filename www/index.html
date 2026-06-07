@@ -145,6 +145,20 @@
     </div>
     <!-- 批次选择列表，点击后收起 -->
     <div id="batch-list" style="display:none; margin-top:8px"></div>
+
+    <!-- ── 流程推进 ── -->
+    <div id="advance-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
+      <div class="card-title">流程推进</div>
+      <div id="advance-node" style="font-size:15px; font-weight:700; color:#1c1c1e; margin-bottom:2px"></div>
+      <div id="advance-resp" style="font-size:12px; color:#8e8e93; margin-bottom:10px"></div>
+      <div class="field">
+        <label>操作人</label>
+        <input id="actor-input" type="text" placeholder="填写姓名" autocomplete="off" oninput="updateAdvanceBtn()" />
+      </div>
+      <div id="transition-btns" style="margin-bottom:10px"></div>
+      <button class="btn btn-blue" id="advance-btn" onclick="doAdvance()" disabled>发送</button>
+      <div class="status" id="advance-status" style="display:none; margin-top:8px"></div>
+    </div>
   </div>
 </div>
 
@@ -287,7 +301,8 @@ function show(id) { const el = document.getElementById(id); if(el) el.style.disp
 
 function resetScanUI() {
   hide('machine-card'); hide('batch-card');
-  hide('barcode-wrap'); hide('print-btns'); hide('print-status');
+  hide('barcode-wrap'); hide('print-btns'); hide('print-status'); hide('advance-wrap');
+  _selectedTransition = null;
   setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
   log('扫描界面已重置', 'info');
 }
@@ -371,6 +386,8 @@ Events.on('batch:loaded', ({ batch, machine }) => {
   const statusLabel = BATCH_STATUS[batch.status] || batch.status;
   setStatus('scan-hint', `批次 ${batch.batch_no}（${statusLabel}）`, 'ok');
   log('批次：' + batch.batch_no + ' status=' + batch.status, 'ok');
+  // 加载流程推进区块
+  loadProcessState(batch.batch_no);
 });
 
 // 无批次且不会自动创建（机器非运行状态）
@@ -527,6 +544,103 @@ async function doPrint(count) {
   } catch(e) {
     setStatus('print-status', '打印失败：' + e.message, 'err');
     log('打印失败：' + e.message, 'err');
+  }
+}
+
+// ── 流程推进 ──────────────────────────────────────────────────────────────────
+let _selectedTransition = null;  // { from_node, event, label }
+
+async function loadProcessState(batchNo) {
+  hide('advance-wrap');
+  _selectedTransition = null;
+  try {
+    const ps = await API.getProcessState(batchNo);
+    if (ps.is_terminal || !ps.active_nodes.length) return; // 已完成，不显示推进区块
+    renderAdvance(ps.active_nodes);
+    show('advance-wrap');
+    hide('advance-status');
+  } catch(e) {
+    log('流程状态查询失败：' + e.message, 'err');
+  }
+}
+
+function renderAdvance(nodes) {
+  // 节点信息
+  document.getElementById('advance-node').textContent = nodes.map(n => n.node_name).join(' / ');
+  document.getElementById('advance-resp').textContent = '负责：' + nodes.map(n => n.responsible).join(' / ');
+
+  // 所有可触发事件（展开多轨道）
+  const all = nodes.flatMap(n => n.valid_transitions.map(t => ({
+    from_node: n.node_id, node_name: n.node_name, event: t.event, label: t.label,
+  })));
+  const multiTrack = nodes.length > 1;
+
+  document.getElementById('transition-btns').innerHTML = all.map((t, i) => `
+    <button id="tbtn-${i}"
+      onclick="selectTransition(${i}, '${t.from_node}', '${t.event}', '${t.label}')"
+      style="display:block;width:100%;padding:11px 14px;margin-bottom:8px;
+             border:2px solid #e5e5ea;border-radius:10px;background:#f9f9f9;
+             text-align:left;cursor:pointer;font-size:14px;font-weight:500;color:#1c1c1e">
+      ${t.label}
+      ${multiTrack ? `<div style="font-size:11px;color:#8e8e93;margin-top:2px">来自：${t.node_name}</div>` : ''}
+    </button>
+  `).join('');
+
+  // 只有一个选项时自动选中
+  if (all.length === 1) selectTransition(0, all[0].from_node, all[0].event, all[0].label);
+}
+
+function selectTransition(idx, fromNode, event, label) {
+  _selectedTransition = { from_node: fromNode, event, label };
+  // 高亮选中按钮，其余恢复
+  document.querySelectorAll('[id^="tbtn-"]').forEach((el, i) => {
+    el.style.borderColor  = i === idx ? '#007aff' : '#e5e5ea';
+    el.style.background   = i === idx ? '#e8f4fd' : '#f9f9f9';
+    el.style.color        = i === idx ? '#007aff' : '#1c1c1e';
+    el.style.fontWeight   = i === idx ? '700' : '500';
+  });
+  updateAdvanceBtn();
+}
+
+function updateAdvanceBtn() {
+  const actor = (document.getElementById('actor-input')?.value || '').trim();
+  document.getElementById('advance-btn').disabled = !(actor && _selectedTransition);
+}
+
+async function doAdvance() {
+  if (!_selectedTransition || !_currentBatch) return;
+  const actor = document.getElementById('actor-input').value.trim();
+  if (!actor) return;
+
+  document.getElementById('advance-btn').disabled = true;
+  setStatus('advance-status', '提交中…', 'info');
+  show('advance-status');
+
+  try {
+    await API.postEvent({
+      batch_no:   _currentBatch.batch_no,
+      event_type: _selectedTransition.event,
+      actor,
+      from_node:  _selectedTransition.from_node,
+    });
+
+    setStatus('advance-status', '✓ 已推进：' + _selectedTransition.label, 'ok');
+    log('流程推进：' + _selectedTransition.event + ' by ' + actor, 'ok');
+
+    // batch_ready：自动打印批次标签
+    if (_selectedTransition.event === 'batch_ready') {
+      setStatus('advance-status', '✓ 已推进，打印中…', 'ok');
+      try {
+        await doPrint(1);
+      } catch(_) { /* doPrint 内部已处理 */ }
+    }
+
+    // 刷新流程状态
+    await loadProcessState(_currentBatch.batch_no);
+  } catch(e) {
+    setStatus('advance-status', '提交失败：' + e.message, 'err');
+    log('流程推进失败：' + e.message, 'err');
+    document.getElementById('advance-btn').disabled = false;
   }
 }
 
@@ -697,7 +811,7 @@ async function triggerAppUpdate() {
       const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
       if (ok) {
         _updateStarted = true;
-        startApkDownload(serverInfo.apkUrl);
+        startApkDownload(serverInfo.apkUrl, serverInfo.versionCode);
       }
     } else {
       log('已是最新版本', 'ok');
@@ -723,7 +837,7 @@ async function autoCheckUpdate() {
         const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载并升级？`);
         if (ok) {
           _updateStarted = true;
-          startApkDownload(serverInfo.apkUrl);
+          startApkDownload(serverInfo.apkUrl, serverInfo.versionCode);
         }
       }, 1500);
     }
@@ -732,7 +846,7 @@ async function autoCheckUpdate() {
   }
 }
 
-function startApkDownload(url) {
+function startApkDownload(url, expectedVersionCode) {
   const absoluteUrl = new URL(url, SERVER_BASE).href;
   let overlay = document.getElementById('update-progress-overlay');
   if (!overlay) {
@@ -755,7 +869,7 @@ function startApkDownload(url) {
   // 监听"需要开启安装未知来源"事件（Android 8+ 首次安装时触发）
   window.UpdatePlugin.addListener('installPermissionRequired', (data) => {
     overlay.style.display = 'none';
-    _updateStarted = false; // 允许权限开启后重新触发
+    _updateStarted = false;
     log('需要安装权限: ' + data.reason, 'warn');
     alert(data.reason);
   });
@@ -770,17 +884,38 @@ function startApkDownload(url) {
       .then(() => {
         log('APK 下载完成，拉起安装', 'ok');
         listener.remove();
-        // 保持 overlay 显示"等待安装"，不提前隐藏
-        // 系统安装器会覆盖在上面，安装完成 App 被杀重启后 overlay 自然消失
         bar.style.width = '100%';
         text.textContent = '安装中，请按提示操作...';
+
+        // 安装器关闭后 App 回到前台，主动查版本决定下一步：
+        // 情况A：新版装好但旧进程没被杀（本设备行为）→ 查到新版 → 重启进程
+        // 情况B：安装取消或失败 → 版本未变 → 提示重试
+        function onResumeFromInstaller() {
+          if (document.visibilityState !== 'visible') return;
+          document.removeEventListener('visibilitychange', onResumeFromInstaller);
+          window.UpdatePlugin.getVersionInfo().then(info => {
+            if (info.versionCode >= expectedVersionCode) {
+              log('新版本已安装，正在重启...', 'ok');
+              window.UpdatePlugin.restartApp();
+            } else {
+              overlay.style.display = 'none';
+              _updateStarted = false;
+              log('安装未完成（取消或失败），可重新点击检查更新', 'warn');
+              alert('安装未完成，如需更新请再次点击「检查更新」');
+            }
+          }).catch(() => {
+            overlay.style.display = 'none';
+            _updateStarted = false;
+          });
+        }
+        document.addEventListener('visibilitychange', onResumeFromInstaller);
       })
       .catch(err => {
         log('下载 APK 失败: ' + err.message, 'err');
         alert('下载 APK 失败: ' + err.message);
         listener.remove();
         overlay.style.display = 'none';
-        _updateStarted = false; // 下载失败，允许重新触发
+        _updateStarted = false;
       });
   });
 }
