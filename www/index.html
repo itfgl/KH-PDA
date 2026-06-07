@@ -882,10 +882,10 @@ function startApkDownload(url, expectedVersionCode) {
   }).then(listener => {
     window.UpdatePlugin.downloadAndInstallApk({ url: absoluteUrl })
       .then(() => {
-        log('APK 下载完成，拉起安装', 'ok');
+        log('APK 下载完成，请点击通知栏安装', 'ok');
         listener.remove();
         bar.style.width = '100%';
-        text.textContent = '安装中，请按提示操作...';
+        text.textContent = '下载完成！请下拉通知栏点击安装';
 
         // 安装器关闭后 App 回到前台，主动查版本决定下一步：
         // 情况A：新版装好但旧进程没被杀（本设备行为）→ 查到新版 → 重启进程
