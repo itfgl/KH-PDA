@@ -2,9 +2,12 @@
  * 服务端 API 调用封装
  * 所有接口统一走 apiFetch，非 2xx 抛出含 detail 的 Error
  */
+const SERVER_BASE = 'http://115.29.178.34:2973';
+
 export async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  const res = await fetch(path, { ...opts, headers });
+  const url = path.startsWith('http') ? path : `${SERVER_BASE}${path}`;
+  const res = await fetch(url, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail ?? `请求失败 ${res.status}`);
   return data;
