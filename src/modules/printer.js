@@ -84,12 +84,6 @@ export async function printBatches(params, count = 1, onProgress) {
   if (!_plugin) throw new Error('打印机未初始化');
   if (!_connected) throw new Error('打印机未连接，请先重连');
 
-  // 走纸到第一张标签起始位
-  // 注意：先创建 Promise 再调用 SDK，确保监听器在事件触发前已注册
-  const p0 = waitPrintStatus('PREPARE_LABEL_OK');
-  await _plugin.prepareToPrintLabel();
-  await p0;
-
   for (let i = 0; i < count; i++) {
     onProgress?.(i + 1, count);
     const pPrint = waitPrintStatus('PRINT_OK');

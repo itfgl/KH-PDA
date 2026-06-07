@@ -40,6 +40,12 @@ public class ScanPlugin extends Plugin {
             public void onReceive(Context context, Intent intent) {
                 String value = intent.getStringExtra("string");
                 if (value == null || value.isEmpty()) return;
+
+                // 收到扫码结果后，立即发送 STOP 广播关闭扫描状态并复位扫码助手，否则可能导致下一次触发失效
+                try {
+                    context.sendBroadcast(new Intent(ACTION_STOP));
+                } catch (Exception ignored) {}
+
                 JSObject data = new JSObject();
                 data.put("value", value);
                 notifyListeners(EVENT_SCAN, data);
@@ -56,6 +62,10 @@ public class ScanPlugin extends Plugin {
 
     @PluginMethod
     public void startScan(PluginCall call) {
+        // 启动前先发送一次 STOP 进行状态复位，确保下一次 START 能够成功被扫码助手响应
+        try {
+            getContext().sendBroadcast(new Intent(ACTION_STOP));
+        } catch (Exception ignored) {}
         getContext().sendBroadcast(new Intent(ACTION_START));
         call.resolve();
     }
