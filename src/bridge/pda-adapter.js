@@ -140,7 +140,7 @@ export const PrintPlugin = {
       name: 'printBmpLabel',
       width: 384, height: 300, top: 8, concentration: 15,
       data: [
-        { printType: 2, text: `${machineId}|${productType}|${date}`,
+        { printType: 2, text: machineId,
           desiredWidth: 200, desiredHeight: 200, displayCode: false, left: 92, top: 8 },
         { printType: 0, text: `机 器：${machineId}`,   textSize: 24, x: 16, y: 224 },
         { printType: 0, text: `品 类：${productType}`, textSize: 22, x: 16, y: 252 },

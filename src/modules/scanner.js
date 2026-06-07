@@ -19,23 +19,32 @@ let _inited   = false;
 export async function init(ScanPlugin) {
   if (_inited) return;
   _plugin = ScanPlugin;
+  emit('scanner:log', { msg: '[Scanner] init 开始', type: 'info' });
   try {
     await _plugin.addListener('scanResult', ({ value }) => {
+      emit('scanner:log', { msg: '[Scanner] 收到结果: ' + value, type: 'ok' });
       emit('scanner:result', { value });
-      // 扫完即重置状态，不留在"等待扫码枪…"
       emit('scanner:status', { msg: '就绪', type: '' });
+      // X8: setOnScan 永久注册，物理扳机无需软件重新 arm
     });
     _inited = true;
+    emit('scanner:log', { msg: '[Scanner] addListener 注册成功，插件就绪', type: 'ok' });
     emit('scanner:status', { msg: '扫码枪就绪', type: 'ok' });
   } catch(e) {
+    emit('scanner:log', { msg: '[Scanner] init 失败: ' + (e?.message ?? e), type: 'err' });
     emit('scanner:status', { msg: '扫码枪不可用（非 X8 设备）', type: 'warn' });
   }
 }
 
 export async function trigger() {
   if (!_plugin) return;
+  emit('scanner:log', { msg: '[Scanner] trigger → startScan', type: 'info' });
   emit('scanner:status', { msg: '等待扫码枪…', type: 'info' });
-  try { await _plugin.startScan(); } catch(e) {
+  try {
+    await _plugin.startScan();
+    emit('scanner:log', { msg: '[Scanner] startScan 已发出', type: 'ok' });
+  } catch(e) {
+    emit('scanner:log', { msg: '[Scanner] startScan 失败: ' + (e?.message ?? e), type: 'err' });
     emit('scanner:status', { msg: '触发失败：' + e.message, type: 'err' });
   }
 }

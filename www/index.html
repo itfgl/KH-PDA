@@ -339,8 +339,9 @@ Events.on('nfc:error', ({ msg }) => {
 });
 
 // ── 扫码枪事件 ────────────────────────────────────────────────────────────────
-Events.on('scanner:status', ({ msg, type }) => setStatus('scan-hint', msg, type));
-Events.on('scanner:result', ({ value }) => log('扫码枪：' + value, 'ok'));
+Events.on('scanner:status', ({ msg, type }) => { setStatus('scan-hint', msg, type); log('扫码枪状态：' + msg, type || 'plain'); });
+Events.on('scanner:result', ({ value }) => log('扫码枪结果：' + value, 'ok'));
+Events.on('scanner:log',    ({ msg, type }) => log(msg, type || 'plain'));
 
 // ── 机器 / 批次事件 ───────────────────────────────────────────────────────────
 Events.on('machine:loading', ({ code }) => {
@@ -588,7 +589,7 @@ function selectSetupMachine(idx) {
   const date = new Date()
     .toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' })
     .replace(/\//g, '');
-  const qrContent = `${m.code}|${m.current_product_name || m.current_product_type || '—'}|${date}`;
+  const qrContent = m.code;
   new QRious({
     element: document.getElementById('s-qrcode'),
     value: qrContent,

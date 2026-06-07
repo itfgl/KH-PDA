@@ -25,7 +25,20 @@ export function init() {
   on('scanner:result', ({ value }) => handleCode(value));
 }
 
-async function handleCode(code) {
+const NFC_PREFIX = 'kaihang://nfc/';
+
+function normalizeCode(raw) {
+  // 剥 URI 前缀
+  let s = raw.startsWith(NFC_PREFIX) ? raw.slice(NFC_PREFIX.length) : raw;
+  // 取第一段（兼容 M53|—|260607 格式）
+  s = s.split('|')[0];
+  // 剥开头的非字母数字字符（兼容扫码枪 GS1 前缀噪音，如 \000026 M53）
+  s = s.replace(/^[^A-Za-z0-9]+/, '').trim();
+  return s;
+}
+
+async function handleCode(raw) {
+  const code = normalizeCode(raw);
   emit('machine:loading', { code });
 
   let machine;
