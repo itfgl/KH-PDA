@@ -18,7 +18,7 @@
  *   batch:error      { msg }
  */
 import { on, emit } from './events.js';
-import { getMachineByCode, getBatchByNo } from './api.js';
+import { getMachineByCode, getMachineById, getBatchByNo } from './api.js';
 
 export function init() {
   on('nfc:detected',   ({ code })  => handleCode(code));
@@ -37,28 +37,38 @@ function normalizeCode(raw) {
   return s;
 }
 
+/** 批次码 15 位（机器码3 + 日期6 + 产品码2 + 流水4），机器码最长 4 位 */
+function isBatchNo(code) {
+  return code.length >= 10;
+}
+
 async function handleCode(raw) {
   const code = normalizeCode(raw);
   emit('machine:loading', { code });
 
-  let machine;
   try {
-    machine = await getMachineByCode(code);
-    emit('machine:loaded', { machine });
+    let machine, batch;
+
+    if (isBatchNo(code)) {
+      // ── 批次码路径（扫码枪扫批次标签）────────────────────────────────
+      batch   = await getBatchByNo(code);
+      machine = await getMachineById(batch.machine_id);
+      emit('machine:loaded', { machine });
+      emit('batch:loaded', { batch, machine });
+    } else {
+      // ── 机器码路径（PDA 扫机器 NFC 或机器条码）────────────────────────
+      machine = await getMachineByCode(code);
+      emit('machine:loaded', { machine });
+
+      if (!machine.latest_batch_no) {
+        emit('batch:none', { machine });
+        return;
+      }
+
+      batch = await getBatchByNo(machine.latest_batch_no);
+      emit('batch:loaded', { batch, machine });
+    }
   } catch(e) {
     emit('machine:error', { msg: e.message });
-    return;
-  }
-
-  if (!machine.latest_batch_no) {
-    emit('batch:none', { machine });
-    return;
-  }
-
-  try {
-    const batch = await getBatchByNo(machine.latest_batch_no);
-    emit('batch:loaded', { batch, machine });
-  } catch(e) {
-    emit('batch:error', { msg: '批次查询失败：' + e.message });
   }
 }

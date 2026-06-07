@@ -891,6 +891,18 @@ function startApkDownload(url, expectedVersionCode) {
         setTimeout(() => {
           window.UpdatePlugin?.exitApp?.();
         }, 1500);
+
+        // 如果覆盖安装失败（签名不一致），在 overlay 里追加卸载按钮
+        const uninstallHint = document.createElement('div');
+        uninstallHint.style.cssText = 'margin-top:16px;font-size:13px;color:#8e8e93;';
+        uninstallHint.innerHTML = `
+          安装失败？签名不一致需先卸载旧版本：<br>
+          <button onclick="window.UpdatePlugin?.uninstallApp?.()"
+            style="margin-top:10px;padding:10px 20px;border:none;border-radius:8px;
+                   background:#ff3b30;color:#fff;font-size:14px;font-weight:600;cursor:pointer">
+            卸载旧版本
+          </button>`;
+        overlay.querySelector('div').appendChild(uninstallHint);
       })
       .catch(err => {
         log('下载 APK 失败: ' + err.message, 'err');

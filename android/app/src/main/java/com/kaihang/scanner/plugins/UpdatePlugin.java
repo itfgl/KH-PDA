@@ -123,6 +123,16 @@ public class UpdatePlugin extends Plugin {
         }
     }
 
+    /** 弹出系统卸载对话框，用户确认后卸载本 App（覆盖安装签名不一致时使用） */
+    @PluginMethod
+    public void uninstallApp(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_UNINSTALL_PACKAGE);
+        intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        getContext().startActivity(intent);
+        call.resolve();
+    }
+
     @PluginMethod
     public void exitApp(PluginCall call) {
         call.resolve();
