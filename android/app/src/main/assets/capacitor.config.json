@@ -4,7 +4,6 @@
 	"webDir": "www",
 	"bundledWebRuntime": false,
 	"server": {
-		"url": "http://115.29.178.34:2973/app",
-		"cleartext": true
+		"androidScheme": "http"
 	}
 }
