@@ -752,7 +752,15 @@ function startApkDownload(url) {
 
   log('开始下载更新 APK: ' + absoluteUrl, 'info');
 
-  // 先注册监听再发起下载，避免竞态导致 listener 为 null
+  // 监听"需要开启安装未知来源"事件（Android 8+ 首次安装时触发）
+  window.UpdatePlugin.addListener('installPermissionRequired', (data) => {
+    overlay.style.display = 'none';
+    _updateStarted = false; // 允许权限开启后重新触发
+    log('需要安装权限: ' + data.reason, 'warn');
+    alert(data.reason);
+  });
+
+  // 先注册进度监听再发起下载，避免竞态导致 listener 为 null
   window.UpdatePlugin.addListener('downloadProgress', (data) => {
     const progress = data.progress;
     bar.style.width = progress + '%';
@@ -762,7 +770,8 @@ function startApkDownload(url) {
       .then(() => {
         log('APK 下载完成，拉起安装', 'ok');
         listener.remove();
-        // 保持 overlay 显示"等待安装"，不隐藏——系统安装器打开后用户才真正完成
+        // 保持 overlay 显示"等待安装"，不提前隐藏
+        // 系统安装器会覆盖在上面，安装完成 App 被杀重启后 overlay 自然消失
         bar.style.width = '100%';
         text.textContent = '安装中，请按提示操作...';
       })
@@ -771,7 +780,7 @@ function startApkDownload(url) {
         alert('下载 APK 失败: ' + err.message);
         listener.remove();
         overlay.style.display = 'none';
-        _clearInstallPending(); // 下载失败，清除标志，允许重新触发
+        _updateStarted = false; // 下载失败，允许重新触发
       });
   });
 }

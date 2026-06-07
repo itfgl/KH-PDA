@@ -3,6 +3,7 @@ package com.kaihang.scanner.plugins;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.provider.Settings;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -107,11 +108,30 @@ public class UpdatePlugin extends Plugin {
     }
 
     private void installApk(File file) {
+        // Android 8+ 需要"安装未知来源"权限，否则系统安装器静默失败
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            boolean canInstall = getContext().getPackageManager().canRequestPackageInstalls();
+            if (!canInstall) {
+                // 跳转到设置页让用户手动开启，开启后用户需再次点击"检查更新"
+                Intent settingsIntent = new Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:" + getContext().getPackageName())
+                );
+                settingsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                getContext().startActivity(settingsIntent);
+
+                // 通知 JS 侧显示提示
+                JSObject obj = new JSObject();
+                obj.put("reason", "需要在设置中开启「允许安装未知来源应用」，开启后请再次点击更新");
+                notifyListeners("installPermissionRequired", obj);
+                return;
+            }
+        }
+
         Intent intent = new Intent(Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            // Share via FileProvider
             Uri apkUri = FileProvider.getUriForFile(
                 getContext(),
                 getContext().getPackageName() + ".fileprovider",
