@@ -519,7 +519,7 @@ async function selectBatch(batchNo) {
 
 async function doPrint(count) {
   if (!_currentBatch || !_currentMachine) return;
-  setStatus('print-status', `发送 ${count} 张打印任务…`, 'info');
+  setStatus('print-status', '就绪检测中…', 'info');
   show('print-status');
   try {
     // 日期从批次码中直接提取，格式 YYMMDD，位于第 4~9 位
@@ -527,10 +527,13 @@ async function doPrint(count) {
     const p = {
       batchNo:     _currentBatch.batch_no,
       machineId:   _currentMachine.code,
-      productType: _currentBatch.product_name,          // 批次自带，不依赖机器当前状态
-      date:        _currentBatch.batch_no.slice(3, 9),  // 批次创建当日的 YYMMDD
+      productType: _currentBatch.product_name,         // 批次自带，不依赖机器当前状态
+      date:        _currentBatch.batch_no.slice(3, 9), // 批次创建当日的 YYMMDD
     };
-    for (let i = 0; i < count; i++) await Printer.printBatch(p);
+    await Printer.printBatches(p, count, (cur, total) => {
+      setStatus('print-status', `打印第 ${cur} / ${total} 张…`, 'info');
+    });
+    setStatus('print-status', `打印完成（共 ${count} 张）`, 'ok');
     log(`打印 ${count} 张：${_currentBatch.batch_no}`, 'ok');
   } catch(e) {
     setStatus('print-status', '打印失败：' + e.message, 'err');

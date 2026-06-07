@@ -6,7 +6,7 @@
  */
 import JsBarcode from 'jsbarcode';
 import React, { useEffect, useRef, useState } from 'react';
-import { PrintPlugin } from '../bridge/CapacitorBridge';
+import { PrintPlugin, PrintStatus } from '../bridge/CapacitorBridge';
 import { createBatch } from '../api/batches';
 import { fetchMachines, Machine } from '../api/machines';
 
@@ -93,19 +93,63 @@ export default function BatchEntryPage() {
 
   // ── 打印 ─────────────────────────────────────────────────────────────────
 
+  /**
+   * 等待特定的 printStatus 事件。
+   * 遇到错误状态时自动 reject，移除临时监听器后才 resolve/reject。
+   */
+  function waitPrintStatus(wanted: PrintStatus): Promise<void> {
+    const ERROR_STATUSES: PrintStatus[] = [
+      'NO_PAPER', 'PRINTER_CLOSED', 'SEND_DATA_FAILED', 'PRINT_FAILED',
+      'BLACK_FLAG_NOT_FOUND',
+      'PREPARE_LABEL_NO_PAPER', 'PREPARE_LABEL_BLACK_FLAG_NOT_FOUND',
+      'PREPARE_LABEL_FAILED', 'PREPARE_LABEL_PRINTER_CLOSED',
+      'PREPARE_LABEL_SEND_DATA_FAILED',
+    ];
+    return new Promise((resolve, reject) => {
+      let sub: { remove: () => void } | null = null;
+      PrintPlugin.addListener('printStatus', ({ status }) => {
+        if (!status) return;
+        if (status === wanted) {
+          sub?.remove();
+          resolve();
+        } else if ((ERROR_STATUSES as string[]).includes(status)) {
+          sub?.remove();
+          reject(new Error(status));
+        }
+      }).then(s => { sub = s; });
+    });
+  }
+
   async function handlePrint(count: number) {
     if (!batchNo) return;
     const m = machines.find(m => m.id === selectedId);
-    setPrintStatus('发送打印任务…');
+    const printDate = new Date()
+      .toLocaleDateString('zh', { year: '2-digit', month: '2-digit', day: '2-digit' })
+      .replace(/\//g, '');
+
     try {
+      // 走纸到第一张标签起始位
+      setPrintStatus('就绪检测中…');
+      await PrintPlugin.prepareToPrintLabel();
+      await waitPrintStatus('PREPARE_LABEL_OK');
+
       for (let i = 0; i < count; i++) {
+        setPrintStatus(`打印第 ${i + 1} / ${count} 张…`);
         await PrintPlugin.printBatchLabel({
           batchNo,
           machineId: m?.code,
           productType: productName,
-          date: new Date().toLocaleDateString('zh', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\//g, ''),
+          date: printDate,
         });
+        await waitPrintStatus('PRINT_OK');
+
+        // 最后一张不需要走纸
+        if (i < count - 1) {
+          await PrintPlugin.checkBlack();
+          await waitPrintStatus('PREPARE_LABEL_OK');
+        }
       }
+      setPrintStatus(`打印完成（共 ${count} 张）`);
     } catch (e: any) {
       setPrintStatus('打印失败：' + e.message);
     }

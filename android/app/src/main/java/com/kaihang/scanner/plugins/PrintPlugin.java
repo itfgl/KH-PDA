@@ -25,25 +25,24 @@ import java.util.concurrent.Executors;
 public class PrintPlugin extends Plugin {
 
     private static final String EVENT_STATUS = "printStatus";
-    private boolean isConnected  = false;
-    private boolean isConnecting = false;
-    private volatile boolean destroyed = false;
+    private boolean isConnected           = false;
+    private boolean isConnecting          = false;
+    private volatile boolean destroyed    = false;
+    /**
+     * App 进后台时若处于已连接/连接中状态，置为 true。
+     * handleOnResume() 据此决定是否自动重连，避免从未连接过时乱重连。
+     */
+    private boolean wasConnectedBeforePause = false;
     // 串行执行打印位图生成任务，destroy 时统一 shutdownNow 中断
     private final ExecutorService printExecutor = Executors.newSingleThreadExecutor();
 
-    @PluginMethod
-    public void connect(PluginCall call) {
-        if (isConnected) {
-            JSObject data = new JSObject();
-            data.put("connection", "connected");
-            notifyListeners(EVENT_STATUS, data);
-            call.resolve();
-            return;
-        }
-        if (isConnecting) {
-            call.resolve();
-            return;
-        }
+    // ── 连接 ──────────────────────────────────────────────────────────────────
+
+    /**
+     * 核心连接逻辑，抽出供 connect() 和 handleOnResume() 共用。
+     * 调用前必须确认 !isConnected && !isConnecting。
+     */
+    private void doConnect() {
         isConnecting = true;
         Printer.connect(
             getActivity(),
@@ -68,7 +67,7 @@ public class PrintPlugin extends Plugin {
                             isConnected = false;
                             data.put("connection", "closed");
                             break;
-                        default:  return;
+                        default: return;
                     }
                     notifyListeners(EVENT_STATUS, data);
                 }
@@ -82,8 +81,26 @@ public class PrintPlugin extends Plugin {
                 notifyListeners(EVENT_STATUS, data);
             }
         );
+    }
+
+    @PluginMethod
+    public void connect(PluginCall call) {
+        if (isConnected) {
+            JSObject data = new JSObject();
+            data.put("connection", "connected");
+            notifyListeners(EVENT_STATUS, data);
+            call.resolve();
+            return;
+        }
+        if (isConnecting) {
+            call.resolve();
+            return;
+        }
+        doConnect();
         call.resolve();
     }
+
+    // ── 标签走纸 ──────────────────────────────────────────────────────────────
 
     @PluginMethod
     public void prepareToPrintLabel(PluginCall call) {
@@ -104,6 +121,8 @@ public class PrintPlugin extends Plugin {
         Printer.prepareToPrintLabel();
         call.resolve();
     }
+
+    // ── 打印 ──────────────────────────────────────────────────────────────────
 
     /**
      * 批次标签（一维码）
@@ -171,14 +190,12 @@ public class PrintPlugin extends Plugin {
                     return;
                 }
 
-                // 布局高度收紧到 300，防止超出打印机最大进纸
                 Bitmap label = new AbsoluteLayoutBitmap(384, 300)
-                    .addBmp(qr, 92, 8)                          // 居中（(384-200)/2=92）
+                    .addBmp(qr, 92, 8)
                     .addText("机 器：" + machineId, 24, 16, 224)
                     .addText("品 类：" + productType, 22, 16, 252)
                     .addText("日 期：" + date, 22, 16, 278)
                     .getBitmap();
-
                 if (label == null) {
                     call.reject("Label bitmap creation failed");
                     return;
@@ -193,13 +210,40 @@ public class PrintPlugin extends Plugin {
         });
     }
 
+    // ── 生命周期 ──────────────────────────────────────────────────────────────
+
+    @Override
+    protected void handleOnPause() {
+        super.handleOnPause();
+        // App 进后台时关闭打印机，熄灭绿色连接指示灯
+        if (isConnected || isConnecting) {
+            wasConnectedBeforePause = true;
+            isConnected  = false;
+            isConnecting = false;
+            android.util.Log.d("PrintPlugin", "onPause: closing printer");
+            Printer.close(getActivity());
+        }
+    }
+
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        // App 回到前台时自动重连（仅限之前已连接过的情况）
+        if (wasConnectedBeforePause && !destroyed) {
+            wasConnectedBeforePause = false;
+            android.util.Log.d("PrintPlugin", "onResume: reconnecting printer");
+            doConnect();
+        }
+    }
+
     @Override
     protected void handleOnDestroy() {
         // 先标记 destroyed，阻止异步回调（103 / printCallback）在销毁后调用 notifyListeners，
         // 同时让 printExecutor 里正在等待的任务检查 destroyed 后提前退出
-        destroyed = true;
-        isConnected = false;
-        isConnecting = false;
+        destroyed              = true;
+        isConnected            = false;
+        isConnecting           = false;
+        wasConnectedBeforePause = false;
         // 中断位图生成 / 打印任务
         printExecutor.shutdownNow();
         // 关闭打印机连接

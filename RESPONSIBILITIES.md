@@ -81,6 +81,15 @@ await ScanPlugin.startScan();
 await ScanPlugin.stopScan();
 ```
 
+#### 生命周期行为
+
+| 时机 | 行为 |
+|------|------|
+| `load()` | 注册广播接收器（`RECEIVER_EXPORTED` on Android 13+） |
+| `handleOnDestroy()` | **先发 `ACTION_STOP` 广播**（防止退出时扫码枪仍处于触发状态），再注销接收器 |
+
+> **注意**：`ACTION_STOP` 广播在 `handleOnDestroy` 中无条件发送。即使 JS 侧从未调用过 `startScan()`，多发一次 STOP 对扫码助手 App 无副作用。
+
 #### H5 壳子（厂商壳阶段）调用方式
 
 ```js
@@ -228,6 +237,36 @@ for (let i = 0; i < copies; i++) {
 }
 ```
 
+#### 生命周期与状态管理规则
+
+**状态标志**
+
+| 标志 | 类型 | 说明 |
+|------|------|------|
+| `isConnected` | `boolean` | 打印机是否已连接（由 101/102/103 回调维护） |
+| `isConnecting` | `boolean` | 连接请求进行中，防止 `connect()` 重复向 SDK 注册回调 |
+| `destroyed` | `volatile boolean` | 插件已销毁，阻止异步回调继续执行 |
+
+**`connect()` 防重入**：`isConnected=true` 时直接返回已连接；`isConnecting=true` 时静默返回，不再发起新连接。
+
+**异步回调保护**：连接 Handler（103 回调）和 printCallback 均在入口处检查 `destroyed`，销毁后不再调用 `notifyListeners`。
+
+**打印任务线程**：`printBatchLabel` / `printMachineQR` 提交到 `printExecutor`（`newSingleThreadExecutor`）执行，不使用裸 `Thread`。任务在位图生成前和调用 `Printer.print()` 前各检查一次 `destroyed`，提前退出。
+
+**`handleOnPause()` / `handleOnResume()` 保活控制**：
+- `handleOnPause()`：若当前已连接或连接中，关闭打印机（熄灭绿色指示灯），并记录 `wasConnectedBeforePause = true`
+- `handleOnResume()`：若 `wasConnectedBeforePause = true` 且未销毁，自动调用 `doConnect()` 重连，重连结果仍通过 `printStatus` 事件通知 JS
+
+**连接逻辑复用（`doConnect()`）**：
+`connect()` 和 `handleOnResume()` 都调用同一个私有 `doConnect()` 方法，回调逻辑只维护一份。
+
+**`handleOnDestroy()` 关闭顺序**：
+```
+destroyed = true           // 1. 先封锁所有异步回调和待执行任务
+printExecutor.shutdownNow() // 2. 中断队列中尚未开始和正在执行的位图任务
+Printer.close(activity)    // 3. 最后断开打印机连接（会触发异步 103，已被 destroyed 拦截）
+```
+
 #### H5 壳子（厂商壳阶段）调用方式
 
 ```js
@@ -312,7 +351,16 @@ PDAJsBridge.SendControlCommand(JSON.stringify({ name: 'checkBlack' }));
 
 4. **`handleOnResume` 仅在 `scanningRequested=true` 时重启 Reader Mode**：调用 `stopScanning()` 后，切到后台再回来不会自动重新开启 NFC 扫描。
 
-5. **`Printer.connect()` 防重入**：`isConnecting` 标志确保连接期间的重复调用直接返回，不会向 SDK 注册多套回调。
+#### 生命周期行为
+
+| 时机 | 行为 |
+|------|------|
+| `load()` | 若 NFC 可用，立即 `enableReaderMode`，设 `scanningRequested=true` |
+| `handleOnResume()` | 仅 `scanningRequested=true` 时重新 `enableReaderMode` |
+| `handleOnPause()` | 无条件 `disableReaderMode`（释放前台 NFC 独占） |
+| `handleOnDestroy()` | `disableReaderMode` → `lastTag.set(null)` → `executor.shutdownNow()` |
+
+> `handleOnDestroy` 中显式调用 `disableReaderMode` 是防御性措施：正常生命周期下 `handleOnPause` 已先执行，但显式清理更安全。`executor.shutdownNow()` 会向正在执行的 NFC I/O 任务发送中断信号；由于先禁用了 Reader Mode，不会有新任务入队。
 
 #### Capacitor Plugin（`KaihangNfc`）JS 调用
 

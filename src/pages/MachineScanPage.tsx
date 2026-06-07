@@ -11,6 +11,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { PrintPlugin, PrintStatus } from '../bridge/CapacitorBridge';
 import { fetchMachineDetailByCode, MachineDetail, MachineStatus } from '../api/machines';
 
 // NFC 标签中存储的内容格式：kaihang://nfc/<machine_code>
@@ -82,17 +83,48 @@ export default function MachineScanPage() {
     (window as any).__debugNFCResult = handleNFCResult;
   }
 
-  // ── 打印最新批次标签 ───────────────────────────────────────────────────────
+  // ── 打印最新批次标签（一维码，与 BatchEntryPage 一致）─────────────────────���──
 
-  const handlePrint = () => {
+  const [printStatus, setPrintStatus] = useState('');
+
+  function waitPrintStatus(wanted: PrintStatus): Promise<void> {
+    const ERROR_STATUSES: PrintStatus[] = [
+      'NO_PAPER', 'PRINTER_CLOSED', 'SEND_DATA_FAILED', 'PRINT_FAILED',
+      'BLACK_FLAG_NOT_FOUND', 'PREPARE_LABEL_NO_PAPER',
+      'PREPARE_LABEL_BLACK_FLAG_NOT_FOUND', 'PREPARE_LABEL_FAILED',
+      'PREPARE_LABEL_PRINTER_CLOSED', 'PREPARE_LABEL_SEND_DATA_FAILED',
+    ];
+    return new Promise((resolve, reject) => {
+      let sub: { remove: () => void } | null = null;
+      PrintPlugin.addListener('printStatus', ({ status }) => {
+        if (!status) return;
+        if (status === wanted) { sub?.remove(); resolve(); }
+        else if ((ERROR_STATUSES as string[]).includes(status)) { sub?.remove(); reject(new Error(status)); }
+      }).then(s => { sub = s; });
+    });
+  }
+
+  const handlePrint = async () => {
     if (!machine?.latest_batch_no) return;
-    // TODO: 调用硬件 Bridge 打印标签
-    // PDAJsBridge.SendControlCommand(JSON.stringify({
-    //   name: 'print',
-    //   data: machine.latest_batch_no,
-    //   count: 1,
-    // }));
-    alert(`打印批次码：${machine.latest_batch_no}（Bridge 接口待接入）`);
+    const printDate = new Date()
+      .toLocaleDateString('zh', { year: '2-digit', month: '2-digit', day: '2-digit' })
+      .replace(/\//g, '');
+    setPrintStatus('就绪检测中…');
+    try {
+      await PrintPlugin.prepareToPrintLabel();
+      await waitPrintStatus('PREPARE_LABEL_OK');
+      setPrintStatus('打印中…');
+      await PrintPlugin.printBatchLabel({
+        batchNo: machine.latest_batch_no,
+        machineId: machine.code,
+        productType: machine.current_product_name ?? '',
+        date: printDate,
+      });
+      await waitPrintStatus('PRINT_OK');
+      setPrintStatus('打印完成');
+    } catch (e: any) {
+      setPrintStatus('打印失败：' + e.message);
+    }
   };
 
   // ── 渲染 ──────────────────────────────────────────────────────────────────
@@ -194,8 +226,15 @@ export default function MachineScanPage() {
             value={machine.latest_batch_no ?? '暂无批次'}
           />
 
+          {/* 打印状态 */}
+          {printStatus && (
+            <div style={{ margin: '10px 0', padding: '8px 12px', background: '#f2f2f7', borderRadius: 8, fontSize: 13, color: '#3a3a3c' }}>
+              {printStatus}
+            </div>
+          )}
+
           {/* 操作按钮区 */}
-          <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+          <div style={{ marginTop: '10px', display: 'flex', gap: '10px' }}>
             {machine.latest_batch_no && (
               <button
                 onClick={handlePrint}

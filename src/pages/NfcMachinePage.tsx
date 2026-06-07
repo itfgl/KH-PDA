@@ -4,19 +4,23 @@
  * 扫描结果分两路：
  *   有 kaihang://nfc/<code> → 查机器状态，展示详情
  *   空白卡 / 非凯航卡       → 展示新建机器表单 → 创建 → 写卡
+ *
+ * NFC 使用自研 KaihangNfc 插件（com.kaihang.scanner.plugins.KaihangNfcPlugin）。
+ * 插件 load() 时已自动启用 Reader Mode，无需手动 startScanning。
+ * nfcEvent 在每次贴卡时触发，通过 phaseRef 区分当前操作模式。
  */
-import { NFC } from '@capgo/capacitor-nfc';
 import React, { useEffect, useRef, useState } from 'react';
+import { KaihangNfc, NfcEvent } from '../bridge/CapacitorBridge';
 import { createMachine, fetchMachineDetailByCode, MachineDetail } from '../api/machines';
 
 const NFC_PREFIX = 'kaihang://nfc/';
 
 type Phase =
   | 'idle'       // 等待扫描
-  | 'scanning'   // 扫描中
+  | 'scanning'   // 等待贴卡（读模式）
   | 'detail'     // 展示已有机器详情
   | 'new-form'   // 填写新机器表单
-  | 'writing'    // 写卡中
+  | 'writing'    // 等待贴卡（写模式）
   | 'done';      // 写卡完成
 
 const STATUS_MAP = {
@@ -36,65 +40,119 @@ export default function NfcMachinePage() {
   const [newName, setNewName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // 保存 NFC 监听器引用，防止重复注册
-  const listenerRef = useRef<{ remove: () => void } | null>(null);
+  // 用 ref 持有当前阶段，避免 nfcEvent 回调中读到 stale state
+  const phaseRef = useRef<Phase>('idle');
+  const newCodeRef = useRef('');
 
-  useEffect(() => () => { stopNfc(); }, []);
-
-  // ── NFC 控制 ────────────────────────────────────────────────────────────────
-
-  async function stopNfc() {
-    listenerRef.current?.remove();
-    listenerRef.current = null;
-    await NFC.removeAllListeners();
+  function setPhaseSync(p: Phase) {
+    phaseRef.current = p;
+    setPhase(p);
   }
 
-  async function startScan() {
-    await stopNfc();
-    setPhase('scanning');
-    setError('');
-    setMachine(null);
-    setHint('扫描中… 请靠近 NFC 标签');
+  // 同步 newCode 到 ref，供 nfcEvent 回调读取
+  useEffect(() => { newCodeRef.current = newCode; }, [newCode]);
 
-    listenerRef.current = await NFC.addListener('nfcTag', async (tag) => {
-      await stopNfc();
+  // ── NFC 监听（整个页面生命周期内持续监听）─────────────────────────────────��──
 
-      const records = tag.messages?.[0]?.records ?? [];
+  useEffect(() => {
+    let sub: { remove: () => void } | null = null;
+
+    KaihangNfc.addListener('nfcEvent', handleNfcEvent).then(s => { sub = s; });
+
+    return () => {
+      sub?.remove();
+      KaihangNfc.removeAllListeners();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleNfcEvent(event: NfcEvent) {
+    const currentPhase = phaseRef.current;
+
+    // ── 读模式：识别机器 ────────────────────────���───────────────────────────
+    if (currentPhase === 'scanning') {
+      setPhaseSync('idle'); // 防止重入
+
       let machineCode: string | null = null;
 
-      for (const r of records) {
-        if (r.tnf === 1 && new TextDecoder().decode(new Uint8Array(r.type)) === 'U') {
-          const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
-          if (uri.startsWith(NFC_PREFIX)) {
-            machineCode = uri.replace(NFC_PREFIX, '').trim();
+      // 优先从 NDEF URI Record 提取
+      if (event.isNdef && event.ndefMessage) {
+        for (const r of event.ndefMessage) {
+          if (r.tnf === 1) {
+            // payload[0] 是 URI 标识符前缀字节（0x00 = 无缩写，保留完整 URI）
+            const uri = new TextDecoder().decode(new Uint8Array(r.payload).slice(1));
+            if (uri.startsWith(NFC_PREFIX)) {
+              machineCode = uri.replace(NFC_PREFIX, '').trim();
+            }
+            break;
           }
-          break;
+        }
+      }
+
+      // MifareUltralight 卡：直接读取 mifareData（已由插件自动解析）
+      if (!machineCode && event.mifareData) {
+        const data = event.mifareData.trim();
+        if (data.startsWith(NFC_PREFIX)) {
+          machineCode = data.replace(NFC_PREFIX, '');
+        } else {
+          machineCode = data; // 直接存储 code 的情况
         }
       }
 
       if (machineCode) {
-        // 已有数据 → 查服务端
         setHint('已识别机器编号：' + machineCode + '，查询中…');
         try {
           const detail = await fetchMachineDetailByCode(machineCode);
           setMachine(detail);
-          setPhase('detail');
+          setPhaseSync('detail');
           setHint('');
         } catch (e: any) {
           setError(e.message);
-          setPhase('idle');
+          setPhaseSync('idle');
         }
       } else {
-        // 空白或非凯航卡 → 进入新建表单
+        // 空白卡或非凯航卡 → 进入新建表单
         setNewCode('');
         setNewName('');
-        setPhase('new-form');
+        setPhaseSync('new-form');
         setHint('空白卡，请填写机器信息后写入');
       }
-    });
+      return;
+    }
+
+    // ── 写模式：写入机器编号 ─────────────────────────────────────────────────
+    if (currentPhase === 'writing') {
+      setPhaseSync('idle'); // 防止重入
+
+      const code = newCodeRef.current.trim();
+      if (!code) {
+        setError('机器编号为空，无法写卡');
+        setPhaseSync('new-form');
+        return;
+      }
+
+      try {
+        // writeNdef 自动写入 kaihang://nfc/<data> URI Record + AAR Record
+        await KaihangNfc.writeNdef({ data: code });
+        setPhaseSync('done');
+        setHint(`机器 ${code} 已写入卡片，贴卡可直接唤起应用。`);
+      } catch (e: any) {
+        setError('写卡失败：' + e.message);
+        setPhaseSync('new-form');
+      }
+    }
   }
 
-  // ── 新建机器 + 写卡 ──────────────────────────────────────────────────────────
+  // ── 扫描控制 ────────────────────────────────────────────────────────────────
+
+  function startScan() {
+    setPhaseSync('scanning');
+    setError('');
+    setMachine(null);
+    setHint('扫描中… 请靠近 NFC 标签');
+  }
+
+  // ── 新建机器 + 触发写卡 ──────────────────────────────────────────────────────
 
   async function handleCreateAndWrite() {
     if (!newCode.trim() || !newName.trim()) { setError('编号和名称不能为空'); return; }
@@ -102,37 +160,9 @@ export default function NfcMachinePage() {
     setError('');
 
     try {
-      // 1. 创建机器
       await createMachine({ code: newCode.trim(), name: newName.trim() });
-
-      // 2. 写卡
-      setPhase('writing');
+      setPhaseSync('writing');
       setHint('机器已创建，请再次靠近 NFC 标签写入…');
-
-      await stopNfc();
-      listenerRef.current = await NFC.addListener('nfcTag', async () => {
-        await stopNfc();
-        try {
-          const enc = new TextEncoder();
-          const uri = NFC_PREFIX + newCode.trim();
-          const payload = new Uint8Array(1 + uri.length);
-          payload[0] = 0x00;
-          payload.set(enc.encode(uri), 1);
-
-          await NFC.write({
-            records: [
-              { tnf: 1, type: Array.from(enc.encode('U')), id: [], payload: Array.from(payload) },
-              { tnf: 4, type: Array.from(enc.encode('android.com:pkg')), id: [], payload: Array.from(enc.encode('com.kaihang.scanner')) },
-            ],
-          });
-
-          setPhase('done');
-          setHint(`机器 ${newCode.trim()} 已写入卡片，贴卡可直接唤起应用。`);
-        } catch (e: any) {
-          setError('写卡失败：' + e.message);
-          setPhase('new-form');
-        }
-      });
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -171,9 +201,10 @@ export default function NfcMachinePage() {
         </button>
       )}
 
-      {/* 扫描中 */}
-      {phase === 'scanning' && (
-        <button onClick={() => { stopNfc(); setPhase('idle'); setHint('点击按钮后靠近 NFC 标签'); }} style={btnStyle('#6e6e73')}>
+      {/* 扫描中 / 写卡中：取消 */}
+      {(phase === 'scanning' || phase === 'writing') && (
+        <button onClick={() => { setPhaseSync('idle'); setHint('点击按钮后靠近 NFC 标签'); }}
+          style={btnStyle('#6e6e73')}>
           取消
         </button>
       )}
@@ -212,7 +243,7 @@ export default function NfcMachinePage() {
           >
             {submitting ? '创建中…' : phase === 'writing' ? '等待靠近标签…' : '确认创建并写卡'}
           </button>
-          <button onClick={() => { stopNfc(); setPhase('idle'); setHint('点击按钮后靠近 NFC 标签'); }}
+          <button onClick={() => { setPhaseSync('idle'); setHint('点击按钮后靠近 NFC 标签'); }}
             style={{ ...btnStyle('#e5e5ea', '#1d1d1f'), marginTop: 8 }}>
             取消
           </button>
@@ -247,7 +278,7 @@ function Field({ label, value, onChange, placeholder, disabled }: {
       <div style={{ fontSize: 12, color: '#86868b', marginBottom: 4 }}>{label}</div>
       <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
         disabled={disabled}
-        style={{ width: '100%', padding: '9px 12px', border: '1px solid #d2d2d7', borderRadius: 8, fontSize: 14, outline: 'none' }} />
+        style={{ width: '100%', padding: '9px 12px', border: '1px solid #d2d2d7', borderRadius: 8, fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
     </div>
   );
 }

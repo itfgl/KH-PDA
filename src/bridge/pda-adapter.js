@@ -149,6 +149,13 @@ export const PrintPlugin = {
     });
   },
 
+  /**
+   * 每张 PRINT_OK 后走纸到下一张起始位（PDA 模式与 prepareToPrintLabel 等价）
+   */
+  async checkBlack() {
+    return this.prepareToPrintLabel();
+  },
+
   async removeAllListeners() {
     _subs['onPrint'] = [];
   },
