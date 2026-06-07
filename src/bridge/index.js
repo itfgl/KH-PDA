@@ -23,3 +23,4 @@ export const bridgeMode = isPDA ? 'pda' : (isCap ? 'capacitor' : 'dev');
 export const ScanPlugin  = isPDA ? pdaAdapter.ScanPlugin  : registerPlugin('ScanPlugin');
 export const PrintPlugin = isPDA ? pdaAdapter.PrintPlugin : registerPlugin('PrintPlugin');
 export const NfcPlugin   = isPDA ? pdaAdapter.NfcPlugin   : registerPlugin('KaihangNfc');
+export const UpdatePlugin = registerPlugin('UpdatePlugin');

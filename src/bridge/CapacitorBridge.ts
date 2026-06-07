@@ -128,3 +128,20 @@ export interface KaihangNfcPlugin {
 }
 
 export const KaihangNfc = registerPlugin<KaihangNfcPlugin>('KaihangNfc');
+
+// ─── 更新 Plugin ──────────────────────────────────────────────────────────────
+
+export interface UpdatePlugin {
+  /** 获取当前 APK 的 versionCode 和 versionName */
+  getVersionInfo(): Promise<{ versionCode: number; versionName: string }>;
+  /** 从指定 URL 下载并安装 APK */
+  downloadAndInstallApk(options: { url: string }): Promise<void>;
+  /** 监听下载进度 */
+  addListener(
+    event: 'downloadProgress',
+    handler: (data: { progress: number }) => void
+  ): Promise<{ remove: () => void }>;
+  removeAllListeners(): Promise<void>;
+}
+
+export const UpdatePlugin = registerPlugin<UpdatePlugin>('UpdatePlugin');

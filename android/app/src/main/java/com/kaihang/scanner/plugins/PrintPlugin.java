@@ -18,6 +18,9 @@ import com.uc.pdasdk.print.Printer;
 import com.uc.pdasdk.utils.AbsoluteLayoutBitmap;
 import com.uc.pdasdk.utils.BarcodeCreater;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -166,35 +169,33 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 机器二维码标签
-     * 布局 384×300：大二维码居中，下方机器信息三行
-     * QR 内容格式：machineId|productType|date
+     * 布局 384×270：大二维码居中，下方机器编号 + 打印时间
+     * QR 内容格式：machineId（仅机器编号）
      */
     @PluginMethod
     public void printMachineQR(PluginCall call) {
-        String machineId   = call.getString("machineId", "");
-        String productType = call.getString("productType", "");
-        String date        = call.getString("date", "");
+        String machineId = call.getString("machineId", "");
 
         if (machineId.isEmpty()) { call.reject("machineId is required"); return; }
 
         printExecutor.execute(() -> {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
-                String qrContent = machineId + "|" + productType + "|" + date;
-
                 Bitmap qr = BarcodeCreater.createBarcode(
-                    getContext(), qrContent, 200, 200, false, 2
+                    getContext(), machineId, 200, 200, false, 2
                 );
                 if (qr == null) {
-                    call.reject("QR code generation failed for content: " + qrContent);
+                    call.reject("QR code generation failed for machineId: " + machineId);
                     return;
                 }
 
-                Bitmap label = new AbsoluteLayoutBitmap(384, 300)
+                String printTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                    .format(new Date());
+
+                Bitmap label = new AbsoluteLayoutBitmap(384, 270)
                     .addBmp(qr, 92, 8)
                     .addText("机 器：" + machineId, 24, 16, 224)
-                    .addText("品 类：" + productType, 22, 16, 252)
-                    .addText("日 期：" + date, 22, 16, 278)
+                    .addText("打印：" + printTime, 20, 16, 250)
                     .getBitmap();
                 if (label == null) {
                     call.reject("Label bitmap creation failed");

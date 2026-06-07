@@ -76,6 +76,8 @@ public class ScanPlugin extends Plugin {
         call.resolve();
     }
 
+
+
     @Override
     protected void handleOnDestroy() {
         // 先停止扫描，防止 App 退出后扫码枪仍处于触发状态（激光亮着）

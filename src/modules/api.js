@@ -13,6 +13,9 @@ export async function apiFetch(path, opts = {}) {
 export const getMachineByCode = (code) =>
   apiFetch('/api/machines/code/' + encodeURIComponent(code));
 
+export const getMachineById = (id) =>
+  apiFetch('/api/machines/' + id);
+
 /** 按批次码查批次详情（含产品名/类型/状态/质检结果） */
 export const getBatchByNo = (batchNo) =>
   apiFetch('/api/batches/' + encodeURIComponent(batchNo));
@@ -25,4 +28,18 @@ export const createBatch = ({ machine_id, product_type, product_name }) =>
   apiFetch('/api/batches', {
     method: 'POST',
     body: JSON.stringify({ machine_id, product_type, product_name }),
+  });
+
+/** 查批次当前流程状态（活跃节点 + 可触发事件） */
+export const getProcessState = (batchNo) =>
+  apiFetch('/api/process/' + encodeURIComponent(batchNo));
+
+/**
+ * 提交流程事件，推进批次到下一个节点。
+ * @param {{ batch_no, event_type, actor, from_node?, payload? }} params
+ */
+export const postEvent = ({ batch_no, event_type, actor, from_node, payload = {} }) =>
+  apiFetch('/api/events', {
+    method: 'POST',
+    body: JSON.stringify({ batch_no, event_type, actor, from_node, payload }),
   });

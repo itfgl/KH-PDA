@@ -1,5 +1,5 @@
 import { BrowserMultiFormatReader } from '@zxing/browser';
-import { ScanPlugin, PrintPlugin, NfcPlugin, bridgeMode } from './bridge/index.js';
+import { ScanPlugin, PrintPlugin, NfcPlugin, UpdatePlugin, bridgeMode } from './bridge/index.js';
 
 import * as Events  from './modules/events.js';
 import * as API     from './modules/api.js';
@@ -12,6 +12,7 @@ import * as Machine from './modules/machine.js';
 window.ScanPlugin  = ScanPlugin;
 window.PrintPlugin = PrintPlugin;
 window.KaihangNfc  = NfcPlugin;
+window.UpdatePlugin = UpdatePlugin;
 
 // ── 元信息 ───────────────────────────────────────────────────────────────────
 window.BUILD_TIME  = __BUILD_TIME__;

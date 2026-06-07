@@ -115,22 +115,10 @@
   <div class="card">
     <div class="card-title">扫描方式</div>
     <div id="nfc-status-bar" class="status ok">📡 NFC 监听中，贴卡即识别</div>
-    <div class="btn-row">
-      <button class="btn btn-gray" onclick="Scanner.trigger()">扫码枪</button>
-      <button class="btn btn-gray" id="cam-btn" onclick="toggleCamera()">相机扫码</button>
-    </div>
+    <button class="btn btn-gray" onclick="Scanner.trigger()">扫码枪</button>
   </div>
 
   <div class="status" id="scan-hint">靠近机器 NFC 标签 / 扫描条码</div>
-
-  <div id="cam-wrap">
-    <video id="cam-video" autoplay playsinline muted></video>
-    <div class="vf">
-      <div class="vf-c vf-tl"></div><div class="vf-c vf-tr"></div>
-      <div class="vf-c vf-bl"></div><div class="vf-c vf-br"></div>
-      <div class="vf-line"></div>
-    </div>
-  </div>
 
   <div class="card" id="machine-card" style="display:none">
     <div class="card-title">机器信息</div>
@@ -190,7 +178,7 @@
       <span class="card-title">插件 & 状态</span>
       <div style="display:flex;gap:6px">
         <button class="btn-sm btn-gray" onclick="refreshDebug()">刷新</button>
-        <button class="btn-sm btn-blue" onclick="location.reload()">刷新页面</button>
+        <button class="btn-sm btn-blue" onclick="triggerAppUpdate()">检查更新</button>
       </div>
     </div>
     <div id="debug-plugins" style="font-size:13px;line-height:2.2"></div>
@@ -278,8 +266,8 @@ function switchTab(name) {
   });
   if (name === 'debug') refreshDebug();
   if (name === 'setup') loadMachineList();
-  // 离开扫描页：停相机，重置扫码枪状态
-  if (name !== 'scan') { stopCamera(); Scanner.reset(); }
+  // 离开扫描页：重置扫码枪状态
+  if (name !== 'scan') { Scanner.reset(); }
   // 进入扫描页：恢复默认提示
   if (name === 'scan') setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
 }
@@ -631,72 +619,25 @@ async function setupWrite() {
   }
 }
 
-// ── 相机 ──────────────────────────────────────────────────────────────────────
-let _camStream = null, _camReader = null;
-async function toggleCamera() {
-  if (_camStream) { stopCamera(); return; }
-  setStatus('scan-hint', '启动相机…', 'info');
-  log('相机：请求权限', 'info');
-  try {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      log('getUserMedia 不可用：非安全上下文或 API 缺失', 'err');
-      setStatus('scan-hint', '⚠️ 相机不可用（mediaDevices 缺失）', 'warn'); return;
-    }
-    _camStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
-    const v = document.getElementById('cam-video');
-    v.srcObject = _camStream;
-    await new Promise(r => { v.onplaying = r; v.play().catch(r); });
-    show('cam-wrap');
-    document.getElementById('cam-btn').textContent = '停止相机';
-    log('相机已启动', 'ok');
 
-    const onHit = (val) => {
-      stopCamera();
-      log('相机识别：' + val, 'ok');
-      Events.emit('scanner:result', { value: val });
-    };
-
-    if ('BarcodeDetector' in window) {
-      try {
-        const det = new BarcodeDetector({ formats:['code_128','qr_code','ean_13','code_39','data_matrix'] });
-        await det.detect(v);
-        setStatus('scan-hint', '相机扫码中（系统API）…', 'info');
-        const loop = async () => {
-          if (!_camStream) return;
-          if (v.readyState >= 2) {
-            try { const r = await det.detect(v); if (r.length) { onHit(r[0].rawValue); return; } } catch(_){}
-          }
-          requestAnimationFrame(loop);
-        };
-        requestAnimationFrame(loop); return;
-      } catch(e) { log('BarcodeDetector 不可用：' + e.message + ' → ZXing', 'warn'); }
-    }
-    setStatus('scan-hint', '相机扫码中（ZXing）…', 'info');
-    _camReader = new window.ZXingReader();
-    new Promise(res => _camReader.decodeFromVideoElement(v, (r) => { if(r) res(r.getText()); }))
-      .then(onHit);
-  } catch(e) {
-    stopCamera();
-    setStatus('scan-hint', '相机失败：' + e.message, 'err');
-    log('相机失败：' + e.message, 'err');
-  }
-}
-function stopCamera() {
-  if (_camReader) { try { _camReader.reset(); } catch(_){} _camReader = null; }
-  if (_camStream) { _camStream.getTracks().forEach(t => t.stop()); _camStream = null; }
-  const v = document.getElementById('cam-video');
-  if (v) v.srcObject = null;
-  hide('cam-wrap');
-  document.getElementById('cam-btn').textContent = '相机扫码';
-}
 
 // ── 调试页 ────────────────────────────────────────────────────────────────────
-function refreshDebug() {
+async function refreshDebug() {
+  let apkVer = 'N/A';
+  if (window.BRIDGE_MODE === 'capacitor' && window.UpdatePlugin) {
+    try {
+      const info = await window.UpdatePlugin.getVersionInfo();
+      apkVer = `${info.versionName} (${info.versionCode})`;
+    } catch(e) {}
+  }
+
   document.getElementById('debug-plugins').innerHTML = [
     ['Bridge',      window.BRIDGE_MODE ?? 'unknown'],
     ['ScanPlugin',  !!window.ScanPlugin],
     ['PrintPlugin', !!window.PrintPlugin],
     ['KaihangNfc',  !!window.KaihangNfc  ? `ok (mode=${NFC.getMode()})` : false],
+    ['UpdatePlugin',!!window.UpdatePlugin],
+    ['APK Version', apkVer],
     ['Platform',    window.Capacitor?.getPlatform?.() ?? (window.PDAJsBridge ? 'X8-PDA' : 'unknown')],
   ].map(([k,v]) => typeof v === 'boolean'
     ? `<span style="color:${v?'#30d158':'#ff453a'}">${v?'✓':'✗'} ${k}</span><br>`
@@ -725,6 +666,108 @@ Machine.init();
 Printer.init(window.PrintPlugin);
 
 refreshDebug();
+
+// ── 自动更新相关逻辑 ─────────────────────────────────────────────────────────
+async function triggerAppUpdate() {
+  if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) {
+    log('非原生模式，刷新页面', 'info');
+    location.reload();
+    return;
+  }
+  log('正在检查 APK 更新...', 'info');
+  try {
+    const localInfo = await window.UpdatePlugin.getVersionInfo();
+    log(`当前版本: Code=${localInfo.versionCode}, Name=${localInfo.versionName}`, 'info');
+
+    const res = await fetch('/api/app/version');
+    if (!res.ok) {
+      log('获取服务器版本失败', 'err');
+      alert('无法获取最新版本信息');
+      return;
+    }
+    const serverInfo = await res.json();
+    log(`最新版本: Code=${serverInfo.versionCode}, Name=${serverInfo.versionName}`, 'info');
+
+    if (serverInfo.versionCode > localInfo.versionCode) {
+      const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
+      if (ok) {
+        startApkDownload(serverInfo.apkUrl);
+      }
+    } else {
+      log('已是最新版本', 'ok');
+      alert(`当前已是最新版本 (v${localInfo.versionName})`);
+    }
+  } catch (e) {
+    log('检查更新失败: ' + e.message, 'err');
+    alert('检查更新失败: ' + e.message);
+  }
+}
+
+async function autoCheckUpdate() {
+  if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) return;
+  try {
+    const localInfo = await window.UpdatePlugin.getVersionInfo();
+    const res = await fetch('/api/app/version');
+    if (!res.ok) return;
+    const serverInfo = await res.json();
+    if (serverInfo.versionCode > localInfo.versionCode) {
+      setTimeout(() => {
+        const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载并升级？`);
+        if (ok) {
+          startApkDownload(serverInfo.apkUrl);
+        }
+      }, 1500);
+    }
+  } catch (e) {
+    console.error('Auto check update failed', e);
+  }
+}
+
+function startApkDownload(url) {
+  const absoluteUrl = new URL(url, window.location.href).href;
+  let overlay = document.getElementById('update-progress-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'update-progress-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);color:#fff;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;';
+    overlay.innerHTML = '<div style="background:#1c1c1e;padding:24px;border-radius:16px;width:85%;max-width:320px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.5);"><div style="font-size:18px;font-weight:bold;margin-bottom:12px;">正在下载更新...</div><div style="font-size:13px;color:#8e8e93;margin-bottom:20px;">请勿关闭应用</div><div style="background:#2c2c2e;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px;position:relative;"><div id="update-progress-bar" style="background:#30d158;width:0%;height:100%;transition:width 0.1s ease;"></div></div><div id="update-progress-text" style="font-size:14px;font-weight:500;">0%</div></div>';
+    document.body.appendChild(overlay);
+  } else {
+    overlay.style.display = 'flex';
+  }
+
+  const bar = document.getElementById('update-progress-bar');
+  const text = document.getElementById('update-progress-text');
+  bar.style.width = '0%';
+  text.textContent = '0%';
+
+  log('开始下载更新 APK: ' + absoluteUrl, 'info');
+
+  let listener;
+  window.UpdatePlugin.addListener('downloadProgress', (data) => {
+    const progress = data.progress;
+    bar.style.width = progress + '%';
+    text.textContent = progress + '%';
+  }).then(l => {
+    listener = l;
+  });
+
+  window.UpdatePlugin.downloadAndInstallApk({ url: absoluteUrl })
+    .then(() => {
+      log('APK 下载完成，拉起安装', 'ok');
+      if (listener) listener.remove();
+      overlay.style.display = 'none';
+    })
+    .catch(err => {
+      log('下载 APK 失败: ' + err.message, 'err');
+      alert('下载 APK 失败: ' + err.message);
+      if (listener) listener.remove();
+      overlay.style.display = 'none';
+    });
+}
+
+// 启动时自动检查更新
+autoCheckUpdate();
 </script>
 </body>
 </html>

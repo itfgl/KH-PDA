@@ -7,6 +7,7 @@ import com.getcapacitor.WebViewListener;
 import com.kaihang.scanner.plugins.KaihangNfcPlugin;
 import com.kaihang.scanner.plugins.PrintPlugin;
 import com.kaihang.scanner.plugins.ScanPlugin;
+import com.kaihang.scanner.plugins.UpdatePlugin;
 
 public class MainActivity extends BridgeActivity {
 
@@ -15,6 +16,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(ScanPlugin.class);
         registerPlugin(PrintPlugin.class);
         registerPlugin(KaihangNfcPlugin.class);
+        registerPlugin(UpdatePlugin.class);
         super.onCreate(savedInstanceState);
 
         // 全局崩溃拦截：将异常信息转发到 JS 日志
