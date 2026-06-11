@@ -46,3 +46,17 @@ export const postEvent = ({ batch_no, event_type, actor, from_node, payload = {}
     method: 'POST',
     body: JSON.stringify({ batch_no, event_type, actor, from_node, payload }),
   });
+
+/**
+ * 上传表单 photo/file 字段的附件，返回 { filename, original_filename, url }。
+ * filename 应作为该字段在事件 payload 中的值。
+ */
+export async function uploadEventFile(batchNo, file) {
+  const fd = new FormData();
+  fd.append('batch_no', batchNo);
+  fd.append('file', file);
+  const res = await fetch(`${SERVER_BASE}/api/events/upload`, { method: 'POST', body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail ?? `上传失败 ${res.status}`);
+  return data;
+}

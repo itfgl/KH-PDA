@@ -20,9 +20,19 @@
 import { on, emit } from './events.js';
 import { getMachineByCode, getMachineById, getBatchByNo } from './api.js';
 
+// 扫码捕获钩子：表单中 scan/nfc 类型字段聚焦时由 UI 设置。
+// 钩子返回 true 表示扫码结果已被表单字段消费，不再走机器/批次查询。
+let _capture = null;
+export function setCapture(fn) { _capture = fn; }
+
 export function init() {
-  on('nfc:detected',   ({ code })  => handleCode(code));
-  on('scanner:result', ({ value }) => handleCode(value));
+  on('nfc:detected',   ({ code })  => dispatch(code));
+  on('scanner:result', ({ value }) => dispatch(value));
+}
+
+function dispatch(raw) {
+  if (_capture && _capture(raw)) return;
+  handleCode(raw);
 }
 
 const NFC_PREFIX = 'kaihang://nfc/';

@@ -146,16 +146,18 @@
     <!-- 批次选择列表，点击后收起 -->
     <div id="batch-list" style="display:none; margin-top:8px"></div>
 
-    <!-- ── 流程推进 ── -->
+    <!-- ── 流程推进（表单按流程定义动态渲染）── -->
     <div id="advance-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
       <div class="card-title">流程推进</div>
       <div id="advance-node" style="font-size:15px; font-weight:700; color:#1c1c1e; margin-bottom:2px"></div>
       <div id="advance-resp" style="font-size:12px; color:#8e8e93; margin-bottom:10px"></div>
+      <div id="advance-display" style="margin-bottom:10px"></div>
       <div class="field">
         <label>操作人</label>
         <input id="actor-input" type="text" placeholder="填写姓名" autocomplete="off" oninput="updateAdvanceBtn()" />
       </div>
       <div id="transition-btns" style="margin-bottom:10px"></div>
+      <div id="form-fields" style="margin-bottom:10px"></div>
       <button class="btn btn-blue" id="advance-btn" onclick="doAdvance()" disabled>发送</button>
       <div class="status" id="advance-status" style="display:none; margin-top:8px"></div>
     </div>
@@ -302,7 +304,7 @@ function show(id) { const el = document.getElementById(id); if(el) el.style.disp
 function resetScanUI() {
   hide('machine-card'); hide('batch-card');
   hide('barcode-wrap'); hide('print-btns'); hide('print-status'); hide('advance-wrap');
-  _selectedTransition = null;
+  _selIdx = -1; _advTransitions = []; _formValues = {}; _scanTarget = null;
   setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
   log('扫描界面已重置', 'info');
 }
@@ -547,12 +549,51 @@ async function doPrint(count) {
   }
 }
 
-// ── 流程推进 ──────────────────────────────────────────────────────────────────
-let _selectedTransition = null;  // { from_node, event, label }
+// ── 流程推进（表单/动作均按流程定义动态渲染，见服务端 transitions[].form/action）──
+let _advTransitions = [];   // 展平的可触发事件 [{from_node,node_name,event,label,form,action}]
+let _selIdx = -1;           // 当前选中事件下标
+let _formValues = {};       // 当前表单值 {key: value}
+let _scanTarget = null;     // 聚焦中的 scan/nfc/scan_list 字段 key（扫码结果优先填它）
+let _uploading = 0;         // 进行中的附件上传数
+
+function normalizeScanValue(raw) {
+  let s = String(raw ?? '');
+  if (s.startsWith('kaihang://nfc/')) s = s.slice('kaihang://nfc/'.length);
+  return s.split('|')[0].trim();
+}
+
+function currentForm() {
+  return _selIdx >= 0 ? (_advTransitions[_selIdx].form || []) : [];
+}
+
+function _esc(s) { return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/"/g, '\\"'); }
+function fieldInput(key) { return document.querySelector(`[data-fkey="${_esc(key)}"]`); }
+
+// 扫码捕获：scan/nfc 字段聚焦时，扫码枪/NFC 结果填入该字段而不触发机器查询
+Machine.setCapture(raw => {
+  if (!_scanTarget) return false;
+  const f = currentForm().find(x => x.key === _scanTarget);
+  if (!f) { _scanTarget = null; return false; }
+  const v = normalizeScanValue(raw);
+  if (!v) return true;
+  if (f.type === 'scan_list') {
+    const list = Array.isArray(_formValues[f.key]) ? _formValues[f.key] : [];
+    if (!list.includes(v)) list.push(v);
+    _formValues[f.key] = list;
+    renderScanListChips(f.key);
+  } else {
+    _formValues[f.key] = v;
+    const input = fieldInput(f.key);
+    if (input) input.value = v;
+  }
+  log(`字段「${f.label || f.key}」← 扫码 ${v}`, 'ok');
+  updateAdvanceBtn();
+  return true;
+});
 
 async function loadProcessState(batchNo) {
   hide('advance-wrap');
-  _selectedTransition = null;
+  _advTransitions = []; _selIdx = -1; _formValues = {}; _scanTarget = null;
   try {
     const ps = await API.getProcessState(batchNo);
     if (ps.is_terminal || !ps.active_nodes.length) return; // 已完成，不显示推进区块
@@ -565,74 +606,260 @@ async function loadProcessState(batchNo) {
 }
 
 function renderAdvance(nodes) {
-  // 节点信息
-  document.getElementById('advance-node').textContent = nodes.map(n => n.node_name).join(' / ');
+  document.getElementById('advance-node').textContent = nodes.map(n =>
+    n.node_name + (n.track_key ? `（${n.track_key}）` : '')).join(' / ');
   document.getElementById('advance-resp').textContent = '负责：' + nodes.map(n => n.responsible).join(' / ');
 
-  // 所有可触发事件（展开多轨道）
-  const all = nodes.flatMap(n => n.valid_transitions.map(t => ({
-    from_node: n.node_id, node_name: n.node_name, event: t.event, label: t.label,
+  // 节点展示信息（流程定义 display 表达式，服务端已求值）
+  const displayRows = nodes.flatMap(n => n.display || [])
+    .filter(d => d.value !== null && d.value !== undefined && d.value !== '');
+  document.getElementById('advance-display').innerHTML = displayRows.map(d => `
+    <div class="info-row" style="padding:6px 0">
+      <span class="lbl">${d.label}</span><span class="val">${d.value}</span>
+    </div>`).join('');
+
+  // 展平多轨道的可触发事件（waiting_join 的轨道服务端不下发事件）
+  _advTransitions = nodes.flatMap(n => n.valid_transitions.map(t => ({
+    from_node: n.node_id, node_name: n.node_name,
+    event: t.event, label: t.label, form: t.form || [], action: t.action || null,
   })));
   const multiTrack = nodes.length > 1;
 
-  document.getElementById('transition-btns').innerHTML = all.map((t, i) => `
-    <button id="tbtn-${i}"
-      onclick="selectTransition(${i}, '${t.from_node}', '${t.event}', '${t.label}')"
+  document.getElementById('transition-btns').innerHTML = _advTransitions.map((t, i) => `
+    <button id="tbtn-${i}" onclick="selectTransition(${i})"
       style="display:block;width:100%;padding:11px 14px;margin-bottom:8px;
              border:2px solid #e5e5ea;border-radius:10px;background:#f9f9f9;
              text-align:left;cursor:pointer;font-size:14px;font-weight:500;color:#1c1c1e">
       ${t.label}
+      ${t.form.length ? `<span style="font-size:11px;color:#8e8e93">（${t.form.length} 项填写）</span>` : ''}
       ${multiTrack ? `<div style="font-size:11px;color:#8e8e93;margin-top:2px">来自：${t.node_name}</div>` : ''}
     </button>
   `).join('');
 
-  // 只有一个选项时自动选中
-  if (all.length === 1) selectTransition(0, all[0].from_node, all[0].event, all[0].label);
+  document.getElementById('form-fields').innerHTML = '';
+  if (_advTransitions.length === 1) selectTransition(0);
 }
 
-function selectTransition(idx, fromNode, event, label) {
-  _selectedTransition = { from_node: fromNode, event, label };
-  // 高亮选中按钮，其余恢复
+function selectTransition(idx) {
+  _selIdx = idx;
   document.querySelectorAll('[id^="tbtn-"]').forEach((el, i) => {
-    el.style.borderColor  = i === idx ? '#007aff' : '#e5e5ea';
-    el.style.background   = i === idx ? '#e8f4fd' : '#f9f9f9';
-    el.style.color        = i === idx ? '#007aff' : '#1c1c1e';
-    el.style.fontWeight   = i === idx ? '700' : '500';
+    el.style.borderColor = i === idx ? '#007aff' : '#e5e5ea';
+    el.style.background  = i === idx ? '#e8f4fd' : '#f9f9f9';
+    el.style.color       = i === idx ? '#007aff' : '#1c1c1e';
+    el.style.fontWeight  = i === idx ? '700' : '500';
   });
+  // 重建表单值：default_value（服务端解析的默认值）预填
+  _formValues = {}; _scanTarget = null;
+  for (const f of currentForm()) {
+    if (f.default_value !== undefined && f.default_value !== null) _formValues[f.key] = f.default_value;
+  }
+  renderFormFields();
   updateAdvanceBtn();
+}
+
+// ── 字段渲染 ─────────────────────────────────────────────────────────────────
+const SCAN_TYPES = ['scan', 'nfc', 'scan_list'];
+
+function renderFormFields() {
+  const wrap = document.getElementById('form-fields');
+  const form = currentForm();
+  if (!form.length) { wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = form.map(f => {
+    const label = `${f.label || f.key}${f.required && !f.formula ? ' <span style="color:#ff3b30">*</span>' : ''}`;
+    const val = _formValues[f.key];
+
+    if (f.formula) {
+      return `<div class="field"><label>${label}</label>
+        <div style="padding:10px 12px;background:#f2f2f7;border-radius:8px;font-size:13px;color:#8e8e93">提交时自动计算</div></div>`;
+    }
+    if (f.type === 'select' || f.type === 'radio') {
+      const opts = (f.options || []).map(o =>
+        `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('');
+      return `<div class="field"><label>${label}</label>
+        <select data-fkey="${f.key}" style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:15px;background:#fff">
+          <option value="">— 请选择 —</option>${opts}
+        </select></div>`;
+    }
+    if (f.type === 'multiselect') {
+      const sel = Array.isArray(val) ? val : [];
+      return `<div class="field"><label>${label}</label>
+        <div data-fmulti="${f.key}">${(f.options || []).map(o => `
+          <label style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:14px;color:#1c1c1e">
+            <input type="checkbox" value="${o}" ${sel.includes(o) ? 'checked' : ''}> ${o}
+          </label>`).join('')}
+        </div></div>`;
+    }
+    if (f.type === 'number' || f.type === 'integer') {
+      return `<div class="field"><label>${label}</label>
+        <input data-fkey="${f.key}" type="number" ${f.step ? `step="${f.step}"` : (f.type === 'integer' ? 'step="1"' : '')}
+          value="${val ?? ''}" placeholder="${f.placeholder || ''}" autocomplete="off"></div>`;
+    }
+    if (f.type === 'datetime') {
+      return `<div class="field"><label>${label}</label>
+        <input data-fkey="${f.key}" type="datetime-local" value="${val ?? ''}"></div>`;
+    }
+    if (f.type === 'textarea') {
+      return `<div class="field"><label>${label}</label>
+        <textarea data-fkey="${f.key}" rows="3"
+          style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:15px;font-family:inherit">${val ?? ''}</textarea></div>`;
+    }
+    if (f.type === 'photo' || f.type === 'file') {
+      const done = typeof val === 'string' && val;
+      return `<div class="field"><label>${label}</label>
+        <input data-fupload="${f.key}" type="file" ${f.type === 'photo' ? 'accept="image/*" capture="environment"' : ''}
+          style="font-size:13px">
+        <div data-fstatus="${f.key}" style="font-size:12px;margin-top:4px;color:${done ? '#065f46' : '#8e8e93'}">
+          ${done ? '✓ 已上传：' + val : '未上传'}</div></div>`;
+    }
+    if (f.type === 'scan_list') {
+      return `<div class="field"><label>${label}（聚焦后连续扫码，自动去重）</label>
+        <input data-fkey="${f.key}" data-scan="1" type="text" placeholder="聚焦此框后扫码，或手动输入后点添加" autocomplete="off">
+        <button type="button" class="btn-sm btn-gray" data-fadd="${f.key}" style="margin-top:6px">手动添加</button>
+        <div data-fchips="${f.key}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>`;
+    }
+    // text / scan / nfc：普通输入框（扫码枪键盘模拟或捕获填充）
+    const ph = f.type === 'scan' ? '聚焦后扫码 / 手动输入'
+             : f.type === 'nfc' ? '聚焦后贴卡 / 手动输入' : (f.placeholder || '');
+    return `<div class="field"><label>${label}</label>
+      <input data-fkey="${f.key}" ${SCAN_TYPES.includes(f.type) ? 'data-scan="1"' : ''}
+        type="text" value="${val ?? ''}" placeholder="${ph}" autocomplete="off"></div>`;
+  }).join('');
+
+  // ── 事件绑定 ──
+  wrap.querySelectorAll('[data-fkey]').forEach(el => {
+    const key = el.getAttribute('data-fkey');
+    const f = form.find(x => x.key === key);
+    if (f && f.type === 'scan_list') {
+      // scan_list 的输入框只做扫码靶子/手动暂存，不直接进 _formValues
+      el.addEventListener('focus', () => { _scanTarget = key; });
+      el.addEventListener('blur',  () => { if (_scanTarget === key) _scanTarget = null; });
+      return;
+    }
+    el.addEventListener('input', () => { _formValues[key] = el.value; updateAdvanceBtn(); });
+    if (el.getAttribute('data-scan')) {
+      el.addEventListener('focus', () => { _scanTarget = key; });
+      el.addEventListener('blur',  () => { if (_scanTarget === key) _scanTarget = null; });
+    }
+  });
+  wrap.querySelectorAll('[data-fmulti]').forEach(box => {
+    const key = box.getAttribute('data-fmulti');
+    box.addEventListener('change', () => {
+      _formValues[key] = [...box.querySelectorAll('input:checked')].map(c => c.value);
+      updateAdvanceBtn();
+    });
+  });
+  wrap.querySelectorAll('[data-fadd]').forEach(btn => {
+    const key = btn.getAttribute('data-fadd');
+    btn.addEventListener('click', () => {
+      const input = fieldInput(key);
+      const v = (input?.value || '').trim();
+      if (!v) return;
+      const list = Array.isArray(_formValues[key]) ? _formValues[key] : [];
+      if (!list.includes(v)) list.push(v);
+      _formValues[key] = list;
+      input.value = '';
+      renderScanListChips(key);
+      updateAdvanceBtn();
+    });
+  });
+  wrap.querySelectorAll('[data-fupload]').forEach(el => {
+    const key = el.getAttribute('data-fupload');
+    el.addEventListener('change', async () => {
+      const file = el.files && el.files[0];
+      if (!file || !_currentBatch) return;
+      const st = wrap.querySelector(`[data-fstatus="${_esc(key)}"]`);
+      _uploading++; updateAdvanceBtn();
+      if (st) { st.textContent = '上传中…'; st.style.color = '#92400e'; }
+      try {
+        const r = await API.uploadEventFile(_currentBatch.batch_no, file);
+        _formValues[key] = r.filename;
+        if (st) { st.textContent = '✓ 已上传：' + (r.original_filename || r.filename); st.style.color = '#065f46'; }
+        log(`附件上传成功：${r.original_filename}`, 'ok');
+      } catch(e) {
+        if (st) { st.textContent = '上传失败：' + e.message; st.style.color = '#991b1b'; }
+        log('附件上传失败：' + e.message, 'err');
+      } finally {
+        _uploading--; updateAdvanceBtn();
+      }
+    });
+  });
+  // 渲染 scan_list 既有值
+  form.filter(f => f.type === 'scan_list').forEach(f => renderScanListChips(f.key));
+}
+
+function renderScanListChips(key) {
+  const box = document.querySelector(`[data-fchips="${_esc(key)}"]`);
+  if (!box) return;
+  const list = Array.isArray(_formValues[key]) ? _formValues[key] : [];
+  box.innerHTML = list.map((v, i) => `
+    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:#e8f4fd;
+                 color:#007aff;border-radius:14px;font-size:12px;font-family:monospace">
+      ${v}<span data-fdel="${key}" data-fdelidx="${i}" style="cursor:pointer;font-weight:700">×</span>
+    </span>`).join('') || '<span style="font-size:12px;color:#8e8e93">（空）</span>';
+  box.querySelectorAll('[data-fdel]').forEach(el => {
+    el.addEventListener('click', () => {
+      list.splice(Number(el.getAttribute('data-fdelidx')), 1);
+      _formValues[key] = list;
+      renderScanListChips(key);
+      updateAdvanceBtn();
+    });
+  });
+}
+
+// ── 校验 + 提交 ──────────────────────────────────────────────────────────────
+function missingRequired() {
+  // formula 服务端强算；有 default_value 的提交时已预填，不算缺失
+  return currentForm().filter(f => {
+    if (!f.required || f.formula) return false;
+    const v = _formValues[f.key];
+    return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length);
+  });
 }
 
 function updateAdvanceBtn() {
   const actor = (document.getElementById('actor-input')?.value || '').trim();
-  document.getElementById('advance-btn').disabled = !(actor && _selectedTransition);
+  document.getElementById('advance-btn').disabled = !(actor && _selIdx >= 0 && _uploading === 0);
 }
 
 async function doAdvance() {
-  if (!_selectedTransition || !_currentBatch) return;
+  if (_selIdx < 0 || !_currentBatch) return;
+  const t = _advTransitions[_selIdx];
   const actor = document.getElementById('actor-input').value.trim();
   if (!actor) return;
+
+  const missing = missingRequired();
+  if (missing.length) {
+    setStatus('advance-status', '请填写：' + missing.map(f => f.label || f.key).join('、'), 'err');
+    show('advance-status');
+    return;
+  }
 
   document.getElementById('advance-btn').disabled = true;
   setStatus('advance-status', '提交中…', 'info');
   show('advance-status');
 
+  // formula 字段由服务端强算，不上送客户端值
+  const payload = { ..._formValues };
+  for (const f of t.form) if (f.formula) delete payload[f.key];
+
   try {
     await API.postEvent({
       batch_no:   _currentBatch.batch_no,
-      event_type: _selectedTransition.event,
+      event_type: t.event,
       actor,
-      from_node:  _selectedTransition.from_node,
+      from_node:  t.from_node,
+      payload,
     });
 
-    setStatus('advance-status', '✓ 已推进：' + _selectedTransition.label, 'ok');
-    log('流程推进：' + _selectedTransition.event + ' by ' + actor, 'ok');
+    setStatus('advance-status', '✓ 已推进：' + t.label, 'ok');
+    log('流程推进：' + t.event + ' by ' + actor, 'ok');
 
-    // batch_ready：自动打印批次标签
-    if (_selectedTransition.event === 'batch_ready') {
+    // 连线级动作：pda_print → 打印批次标签
+    // （旧版本流程快照无 action 字段，保留 batch_ready 事件名兜底，待在途批次清空后可删）
+    if ((t.action && t.action.type === 'pda_print') || (!t.action && t.event === 'batch_ready')) {
       setStatus('advance-status', '✓ 已推进，打印中…', 'ok');
-      try {
-        await doPrint(1);
-      } catch(_) { /* doPrint 内部已处理 */ }
+      try { await doPrint(1); } catch(_) { /* doPrint 内部已处理 */ }
     }
 
     // 刷新流程状态
