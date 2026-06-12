@@ -6,6 +6,13 @@ export interface Batch {
   machine_id: number;
   product_type: string;
   product_name: string;
+  material_code: string | null;
+  mold_no: string | null;
+  business_type: string | null;
+  name_spec: string | null;
+  injection_molding_start_time: string | null;
+  cavity_no: string | null;
+  parent_batch_no: string | null;
   status: 'created' | 'inspecting' | 'done' | 'failed';
   created_at: string;
   updated_at: string;
