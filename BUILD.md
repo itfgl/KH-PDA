@@ -1,157 +1,138 @@
-# 凯航扫码 APK 构建说明
+﻿# 鍑埅鎵爜 APK 鏋勫缓璇存槑
 
-## 架构说明
+## 鏋舵瀯璇存槑
 
 ```
-APK（Capacitor 壳）
-  └─ 启动时加载 → http://115.29.178.34:2973  （服务端托管的 H5 页面）
-
-服务端
-  ├─ /static/        H5 前端文件
-  └─ /api/...        业务接口
+APK锛圕apacitor 澹筹級
+  鈹斺攢 鍚姩鏃跺姞杞?鈫?http://115.29.178.34:2974  锛堟湇鍔＄鎵樼鐨?H5 椤甸潰锛?
+鏈嶅姟绔?  鈹溾攢 /static/        H5 鍓嶇鏂囦欢
+  鈹斺攢 /api/...        涓氬姟鎺ュ彛
 ```
 
-**核心原则**：APK 只是一个原生壳，H5 界面部署在服务端。  
-- **更新界面/业务逻辑** → 只需重新部署服务端 H5，无需重新打包 APK  
-- **更新原生功能**（插件、权限、NFC、打印）→ 需要重新打包 APK
+**鏍稿績鍘熷垯**锛欰PK 鍙槸涓€涓師鐢熷３锛孒5 鐣岄潰閮ㄧ讲鍦ㄦ湇鍔＄銆? 
+- **鏇存柊鐣岄潰/涓氬姟閫昏緫** 鈫?鍙渶閲嶆柊閮ㄧ讲鏈嶅姟绔?H5锛屾棤闇€閲嶆柊鎵撳寘 APK  
+- **鏇存柊鍘熺敓鍔熻兘**锛堟彃浠躲€佹潈闄愩€丯FC銆佹墦鍗帮級鈫?闇€瑕侀噸鏂版墦鍖?APK
 
 ---
 
-## 两种加载模式
+## 涓ょ鍔犺浇妯″紡
 
-### 模式 A：远程服务端模式（生产默认）
+### 妯″紡 A锛氳繙绋嬫湇鍔＄妯″紡锛堢敓浜ч粯璁わ級
 
-`capacitor.config.json` 中包含 `server.url`：
-```json
+`capacitor.config.json` 涓寘鍚?`server.url`锛?```json
 {
   "appId": "com.kaihang.scanner",
-  "appName": "凯航扫码",
+  "appName": "鍑埅鎵爜",
   "webDir": "www",
   "server": {
-    "url": "http://115.29.178.34:2973",
+    "url": "http://115.29.178.34:2974",
     "cleartext": true
   }
 }
 ```
-APK 启动后直接加载服务端页面，`www/` 目录内容被忽略。  
-**优点**：H5 更新不需要重新打包 APK。
+APK 鍚姩鍚庣洿鎺ュ姞杞芥湇鍔＄椤甸潰锛宍www/` 鐩綍鍐呭琚拷鐣ャ€? 
+**浼樼偣**锛欻5 鏇存柊涓嶉渶瑕侀噸鏂版墦鍖?APK銆?
+### 妯″紡 B锛氭湰鍦扮绾挎ā寮忥紙璋冭瘯鐢級
 
-### 模式 B：本地离线模式（调试用）
-
-删除 `server` 字段或注释掉：
-```json
+鍒犻櫎 `server` 瀛楁鎴栨敞閲婃帀锛?```json
 {
   "appId": "com.kaihang.scanner",
-  "appName": "凯航扫码",
+  "appName": "鍑埅鎵爜",
   "webDir": "www"
 }
 ```
-APK 从打包进去的 `www/` 目录加载，无网络也能运行。  
-**使用场景**：无服务器环境调试、Demo 演示。
-
-> ⚠️ 切换模式后必须重新构建 APK。
-
+APK 浠庢墦鍖呰繘鍘荤殑 `www/` 鐩綍鍔犺浇锛屾棤缃戠粶涔熻兘杩愯銆? 
+**浣跨敤鍦烘櫙**锛氭棤鏈嶅姟鍣ㄧ幆澧冭皟璇曘€丏emo 婕旂ず銆?
+> 鈿狅笍 鍒囨崲妯″紡鍚庡繀椤婚噸鏂版瀯寤?APK銆?
 ---
 
-## 自动构建（GitHub Actions）
+## 鑷姩鏋勫缓锛圙itHub Actions锛?
+浠撳簱鍦板潃锛歨ttps://github.com/nyushimentor-crypto/scanner
 
-仓库地址：https://github.com/nyushimentor-crypto/scanner
+### 瑙﹀彂鏉′欢
+- 鎺ㄩ€佷唬鐮佸埌 `master` 鍒嗘敮 鈫?鑷姩瑙﹀彂
+- GitHub 浠撳簱 Actions 椤甸潰鎵嬪姩鐐瑰嚮 `Run workflow`
 
-### 触发条件
-- 推送代码到 `master` 分支 → 自动触发
-- GitHub 仓库 Actions 页面手动点击 `Run workflow`
-
-### 构建流程（`.github/workflows/build.yml`）
-
+### 鏋勫缓娴佺▼锛坄.github/workflows/build.yml`锛?
 ```
-1. 拉取代码
-2. 配置 Node.js 22
-3. 配置 Java 21
-4. npm install                    安装依赖
-   npm run build                  Vite 打包 JS（生成 www/plugins.js）
-   npx cap sync android           同步 Capacitor 插件到 Android 项目
-5. ./gradlew assembleDebug        编译 Debug APK（无需签名配置）
-6. 上传 Artifact                  产物名：kaihang-scanner-debug
+1. 鎷夊彇浠ｇ爜
+2. 閰嶇疆 Node.js 22
+3. 閰嶇疆 Java 21
+4. npm install                    瀹夎渚濊禆
+   npm run build                  Vite 鎵撳寘 JS锛堢敓鎴?www/plugins.js锛?   npx cap sync android           鍚屾 Capacitor 鎻掍欢鍒?Android 椤圭洰
+5. ./gradlew assembleDebug        缂栬瘧 Debug APK锛堟棤闇€绛惧悕閰嶇疆锛?6. 涓婁紶 Artifact                  浜х墿鍚嶏細kaihang-scanner-debug
 ```
 
-> 当前使用 `assembleDebug`，APK 使用 Android 调试签名，可直接安装测试。
+> 褰撳墠浣跨敤 `assembleDebug`锛孉PK 浣跨敤 Android 璋冭瘯绛惧悕锛屽彲鐩存帴瀹夎娴嬭瘯銆?
+### 涓嬭浇 APK
 
-### 下载 APK
-
-1. 打开 [Actions](https://github.com/nyushimentor-crypto/scanner/actions)
-2. 点击最新成功的构建
-3. 页面底部 **Artifacts** → 下载 `kaihang-scanner-debug`
-4. 解压得到 `.apk` 文件，传到设备安装
-
+1. 鎵撳紑 [Actions](https://github.com/nyushimentor-crypto/scanner/actions)
+2. 鐐瑰嚮鏈€鏂版垚鍔熺殑鏋勫缓
+3. 椤甸潰搴曢儴 **Artifacts** 鈫?涓嬭浇 `kaihang-scanner-debug`
+4. 瑙ｅ帇寰楀埌 `.apk` 鏂囦欢锛屼紶鍒拌澶囧畨瑁?
 ---
 
-## 本地构建（可选）
+## 鏈湴鏋勫缓锛堝彲閫夛級
 
-需要本地安装：Node.js 22、JDK 21、Android SDK
+闇€瑕佹湰鍦板畨瑁咃細Node.js 22銆丣DK 21銆丄ndroid SDK
 
 ```bash
 cd android-entry
 
-# 安装依赖
+# 瀹夎渚濊禆
 npm install
 
-# 打包 JS（生产模式）
+# 鎵撳寘 JS锛堢敓浜фā寮忥級
 npm run build
 
-# 同步到 Android 项目
+# 鍚屾鍒?Android 椤圭洰
 npx cap sync android
 
-# 编译 Debug APK
+# 缂栬瘧 Debug APK
 cd android
 ./gradlew assembleDebug
 
-# APK 路径
+# APK 璺緞
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
-## 正式签名打包（待配置）
-
-切换到 `assembleRelease` 并在 GitHub 仓库配置以下 Secrets：
-
-| Secret 名 | 说明 |
+## 姝ｅ紡绛惧悕鎵撳寘锛堝緟閰嶇疆锛?
+鍒囨崲鍒?`assembleRelease` 骞跺湪 GitHub 浠撳簱閰嶇疆浠ヤ笅 Secrets锛?
+| Secret 鍚?| 璇存槑 |
 |-----------|------|
-| `SIGNING_KEY` | `apk-release-key.jks` 转 Base64：`[Convert]::ToBase64String([IO.File]::ReadAllBytes("apk-release-key.jks"))` |
+| `SIGNING_KEY` | `apk-release-key.jks` 杞?Base64锛歚[Convert]::ToBase64String([IO.File]::ReadAllBytes("apk-release-key.jks"))` |
 | `ALIAS` | keystore alias |
-| `KEY_STORE_PASSWORD` | keystore 密码 |
-| `KEY_PASSWORD` | key 密码 |
+| `KEY_STORE_PASSWORD` | keystore 瀵嗙爜 |
+| `KEY_PASSWORD` | key 瀵嗙爜 |
 
-配置完成后修改 `build.yml` 第 5 步：
+閰嶇疆瀹屾垚鍚庝慨鏀?`build.yml` 绗?5 姝ワ細
 ```yaml
 ./gradlew assembleRelease
 ```
-并取消注释签名步骤。
-
+骞跺彇娑堟敞閲婄鍚嶆楠ゃ€?
 ---
 
-## H5 前端单独更新（不重新打包 APK）
+## H5 鍓嶇鍗曠嫭鏇存柊锛堜笉閲嶆柊鎵撳寘 APK锛?
+**浠呭湪杩滅▼鏈嶅姟绔ā寮忎笅鏈夋晥銆?*
 
-**仅在远程服务端模式下有效。**
-
-将 `www/` 目录下的文件部署到服务端 `/static/` 路径即可：
-```bash
-# 构建 H5
+灏?`www/` 鐩綍涓嬬殑鏂囦欢閮ㄧ讲鍒版湇鍔＄ `/static/` 璺緞鍗冲彲锛?```bash
+# 鏋勫缓 H5
 npm run build
-# 将 www/ 目录上传到服务器 115.29.178.34:2973 的静态文件目录
-```
+# 灏?www/ 鐩綍涓婁紶鍒版湇鍔″櫒 115.29.178.34:2974 鐨勯潤鎬佹枃浠剁洰褰?```
 
 ---
 
-## 原生功能文件索引
+## 鍘熺敓鍔熻兘鏂囦欢绱㈠紩
 
-| 文件 | 说明 |
+| 鏂囦欢 | 璇存槑 |
 |------|------|
-| `capacitor.config.json` | 切换远程/本地模式、修改服务器地址 |
-| `android/app/src/main/java/com/kaihang/scanner/plugins/ScanPlugin.java` | 扫码枪广播接收 |
-| `android/app/src/main/java/com/kaihang/scanner/plugins/PrintPlugin.java` | 打印标签/二维码 |
-| `android/app/src/main/java/com/kaihang/scanner/plugins/KaihangNfcPlugin.java` | NFC 读写（NDEF + MifareUltralight） |
-| `android/app/src/main/AndroidManifest.xml` | 权限、NFC intent-filter |
-| `android/app/libs/uc_pda_sdk_native_temp_v1.16_240515.aar` | 打印机原生 SDK |
-| `src/main.js` | JS 插件入口，Vite 打包目标 |
-| `www/index.html` | 调试用离线页面（远程模式下不使用） |
+| `capacitor.config.json` | 鍒囨崲杩滅▼/鏈湴妯″紡銆佷慨鏀规湇鍔″櫒鍦板潃 |
+| `android/app/src/main/java/com/kaihang/scanner/plugins/ScanPlugin.java` | 鎵爜鏋箍鎾帴鏀?|
+| `android/app/src/main/java/com/kaihang/scanner/plugins/PrintPlugin.java` | 鎵撳嵃鏍囩/浜岀淮鐮?|
+| `android/app/src/main/java/com/kaihang/scanner/plugins/KaihangNfcPlugin.java` | NFC 璇诲啓锛圢DEF + MifareUltralight锛?|
+| `android/app/src/main/AndroidManifest.xml` | 鏉冮檺銆丯FC intent-filter |
+| `android/app/libs/uc_pda_sdk_native_temp_v1.16_240515.aar` | 鎵撳嵃鏈哄師鐢?SDK |
+| `src/main.js` | JS 鎻掍欢鍏ュ彛锛孷ite 鎵撳寘鐩爣 |
+| `www/index.html` | 璋冭瘯鐢ㄧ绾块〉闈紙杩滅▼妯″紡涓嬩笉浣跨敤锛?|

@@ -2,7 +2,7 @@
  * 服务端 API 调用封装
  * 所有接口统一走 apiFetch，非 2xx 抛出含 detail 的 Error
  */
-const SERVER_BASE = 'http://115.29.178.34:2973';
+const SERVER_BASE = 'http://115.29.178.34:2974';
 
 export async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
