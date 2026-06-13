@@ -58,11 +58,13 @@ await PrintPlugin.prepareToPrintLabel();  // ← 删掉这行
 await PrintPlugin.printBatchLabel({ ... });
 ```
 
-**原因**：`prepareToPrintLabel()` 作用是走纸定位到标签起始位。  
+**原因**：`prepareToPrintLabel()` 作用是走纸定位到标签起始位（标签纸模式才需要）。  
 打印机 `connect()` 时已内部执行过一次定位，之后调用会再走一张，浪费标签。  
 `prepareToPrintLabel()` 只应在以下情况手动调用：
 - 更换标签纸后重新定位
 - 打印机断线重连后
+
+> **批次标签（`printBatchLabel`）现已改为普通纸（热敏）打印**：不依赖黑标定位，打印完成（`PRINT_OK`）后**不需要**调用 `checkBlack()`，详见 `RESPONSIBILITIES.md`。机器二维码标签（`printMachineQR`）仍走标签纸模式，本节规则对其依然适用。
 
 ---
 
@@ -102,3 +104,4 @@ const { KaihangNfc, ScanPlugin, PrintPlugin } = window;
 | 2026-06-04 | 去掉打印前的 prepareToPrintLabel()，修复空白标签 |
 | 2026-06-04 | 实现相机扫码（BarcodeDetector 优先，ZXing 降级） |
 | 2026-06-04 | ZXing 回归 IIFE 静态打包，放弃 ESM 懒加载（兼容性优先） |
+| 2026-06-13 | 批次标签（printBatchLabel）改为普通纸（热敏）打印，不再黑标定位/checkBlack；机器二维码（printMachineQR）保持标签纸模式不变 |

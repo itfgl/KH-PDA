@@ -67,10 +67,9 @@ export async function reset() {
  * 打印批次标签（一维码），处理完整的多张打印流程。
  *
  * 流程：
- *   printBatchLabel → PRINT_OK
- *     → checkBlack → PREPARE_LABEL_OK
- *     → ... 循环（每张打完都走纸，含最后一张，使打印机停在下一张空白标签起始位，
- *               避免下次打印时位置错位、错位内容溢到上一张标签上造成空白页）
+ *   printBatchLabel → PRINT_OK → ... 循环
+ *
+ * 批次标签走普通纸（热敏）打印，不走黑标定位，每张打完不需要 checkBlack 归位。
  *
  * @param {{ batchNo, machineId, productType, date }} params
  *   - batchNo     15位批次码
@@ -89,11 +88,6 @@ export async function printBatches(params, count = 1, onProgress) {
     const pPrint = waitPrintStatus('PRINT_OK');
     await _plugin.printBatchLabel(params);
     await pPrint;
-
-    // 每张打完都走纸到下一张标签起始位，确保下一次打印（同批或下一批）位置正确
-    const pNext = waitPrintStatus('PREPARE_LABEL_OK');
-    await _plugin.checkBlack();
-    await pNext;
   }
 }
 
@@ -105,6 +99,8 @@ export async function printBatch(params) {
 /**
  * 打印一组「不同批次码」的标签，每个批次一张（用于开机按穴号拆分后逐穴号打码）。
  * 与 printBatches 的区别：printBatches 重复同一份 params N 张，这里每张 params 不同。
+ *
+ * 批次标签走普通纸（热敏）打印，不走黑标定位，每张打完不需要 checkBlack 归位。
  *
  * @param {Array<{batchNo,machineId,productType,date}>} list  每张标签的参数
  * @param {function} [onProgress]  进度回调 (current, total, params) => void
@@ -119,11 +115,6 @@ export async function printBatchList(list, onProgress) {
     const pPrint = waitPrintStatus('PRINT_OK');
     await _plugin.printBatchLabel(list[i]);
     await pPrint;
-
-    // 每张打完都走纸到下一张标签起始位，确保下一次打印（同批或下一批）位置正确
-    const pNext = waitPrintStatus('PREPARE_LABEL_OK');
-    await _plugin.checkBlack();
-    await pNext;
   }
 }
 

@@ -153,23 +153,38 @@ Printer.prepareToPrintLabel(); // 即 checkBlack 的实现
 Printer.close(activity);
 ```
 
-#### 标签纸多张打印完整流程
+#### 批次标签（printBatchLabel）：普通纸（热敏）打印流程
+
+`PrintPlugin.printBatchLabel` 内部走 `Printer.print(BitmapData, top, forwardMorePaper, flag, runOnNewThread)`
+（普通纸 5 参数重载，`top=8, forwardMorePaper=24`），不依赖黑标检测：
+
+```
+connect()
+    └─ printStatus: connection=connected
+         └─ printBatchLabel(...)  // 打印第一张
+              └─ printStatus: PRINT_OK
+                   └─ printBatchLabel(...)  // 打印第二张，直接继续
+                        └─ ...（循环直到所有张数打完，每张之间不需要 checkBlack）
+```
+
+#### 机器二维码标签（printMachineQR）：标签纸多张打印流程
 
 ```
 connect()
     └─ printStatus: connection=connected
          └─ prepareToPrintLabel()          // 走纸到第一张标签起始
               └─ printStatus: PREPARE_LABEL_OK
-                   └─ printBatchLabel(...)  // 打印第一张
+                   └─ printMachineQR(...)  // 打印第一张
                         └─ printStatus: PRINT_OK
                              └─ checkBlack()  // 走纸到第二张标签起始  ← 必须调用
                                   └─ printStatus: PREPARE_LABEL_OK
-                                       └─ printBatchLabel(...)  // 打印第二张
+                                       └─ printMachineQR(...)  // 打印第二张
                                             └─ ...（循环直到所有张数打完）
 ```
 
-> **注意**：每次 `PRINT_OK` 后必须调用 `checkBlack()`，否则打印机不走纸，下一张会从错误位置打印。
+> **注意**：标签纸模式下，每次 `PRINT_OK` 后必须调用 `checkBlack()`，否则打印机不走纸，下一张会从错误位置打印。
 > `prepareToPrintLabel` 与 `checkBlack` 的区别仅是语义：前者用于"首次就绪"，后者用于"每张打完后继续"，底层调用相同。
+> 批次标签已改为普通纸模式，不适用本段。
 
 #### BarcodeCreater
 
@@ -186,15 +201,21 @@ Bitmap label = new AbsoluteLayoutBitmap(384, 280)  // 宽x高，单位点
     .addBmp(barcodeBmp, x, y)
     .addText("批次码：M05260604030012", textSize, x, y)  // y为文字基线位置
     .getBitmap();
-BitmapData data = new BitmapData(label, 15, 0);  // 参数2=浓度(1~20), 参数3=普通纸时isAlignCenter
-Printer.print(data, 16, "batch_label", false);
+
+// 批次标签（printBatchLabel）：普通纸（热敏），不依赖黑标
+BitmapData data = new BitmapData(label, 15, false);  // 参数2=浓度(1~20), 参数3=普通纸时isAlignCenter
+Printer.print(data, 8, 24, "batch_label", false);    // top=8, forwardMorePaper=24
+
+// 机器二维码标签（printMachineQR）：标签纸模式，保持不变
+BitmapData qrData = new BitmapData(label, 15, 0);    // 参数3=标签纸时left
+Printer.print(qrData, 16, "machine_qr", false);
 ```
 
 #### PrintResult 枚举（回调状态）
 
 | 值 | 说明 |
 |----|------|
-| `PRINT_OK` | 打印完成 → 应继续调用 `checkBlack()` |
+| `PRINT_OK` | 打印完成 → 标签纸模式应继续调用 `checkBlack()`；普通纸（批次标签）模式无需此步骤 |
 | `NO_PAPER` | 缺纸 |
 | `PRINTER_CLOSED` | 打印机未连接 |
 | `SEND_DATA_FAILED` | 数据发送失败 |
@@ -223,11 +244,18 @@ await PrintPlugin.addListener('printStatus', (e) => {
 await PrintPlugin.connect();
 // → 等待 printStatus: connection=connected
 
+// 批次标签：普通纸（热敏），不依赖黑标，无需 prepareToPrintLabel/checkBlack
+for (let i = 0; i < copies; i++) {
+    await PrintPlugin.printBatchLabel({ batchNo, machineId, productType, date });
+    // → 等待 printStatus: status=PRINT_OK
+}
+
+// 机器二维码标签：标签纸模式，仍需 prepareToPrintLabel + 每张 checkBlack（流程见上）
 await PrintPlugin.prepareToPrintLabel();
 // → 等待 printStatus: status=PREPARE_LABEL_OK
 
 for (let i = 0; i < copies; i++) {
-    await PrintPlugin.printBatchLabel({ batchNo, machineId, productType, date });
+    await PrintPlugin.printMachineQR({ machineId });
     // → 等待 printStatus: status=PRINT_OK
 
     if (i < copies - 1) {

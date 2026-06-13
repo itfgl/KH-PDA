@@ -158,7 +158,8 @@ public class PrintPlugin extends Plugin {
 
                 if (destroyed) { call.reject("printer destroyed"); return; }
                 android.util.Log.d("PrintPlugin", "printBatchLabel → Printer.print()");
-                Printer.print(new BitmapData(label, 15, 0), 16, "batch_" + batchNo, false);
+                // 普通纸（热敏）打印：不走黑标定位，无需 prepareToPrintLabel/checkBlack
+                Printer.print(new BitmapData(label, 15, false), 8, 24, "batch_" + batchNo, false);
                 call.resolve();
             } catch (Exception e) {
                 android.util.Log.e("PrintPlugin", "printBatchLabel crash", e);
