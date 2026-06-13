@@ -18,6 +18,8 @@ import com.uc.pdasdk.print.Printer;
 import com.uc.pdasdk.utils.AbsoluteLayoutBitmap;
 import com.uc.pdasdk.utils.BarcodeCreater;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -28,6 +30,7 @@ import java.util.concurrent.Executors;
 public class PrintPlugin extends Plugin {
 
     private static final String EVENT_STATUS = "printStatus";
+    private static final int BATCH_EXTRA_FEED = 48;
     private boolean isConnected           = false;
     private boolean isConnecting          = false;
     private volatile boolean destroyed    = false;
@@ -127,9 +130,40 @@ public class PrintPlugin extends Plugin {
 
     // ── 打印 ──────────────────────────────────────────────────────────────────
 
+    private static List<String> wrapLabeledText(String label, String text, int maxUnitsPerLine) {
+        List<String> lines = new ArrayList<>();
+        String safeText = text == null ? "" : text.trim();
+        String current = label;
+        int units = textUnits(label);
+        for (int i = 0; i < safeText.length(); i++) {
+            char ch = safeText.charAt(i);
+            int next = charUnits(ch);
+            if (units + next > maxUnitsPerLine && !current.equals(label)) {
+                lines.add(current);
+                current = "      " + ch;
+                units = textUnits("      ") + next;
+            } else {
+                current += ch;
+                units += next;
+            }
+        }
+        lines.add(current);
+        return lines;
+    }
+
+    private static int textUnits(String text) {
+        int total = 0;
+        for (int i = 0; i < text.length(); i++) total += charUnits(text.charAt(i));
+        return total;
+    }
+
+    private static int charUnits(char ch) {
+        return ch <= 0x7f ? 1 : 2;
+    }
+
     /**
      * 批次标签（一维码）
-     * 布局 384×460：条码高度与文字字号约为旧版 2 倍，下方批次码 + 机器/日期/品类/穴号
+     * 布局 384×500：条码恢复正常高度；机器/日期分行；品类支持换行；批次间额外走纸加大。
      */
     @PluginMethod
     public void printBatchLabel(PluginCall call) {
@@ -144,24 +178,31 @@ public class PrintPlugin extends Plugin {
         printExecutor.execute(() -> {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
+                List<String> productLines = wrapLabeledText("品类：", productType, 16);
                 Bitmap barcode = BarcodeCreater.createBarcode(
-                    getContext(), batchNo, 364, 160, false, 1
+                    getContext(), batchNo, 364, 80, false, 1
                 );
                 if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
-                Bitmap label = new AbsoluteLayoutBitmap(384, 460)
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 500)
                     .addBmp(barcode, 10, 0)
-                    .addText(batchNo, 44, 0, 190)
-                    .addText("机器：" + machineId + "  日期：" + date, 40, 0, 252)
-                    .addText("品类：" + productType, 40, 0, 312)
-                    .addText("穴号：" + cavityNo, 40, 0, 372)
+                    .addText(batchNo, 44, 0, 130)
+                    .addText("机器：" + machineId, 40, 0, 192)
+                    .addText("日期：" + date, 40, 0, 252);
+                int y = 312;
+                for (String line : productLines) {
+                    builder.addText(line, 40, 0, y);
+                    y += 48;
+                }
+                Bitmap label = builder
+                    .addText("穴号：" + cavityNo, 40, 0, y + 12)
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 
                 if (destroyed) { call.reject("printer destroyed"); return; }
                 android.util.Log.d("PrintPlugin", "printBatchLabel → Printer.print()");
                 // 普通纸（热敏）打印：不走黑标定位，无需 prepareToPrintLabel/checkBlack
-                Printer.print(new BitmapData(label, 15, false), 8, 24, "batch_" + batchNo, false);
+                Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "batch_" + batchNo, false);
                 call.resolve();
             } catch (Exception e) {
                 android.util.Log.e("PrintPlugin", "printBatchLabel crash", e);

@@ -34,6 +34,36 @@ function _send(cmd) {
   window.PDAJsBridge.SendControlCommand(JSON.stringify(cmd));
 }
 
+function wrapLabeledText(label, text, maxUnitsPerLine) {
+  const safeText = String(text || '').trim();
+  const lines = [];
+  let current = label;
+  let units = textUnits(label);
+  for (const ch of safeText) {
+    const next = charUnits(ch);
+    if (units + next > maxUnitsPerLine && current !== label) {
+      lines.push(current);
+      current = '      ' + ch;
+      units = textUnits('      ') + next;
+    } else {
+      current += ch;
+      units += next;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
+
+function textUnits(text) {
+  let total = 0;
+  for (const ch of text) total += charUnits(ch);
+  return total;
+}
+
+function charUnits(ch) {
+  return ch.charCodeAt(0) <= 0x7f ? 1 : 2;
+}
+
 // ── ScanPlugin ───────────────────────────────────────────────────────────────
 // Capacitor 接口：addListener('scanResult', cb({ value })) / startScan() / stopScan()
 
@@ -114,20 +144,28 @@ export const PrintPlugin = {
   /**
    * 批次标签（一维码）
    * 与 PrintPlugin.java 的 printBatchLabel 布局一致：
-   *   384×460  一维码(10,0 364×160)  批次码文字(0,190)  机器/日期(0,252)  品类(0,312)  穴号(0,372)
+   *   384×500  一维码(10,0 364×80)  批次码(0,130)  机器(0,192)  日期(0,252)
+   *             品类最多两行(0,312...)  穴号紧随其后；批次间额外走纸 48
    */
   async printBatchLabel({ batchNo, machineId = '', productType = '', cavityNo = '', date = '' }) {
+    const productLines = wrapLabeledText('品类：', productType, 16);
+    const data = [
+      { printType: 1, text: batchNo,
+        desiredWidth: 364, desiredHeight: 80, displayCode: false, left: 10, top: 0 },
+      { printType: 0, text: batchNo,             textSize: 44, x: 0, y: 130 },
+      { printType: 0, text: `机器：${machineId}`, textSize: 40, x: 0, y: 192 },
+      { printType: 0, text: `日期：${date}`,      textSize: 40, x: 0, y: 252 },
+    ];
+    let y = 312;
+    for (const line of productLines) {
+      data.push({ printType: 0, text: line, textSize: 40, x: 0, y });
+      y += 48;
+    }
+    data.push({ printType: 0, text: `穴号：${cavityNo}`, textSize: 40, x: 0, y: y + 12 });
     _send({
       name: 'printBmpLabel',
-      width: 384, height: 460, top: 8, concentration: 15,
-      data: [
-        { printType: 1, text: batchNo,
-          desiredWidth: 364, desiredHeight: 160, displayCode: false, left: 10, top: 0 },
-        { printType: 0, text: batchNo,                           textSize: 44, x: 0, y: 190 },
-        { printType: 0, text: `机器：${machineId}  日期：${date}`, textSize: 40, x: 0, y: 252 },
-        { printType: 0, text: `品类：${productType}`,             textSize: 40, x: 0, y: 312 },
-        { printType: 0, text: `穴号：${cavityNo}`,                textSize: 40, x: 0, y: 372 },
-      ],
+      width: 384, height: 500, top: 8, concentration: 15, forwardMorePaper: 48,
+      data,
     });
   },
 
