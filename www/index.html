@@ -635,6 +635,22 @@ function currentForm() {
 function _esc(s) { return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/"/g, '\\"'); }
 function fieldInput(key) { return document.querySelector(`[data-fkey="${_esc(key)}"]`); }
 
+// 上传文件名是否为图片（按扩展名判断；存储名形如 <uuid>_<原文件名>，扩展名保留）
+function _isImageFile(name) { return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(name || ''); }
+// 拼出已上传文件的预览/下载地址
+function _fileUrl(filename) {
+  return SERVER_BASE + '/api/events/files/' + encodeURIComponent(_currentBatch.batch_no) + '/' + encodeURIComponent(filename);
+}
+// photo/file 字段已上传值的展示 HTML（缩略图 + 链接，或纯下载链接）
+function _fileFieldPreview(f, val) {
+  if (!val) return '';
+  const url = _fileUrl(val);
+  if (f.type === 'photo' || _isImageFile(val)) {
+    return `<a href="${url}" target="_blank"><img src="${url}" alt="" style="display:block;max-width:100%;max-height:160px;border-radius:8px;border:1px solid #d1d1d6;margin-top:4px;object-fit:contain"></a>`;
+  }
+  return `<a href="${url}" target="_blank" style="color:#065f46">${val}（点击下载）</a>`;
+}
+
 // 扫码捕获：scan/nfc 字段聚焦时，扫码枪/NFC 结果填入该字段而不触发机器查询
 Machine.setCapture(raw => {
   if (!_scanTarget) return false;
@@ -807,7 +823,8 @@ function renderFormFields() {
         <input data-fupload="${f.key}" type="file" ${f.type === 'photo' ? 'accept="image/*" capture="environment"' : ''}
           style="font-size:13px">
         <div data-fstatus="${f.key}" style="font-size:12px;margin-top:4px;color:${done ? '#065f46' : '#8e8e93'}">
-          ${done ? '✓ 已上传：' + val : '未上传'}</div></div>`;
+          ${done ? '✓ 已上传：' + val : '未上传'}</div>
+        <div data-fpreview="${f.key}">${done ? _fileFieldPreview(f, val) : ''}</div></div>`;
     }
     if (f.type === 'scan_list') {
       return `<div class="field"><label>${label}（聚焦后连续扫码，自动去重）</label>
@@ -862,16 +879,20 @@ function renderFormFields() {
   });
   wrap.querySelectorAll('[data-fupload]').forEach(el => {
     const key = el.getAttribute('data-fupload');
+    const f = form.find(x => x.key === key);
     el.addEventListener('change', async () => {
       const file = el.files && el.files[0];
       if (!file || !_currentBatch) return;
       const st = wrap.querySelector(`[data-fstatus="${_esc(key)}"]`);
+      const pv = wrap.querySelector(`[data-fpreview="${_esc(key)}"]`);
       _uploading++; updateAdvanceBtn();
       if (st) { st.textContent = '上传中…'; st.style.color = '#92400e'; }
+      if (pv) pv.innerHTML = '';
       try {
         const r = await API.uploadEventFile(_currentBatch.batch_no, file);
         _formValues[key] = r.filename;
         if (st) { st.textContent = '✓ 已上传：' + (r.original_filename || r.filename); st.style.color = '#065f46'; }
+        if (pv) pv.innerHTML = _fileFieldPreview(f, r.filename);
         log(`附件上传成功：${r.original_filename}`, 'ok');
       } catch(e) {
         if (st) { st.textContent = '上传失败：' + e.message; st.style.color = '#991b1b'; }
