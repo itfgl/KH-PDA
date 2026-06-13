@@ -14,11 +14,12 @@
  *   machine:loaded   { machine }
  *   machine:error    { msg }
  *   batch:loaded     { batch, machine }
+ *   batch:group      { batches }  扫机器码时，当前批次按穴号拆分出的全部子批次（无拆分则不发）
  *   batch:none       { machine }
  *   batch:error      { msg }
  */
 import { on, emit } from './events.js';
-import { getMachineByCode, getMachineById, getBatchByNo } from './api.js';
+import { getMachineByCode, getMachineById, getBatchByNo, getBatchesByParent } from './api.js';
 
 // 扫码捕获钩子：表单中 scan/nfc 类型字段聚焦时由 UI 设置。
 // 钩子返回 true 表示扫码结果已被表单字段消费，不再走机器/批次查询。
@@ -77,6 +78,12 @@ async function handleCode(raw) {
 
       batch = await getBatchByNo(machine.latest_batch_no);
       emit('batch:loaded', { batch, machine });
+
+      // 开机按穴号拆分过：取同组全部子批次，供整组补打标签
+      if (batch.parent_batch_no) {
+        const group = await getBatchesByParent(batch.parent_batch_no);
+        if (group.length) emit('batch:group', { batches: group });
+      }
     }
   } catch(e) {
     emit('machine:error', { msg: e.message });

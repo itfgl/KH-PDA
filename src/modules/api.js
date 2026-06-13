@@ -83,6 +83,10 @@ export const getBatchByNo = (batchNo) =>
 export const getBatchesByMachine = (machineId) =>
   apiFetch('/api/batches?machine_id=' + machineId);
 
+/** 查同一开机批次按穴号拆分出的全部子批次 */
+export const getBatchesByParent = (parentBatchNo) =>
+  apiFetch('/api/batches?parent_batch_no=' + encodeURIComponent(parentBatchNo));
+
 export const createBatch = ({ machine_id, product_type, product_name }) =>
   apiFetch('/api/batches', {
     method: 'POST',

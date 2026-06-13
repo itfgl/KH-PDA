@@ -171,6 +171,13 @@
     <!-- 批次选择列表，点击后收起 -->
     <div id="batch-list" style="display:none; margin-top:8px"></div>
 
+    <!-- ── 本组穴号批次（开机按穴号拆分后，扫机器码可整组补打标签）── -->
+    <div id="group-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
+      <div class="card-title">本组穴号批次</div>
+      <div id="group-body" style="margin-bottom:8px"></div>
+      <button class="btn btn-green" onclick="doPrintGroup()">打印整组（<span id="group-count">0</span> 张）</button>
+    </div>
+
     <!-- ── 流程推进（表单按流程定义动态渲染）── -->
     <div id="advance-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
       <div class="card-title">流程推进</div>
@@ -378,8 +385,9 @@ Events.on('scanner:log',    ({ msg, type }) => log(msg, type || 'plain'));
 Events.on('machine:loading', ({ code }) => {
   // 重置上次结果，防止 doPrint() 使用旧批次
   _currentBatch = null; _currentMachine = null;
+  _groupBatches = [];
   setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
-  hide('machine-card'); hide('batch-card');
+  hide('machine-card'); hide('batch-card'); hide('group-wrap');
   stopCamera(); // 任何方式识别到机器码后停相机
   switchTab('scan');
 });
@@ -434,6 +442,20 @@ Events.on('batch:error', ({ msg }) => {
     `<div style="color:#991b1b;font-size:14px;padding:4px 0">${msg}</div>`;
 });
 
+// 扫机器码：当前批次按穴号拆分过，显示整组（供补打全部穴号标签）
+Events.on('batch:group', ({ batches }) => {
+  _groupBatches = batches;
+  if (batches.length <= 1) { hide('group-wrap'); return; }
+  document.getElementById('group-body').innerHTML = batches.map(b => `
+    <div class="info-row">
+      <span class="lbl">${b.cavity_no ? '穴号 ' + b.cavity_no : '—'}</span>
+      <span class="val" style="font-family:monospace">${b.batch_no}</span>
+    </div>`).join('');
+  document.getElementById('group-count').textContent = String(batches.length);
+  show('group-wrap');
+  log(`本组穴号批次：${batches.length} 个`, 'info');
+});
+
 // ── 打印机事件 ────────────────────────────────────────────────────────────────
 Events.on('printer:status', ({ connection, status, error }) => {
   let msg, type;
@@ -457,6 +479,7 @@ Events.on('printer:status', ({ connection, status, error }) => {
 // ══════════════════════════════════════════════════════════════════════════════
 let _currentBatch   = null;
 let _currentMachine = null;
+let _groupBatches   = []; // 当前批次按穴号拆分出的同组子批次（扫机器码时填充）
 
 // 批次状态映射
 const BATCH_STATUS     = { created:'已创建', inspecting:'质检中', done:'已完成', failed:'已失败' };
@@ -599,6 +622,12 @@ async function doPrintBatches(batchNos) {
     setStatus('print-status', '打印失败：' + e.message, 'err');
     log('打印失败：' + e.message, 'err');
   }
+}
+
+/** 整组补打：把本组全部穴号子批次的标签各打一张 */
+async function doPrintGroup() {
+  if (!_groupBatches.length) return;
+  await doPrintBatches(_groupBatches.map(b => b.batch_no));
 }
 
 // ── 流程推进（表单/动作均按流程定义动态渲染，见服务端 transitions[].form/action）──
