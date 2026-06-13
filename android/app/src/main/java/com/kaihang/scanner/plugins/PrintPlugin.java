@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
 public class PrintPlugin extends Plugin {
 
     private static final String EVENT_STATUS = "printStatus";
-    private static final int BATCH_EXTRA_FEED = 48;
+    private static final int BATCH_EXTRA_FEED = 96;
     private boolean isConnected           = false;
     private boolean isConnecting          = false;
     private volatile boolean destroyed    = false;
@@ -163,7 +163,7 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 批次标签（一维码）
-     * 布局 384×500：条码恢复正常高度；机器/日期分行；品类支持换行；批次间额外走纸加大。
+     * 布局 384×560：条码放大，文字略缩小；机器/日期分行；品类支持换行；批次间额外走纸明显加大。
      */
     @PluginMethod
     public void printBatchLabel(PluginCall call) {
@@ -178,24 +178,24 @@ public class PrintPlugin extends Plugin {
         printExecutor.execute(() -> {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
-                List<String> productLines = wrapLabeledText("品类：", productType, 16);
+                List<String> productLines = wrapLabeledText("品类：", productType, 18);
                 Bitmap barcode = BarcodeCreater.createBarcode(
-                    getContext(), batchNo, 364, 80, false, 1
+                    getContext(), batchNo, 364, 140, false, 1
                 );
                 if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 500)
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 560)
                     .addBmp(barcode, 10, 0)
-                    .addText(batchNo, 44, 0, 130)
-                    .addText("机器：" + machineId, 40, 0, 192)
-                    .addText("日期：" + date, 40, 0, 252);
-                int y = 312;
+                    .addText(batchNo, 38, 0, 180)
+                    .addText("机器：" + machineId, 34, 0, 234)
+                    .addText("日期：" + date, 34, 0, 282);
+                int y = 336;
                 for (String line : productLines) {
-                    builder.addText(line, 40, 0, y);
-                    y += 48;
+                    builder.addText(line, 34, 0, y);
+                    y += 42;
                 }
                 Bitmap label = builder
-                    .addText("穴号：" + cavityNo, 40, 0, y + 12)
+                    .addText("穴号：" + cavityNo, 34, 0, y + 16)
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 
