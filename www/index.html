@@ -158,24 +158,12 @@
       <div class="barcode-no" id="batch-no-text"></div>
     </div>
     <div class="status" id="print-status" style="display:none"></div>
-    <div id="print-btns" style="display:none; margin-top:10px">
-      <div class="btn-row">
-        <button class="btn btn-green" onclick="doPrint(1)">打印 1 张</button>
-        <button class="btn btn-green" onclick="doPrint(3)">打印 3 张</button>
-        <button class="btn btn-green" onclick="doPrint(5)">打印 5 张</button>
-      </div>
-      <button class="btn btn-gray" onclick="toggleBatchList()" id="switch-batch-btn" style="margin-top:6px">
-        切换批次 ▾
-      </button>
-    </div>
-    <!-- 批次选择列表，点击后收起 -->
-    <div id="batch-list" style="display:none; margin-top:8px"></div>
 
-    <!-- ── 本组穴号批次（开机按穴号拆分后，扫机器码可整组补打标签）── -->
+    <!-- ── 当前机器批次标签（扫机器码：按穴号拆分则为同组全部子批次，否则为该批次自身；各打一张）── -->
     <div id="group-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
-      <div class="card-title">本组穴号批次</div>
+      <div class="card-title">当前机器批次标签</div>
       <div id="group-body" style="margin-bottom:8px"></div>
-      <button class="btn btn-green" onclick="doPrintGroup()">打印整组（<span id="group-count">0</span> 张）</button>
+      <button class="btn btn-green" onclick="doPrintGroup()">打印标签（<span id="group-count">0</span> 张）</button>
     </div>
 
     <!-- ── 流程推进（表单按流程定义动态渲染）── -->
@@ -336,7 +324,7 @@ function show(id) { const el = document.getElementById(id); if(el) el.style.disp
 
 function resetScanUI() {
   hide('machine-card'); hide('batch-card');
-  hide('barcode-wrap'); hide('print-btns'); hide('print-status'); hide('advance-wrap');
+  hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('advance-wrap');
   _selIdx = -1; _advTransitions = []; _formValues = {}; _scanTarget = null;
   setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
   log('扫描界面已重置', 'info');
@@ -383,7 +371,7 @@ Events.on('scanner:log',    ({ msg, type }) => log(msg, type || 'plain'));
 
 // ── 机器 / 批次事件 ───────────────────────────────────────────────────────────
 Events.on('machine:loading', ({ code }) => {
-  // 重置上次结果，防止 doPrint() 使用旧批次
+  // 重置上次结果，防止 doPrintGroup() 使用旧批次
   _currentBatch = null; _currentMachine = null;
   _groupBatches = [];
   setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
@@ -405,7 +393,7 @@ Events.on('machine:loaded', ({ machine: m }) => {
   show('batch-card');
   document.getElementById('batch-body').innerHTML =
     '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次查询中…</div>';
-  hide('barcode-wrap'); hide('print-btns'); hide('print-status');
+  hide('barcode-wrap'); hide('group-wrap'); hide('print-status');
   setStatus('scan-hint', '机器 ' + m.code + '，获取批次…', 'info');
   log('机器：' + m.code + ' status=' + m.status, 'ok');
 });
@@ -430,7 +418,7 @@ Events.on('batch:loaded', ({ batch, machine }) => {
 Events.on('batch:none', ({ machine }) => {
   document.getElementById('batch-body').innerHTML =
     '<div style="color:#8e8e93;font-size:14px;padding:4px 0">暂无批次记录</div>';
-  hide('barcode-wrap'); hide('print-btns');
+  hide('barcode-wrap'); hide('group-wrap');
   setStatus('scan-hint', '机器 ' + machine.code + ' 暂无批次', 'warn');
   log('机器 ' + machine.code + ' 暂无批次', 'warn');
 });
@@ -442,18 +430,17 @@ Events.on('batch:error', ({ msg }) => {
     `<div style="color:#991b1b;font-size:14px;padding:4px 0">${msg}</div>`;
 });
 
-// 扫机器码：当前批次按穴号拆分过，显示整组（供补打全部穴号标签）
+// 扫机器码：打印这一炉的全部标签（按穴号拆分过则为同组全部子批次，否则就是这一个批次）
 Events.on('batch:group', ({ batches }) => {
   _groupBatches = batches;
-  if (batches.length <= 1) { hide('group-wrap'); return; }
   document.getElementById('group-body').innerHTML = batches.map(b => `
     <div class="info-row">
-      <span class="lbl">${b.cavity_no ? '穴号 ' + b.cavity_no : '—'}</span>
+      <span class="lbl">${b.cavity_no ? '穴号 ' + b.cavity_no : '批次'}</span>
       <span class="val" style="font-family:monospace">${b.batch_no}</span>
     </div>`).join('');
   document.getElementById('group-count').textContent = String(batches.length);
   show('group-wrap');
-  log(`本组穴号批次：${batches.length} 个`, 'info');
+  log(`本炉标签：${batches.length} 个`, 'info');
 });
 
 // ── 打印机事件 ────────────────────────────────────────────────────────────────
@@ -509,93 +496,7 @@ function renderBatch(batch, isNew) {
     </div>`;
   JsBarcode('#batch-barcode', batch.batch_no, { format:'CODE128', width:2, height:52, displayValue:false, margin:6 });
   document.getElementById('batch-no-text').textContent = batch.batch_no;
-  show('barcode-wrap'); show('print-btns');
-}
-
-// ── 切换批次 ──────────────────────────────────────────────────────────────────
-let _batchListOpen = false;
-
-async function toggleBatchList() {
-  const el  = document.getElementById('batch-list');
-  const btn = document.getElementById('switch-batch-btn');
-  if (_batchListOpen) {
-    _batchListOpen = false;
-    el.style.display = 'none';
-    btn.textContent = '切换批次 ▾';
-    return;
-  }
-  if (!_currentMachine) return;
-  _batchListOpen = true;
-  btn.textContent = '切换批次 ▴';
-  el.style.display = '';
-  el.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">加载中…</div>';
-
-  try {
-    const list = await API.getBatchesByMachine(_currentMachine.id);
-    if (!list.length) {
-      el.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">暂无批次记录</div>';
-      return;
-    }
-    el.innerHTML = list.map(b => {
-      const isActive = _currentBatch && b.batch_no === _currentBatch.batch_no;
-      const statusLabel = BATCH_STATUS[b.status] || b.status;
-      const statusCls   = BATCH_STATUS_CLS[b.status] || '';
-      return `
-        <div onclick="selectBatch(${JSON.stringify(b.batch_no)})"
-          style="display:flex;justify-content:space-between;align-items:center;
-                 padding:10px 10px;border-radius:8px;margin-bottom:4px;cursor:pointer;
-                 background:${isActive ? '#e8f4fd' : '#f9f9f9'};
-                 border:1px solid ${isActive ? '#007aff' : '#e5e5ea'}">
-          <span style="font-family:monospace;font-size:13px;${isActive ? 'color:#007aff;font-weight:600' : ''}">
-            ${b.batch_no}
-          </span>
-          <span class="badge ${statusCls}" style="flex-shrink:0;margin-left:8px">${statusLabel}</span>
-        </div>`;
-    }).join('');
-  } catch(e) {
-    el.innerHTML = `<div style="color:#991b1b;font-size:13px;padding:6px 0">加载失败：${e.message}</div>`;
-    log('批次列表加载失败：' + e.message, 'err');
-  }
-}
-
-async function selectBatch(batchNo) {
-  if (!_currentMachine) return;
-  try {
-    const batch = await API.getBatchByNo(batchNo);
-    _currentBatch = batch;
-    renderBatch(batch, false);
-    setStatus('scan-hint', `已切换：${batch.batch_no}`, 'ok');
-    log('手动切换批次：' + batch.batch_no, 'ok');
-    // 收起列表
-    _batchListOpen = true; // toggleBatchList 会把它翻转为 false
-    toggleBatchList();
-  } catch(e) {
-    log('切换批次失败：' + e.message, 'err');
-  }
-}
-
-async function doPrint(count) {
-  if (!_currentBatch || !_currentMachine) return;
-  setStatus('print-status', '就绪检测中…', 'info');
-  show('print-status');
-  try {
-    // 日期从批次码中直接提取，格式 YYMMDD，位于第 4~9 位
-    // 例：M05260604030012 → 260604
-    const p = {
-      batchNo:     _currentBatch.batch_no,
-      machineId:   _currentMachine.code,
-      productType: _currentBatch.product_name,         // 批次自带，不依赖机器当前状态
-      date:        _currentBatch.batch_no.slice(3, 9), // 批次创建当日的 YYMMDD
-    };
-    await Printer.printBatches(p, count, (cur, total) => {
-      setStatus('print-status', `打印第 ${cur} / ${total} 张…`, 'info');
-    });
-    setStatus('print-status', `打印完成（共 ${count} 张）`, 'ok');
-    log(`打印 ${count} 张：${_currentBatch.batch_no}`, 'ok');
-  } catch(e) {
-    setStatus('print-status', '打印失败：' + e.message, 'err');
-    log('打印失败：' + e.message, 'err');
-  }
+  show('barcode-wrap');
 }
 
 /**
@@ -624,7 +525,7 @@ async function doPrintBatches(batchNos) {
   }
 }
 
-/** 整组补打：把本组全部穴号子批次的标签各打一张 */
+/** 本炉标签打印：扫机器码时，把当前这一炉（按穴号拆分则为全部子批次，否则为这一个批次）各打一张 */
 async function doPrintGroup() {
   if (!_groupBatches.length) return;
   await doPrintBatches(_groupBatches.map(b => b.batch_no));

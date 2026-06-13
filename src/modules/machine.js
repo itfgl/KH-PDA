@@ -7,14 +7,14 @@
  *   1. 查机器详情（GET /api/machines/code/{code}）→ machine:loaded
  *   2. 若有 latest_batch_no → 查批次详情（GET /api/batches/{no}）→ batch:loaded
  *   3. 若没有批次 → batch:none
- *   批次创建由 BatchEntryPage 负责，此处不自动创建。
+ *   批次创建在 Web 端「模具上机/开机」完成，此处不自动创建。
  *
  * 发出的事件：
  *   machine:loading  { code }
  *   machine:loaded   { machine }
  *   machine:error    { msg }
  *   batch:loaded     { batch, machine }
- *   batch:group      { batches }  扫机器码时，当前批次按穴号拆分出的全部子批次（无拆分则不发）
+ *   batch:group      { batches }  仅扫机器码时发出：按穴号拆分过则为同组全部子批次，否则为该批次自身（长度1）
  *   batch:none       { machine }
  *   batch:error      { msg }
  */
@@ -79,11 +79,9 @@ async function handleCode(raw) {
       batch = await getBatchByNo(machine.latest_batch_no);
       emit('batch:loaded', { batch, machine });
 
-      // 开机按穴号拆分过：取同组全部子批次，供整组补打标签
-      if (batch.parent_batch_no) {
-        const group = await getBatchesByParent(batch.parent_batch_no);
-        if (group.length) emit('batch:group', { batches: group });
-      }
+      // 扫机器码＝打印这一炉的全部标签：按穴号拆分过取同组子批次，否则就是这一个批次
+      const group = batch.parent_batch_no ? await getBatchesByParent(batch.parent_batch_no) : [batch];
+      emit('batch:group', { batches: group });
     }
   } catch(e) {
     emit('machine:error', { msg: e.message });

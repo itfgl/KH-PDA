@@ -79,19 +79,9 @@ export const getMachineById = (id) =>
 export const getBatchByNo = (batchNo) =>
   apiFetch('/api/batches/' + encodeURIComponent(batchNo));
 
-/** 查某台机器的最近批次列表（按创建时间倒序） */
-export const getBatchesByMachine = (machineId) =>
-  apiFetch('/api/batches?machine_id=' + machineId);
-
 /** 查同一开机批次按穴号拆分出的全部子批次 */
 export const getBatchesByParent = (parentBatchNo) =>
   apiFetch('/api/batches?parent_batch_no=' + encodeURIComponent(parentBatchNo));
-
-export const createBatch = ({ machine_id, product_type, product_name }) =>
-  apiFetch('/api/batches', {
-    method: 'POST',
-    body: JSON.stringify({ machine_id, product_type, product_name }),
-  });
 
 /** 查批次当前流程状态（活跃节点 + 可触发事件） */
 export const getProcessState = (batchNo) =>
