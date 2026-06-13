@@ -69,6 +69,22 @@ export async function fetchMe() {
   return user;
 }
 
+/** 角色列表（用于「代办批次」的模拟角色筛选） */
+export const getRoles = () => apiFetch('/api/roles');
+
+/**
+ * 代办批次列表：按模拟角色 / 机器筛选。
+ * @param {{ responsible?: string, machine_id?: number, include_simulation?: boolean }} params
+ */
+export function getTodoBatches({ responsible, machine_id, include_simulation } = {}) {
+  const q = new URLSearchParams();
+  if (responsible) q.set('responsible', responsible);
+  if (machine_id != null) q.set('machine_id', String(machine_id));
+  if (include_simulation) q.set('include_simulation', 'true');
+  const qs = q.toString();
+  return apiFetch('/api/batches/todos' + (qs ? '?' + qs : ''));
+}
+
 export const getMachineByCode = (code) =>
   apiFetch('/api/machines/code/' + encodeURIComponent(code));
 

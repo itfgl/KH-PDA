@@ -53,6 +53,24 @@ function isBatchNo(code) {
   return code.length >= 10;
 }
 
+/** 按批次码直接加载批次（如「代办批次」列表点击「去操作」），与扫批次码路径一致 */
+async function loadBatchCode(code) {
+  const batch   = await getBatchByNo(code);
+  const machine = await getMachineById(batch.machine_id);
+  emit('machine:loaded', { machine });
+  emit('batch:loaded', { batch, machine });
+}
+
+/** 「代办批次」列表点击「去操作」入口 */
+export async function loadBatchByNo(batchNo) {
+  emit('machine:loading', { code: batchNo });
+  try {
+    await loadBatchCode(batchNo);
+  } catch(e) {
+    emit('machine:error', { msg: e.message });
+  }
+}
+
 async function handleCode(raw) {
   const code = normalizeCode(raw);
   emit('machine:loading', { code });
@@ -62,10 +80,7 @@ async function handleCode(raw) {
 
     if (isBatchNo(code)) {
       // ── 批次码路径（扫码枪扫批次标签）────────────────────────────────
-      batch   = await getBatchByNo(code);
-      machine = await getMachineById(batch.machine_id);
-      emit('machine:loaded', { machine });
-      emit('batch:loaded', { batch, machine });
+      await loadBatchCode(code);
     } else {
       // ── 机器码路径（PDA 扫机器 NFC 或机器条码）────────────────────────
       machine = await getMachineByCode(code);

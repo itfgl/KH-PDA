@@ -154,6 +154,7 @@
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('scan')">扫描</button>
+  <button class="tab-btn"        onclick="switchTab('todo')">代办</button>
   <button class="tab-btn"        onclick="switchTab('setup')">绑定 NFC</button>
   <button class="tab-btn"        onclick="switchTab('debug')">调试</button>
 </div>
@@ -215,6 +216,34 @@
       <div class="status" id="advance-status" style="display:none; margin-top:8px"></div>
     </div>
   </div>
+</div>
+
+<!-- ══ 代办批次页 ══ -->
+<div class="page" id="page-todo">
+  <div class="card">
+    <div class="card-title-row">
+      <span class="card-title">代办批次</span>
+      <button class="btn-sm btn-gray" onclick="loadTodos()">刷新</button>
+    </div>
+    <div class="field">
+      <label>模拟角色</label>
+      <select id="todo-role" onchange="loadTodos()">
+        <option value="">请选择要模拟的角色</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>机器</label>
+      <select id="todo-machine" onchange="loadTodos()">
+        <option value="">全部机器</option>
+      </select>
+    </div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8e8e93;cursor:pointer">
+      <input type="checkbox" id="todo-sim" onchange="loadTodos()" style="width:16px;height:16px;margin:0">
+      显示模拟批次
+    </label>
+  </div>
+  <div class="status info" id="todo-hint"></div>
+  <div id="todo-list"></div>
 </div>
 
 <!-- ══ 绑定 NFC 页 ══ -->
@@ -327,7 +356,7 @@ document.getElementById('build-info').textContent =
 const { Events, API, Printer, Scanner, NFC, Machine } = window;
 
 // ── Tab 切换 ──────────────────────────────────────────────────────────────────
-const TABS = ['scan', 'setup', 'debug'];
+const TABS = ['scan', 'todo', 'setup', 'debug'];
 function switchTab(name) {
   TABS.forEach((t, i) => {
     document.querySelectorAll('.tab-btn')[i].classList.toggle('active', t === name);
@@ -335,6 +364,7 @@ function switchTab(name) {
   });
   if (name === 'debug') refreshDebug();
   if (name === 'setup') loadMachineList();
+  if (name === 'todo') loadTodoFilters();
   // 离开扫描页：重置扫码枪状态
   if (name !== 'scan') { Scanner.reset(); }
   // 进入扫描页：恢复默认提示
@@ -637,6 +667,8 @@ function fieldInput(key) { return document.querySelector(`[data-fkey="${_esc(key
 
 // 上传文件名是否为图片（按扩展名判断；存储名形如 <uuid>_<原文件名>，扩展名保留）
 function _isImageFile(name) { return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(name || ''); }
+// 展示信息里的字段值是否为 /api/events/upload 生成的图片文件名（<32位hex>_<原文件名>），区分普通文本
+function _isUploadedImage(val) { return typeof val === 'string' && /^[0-9a-f]{32}_.+\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(val); }
 // 拼出已上传文件的预览/下载地址
 function _fileUrl(filename) {
   return SERVER_BASE + '/api/events/files/' + encodeURIComponent(_currentBatch.batch_no) + '/' + encodeURIComponent(filename);
@@ -707,10 +739,14 @@ function renderAdvance(nodes) {
   // 节点展示信息（流程定义 display 表达式，服务端已求值）
   const displayRows = nodes.flatMap(n => n.display || [])
     .filter(d => d.value !== null && d.value !== undefined && d.value !== '');
-  document.getElementById('advance-display').innerHTML = displayRows.map(d => `
-    <div class="info-row" style="padding:6px 0">
-      <span class="lbl">${d.label}</span><span class="val">${d.value}</span>
-    </div>`).join('');
+  document.getElementById('advance-display').innerHTML = displayRows.map(d => {
+    const valHtml = _isUploadedImage(d.value)
+      ? `<a href="${_fileUrl(d.value)}" target="_blank"><img src="${_fileUrl(d.value)}" alt="" style="display:block;max-width:100%;max-height:160px;border-radius:8px;border:1px solid #d1d1d6;margin-top:4px;object-fit:contain"></a>`
+      : d.value;
+    return `<div class="info-row" style="padding:6px 0">
+      <span class="lbl">${d.label}</span><span class="val">${valHtml}</span>
+    </div>`;
+  }).join('');
 
   // 展平多轨道的可触发事件（waiting_join 的轨道服务端不下发事件）
   _advTransitions = nodes.flatMap(n => n.valid_transitions.map(t => ({
@@ -1080,6 +1116,119 @@ async function setupWrite() {
     setStatus('setup-hint', '写入失败：' + e.message, 'err');
     document.getElementById('s-write-btn').disabled = false;
   }
+}
+
+// ── 代办批次页 ────────────────────────────────────────────────────────────────
+let _todoFiltersLoaded = false;
+let _todoMachines = [];
+
+/** 进入「代办」标签时拉一次角色 + 机器列表（仅首次），并加载代办 */
+async function loadTodoFilters() {
+  if (_todoFiltersLoaded) { loadTodos(); return; }
+  _todoFiltersLoaded = true;
+
+  const roleSel = document.getElementById('todo-role');
+  try {
+    const roles = await API.getRoles();
+    const cu = API.getCurrentUser();
+    roleSel.innerHTML = '<option value="">请选择要模拟的角色</option>' +
+      roles.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
+    if (cu && cu.role && roles.some(r => r.name === cu.role)) roleSel.value = cu.role;
+  } catch(e) {
+    log('角色列表加载失败：' + e.message, 'err');
+  }
+
+  const machineSel = document.getElementById('todo-machine');
+  try {
+    _todoMachines = await API.apiFetch('/api/machines');
+    machineSel.innerHTML = '<option value="">全部机器</option>' +
+      _todoMachines.map(m => `<option value="${m.id}">${m.code} ${m.name}</option>`).join('');
+  } catch(e) {
+    log('机器列表加载失败：' + e.message, 'err');
+  }
+
+  loadTodos();
+}
+
+async function loadTodos() {
+  const role = document.getElementById('todo-role').value;
+  const machineId = document.getElementById('todo-machine').value;
+  const includeSim = document.getElementById('todo-sim').checked;
+  const hint = document.getElementById('todo-hint');
+  const list = document.getElementById('todo-list');
+
+  hint.textContent = role ? `正在模拟「${role}」角色` : '请选择要模拟的角色';
+  hint.className = 'status info';
+  list.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:20px 0;text-align:center">加载中…</div>';
+
+  try {
+    const items = await API.getTodoBatches({
+      responsible: role || undefined,
+      machine_id: machineId ? Number(machineId) : undefined,
+      include_simulation: includeSim,
+    });
+    renderTodos(items, role);
+  } catch(e) {
+    list.innerHTML = `<div style="color:#991b1b;font-size:13px;padding:20px 0;text-align:center">加载失败：${e.message}</div>`;
+    log('代办批次加载失败：' + e.message, 'err');
+  }
+}
+
+function renderTodos(items, role) {
+  const list = document.getElementById('todo-list');
+  if (!items.length) {
+    list.innerHTML = `<div style="color:#8e8e93;font-size:13px;padding:20px 0;text-align:center">` +
+      (role ? `当前没有「${role}」的待办批次` : '请选择要模拟的角色') + `</div>`;
+    return;
+  }
+
+  const machineMap = Object.fromEntries(_todoMachines.map(m => [m.id, m]));
+
+  list.innerHTML = items.map(item => {
+    const statusLabel = BATCH_STATUS[item.status] || item.status;
+    const statusCls   = BATCH_STATUS_CLS[item.status] || '';
+    const m = machineMap[item.machine_id];
+    const machineText = item.machine_name
+      ? `${item.machine_code || ''} ${item.machine_name}`.trim()
+      : (m ? `${m.code} ${m.name}` : `机器 ${item.machine_id}`);
+
+    const nodesHtml = item.active_nodes.map(node => `
+      <div style="border:1px solid #e5e5ea;border-radius:8px;padding:8px 10px;background:#f9f9fb;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+          <div style="font-size:13px;font-weight:700">
+            ${node.node_name}${node.track_key ? ` <span style="color:#007aff;font-size:11px">${node.track_key}</span>` : ''}
+          </div>
+          <div style="font-size:11px;color:#8e8e93;white-space:nowrap">
+            ${new Date(node.entered_at).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}
+          </div>
+        </div>
+        <div style="font-size:12px;color:#8e8e93;margin-top:2px">${node.responsible} · ${node.transition_count} 个可用动作</div>
+      </div>`).join('');
+
+    return `
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="min-width:0">
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+              <span style="font-family:monospace;font-weight:700">${item.batch_no}</span>
+              <span class="badge" style="background:#007aff;color:#fff">${item.todo_count} 项待办</span>
+              ${item.is_simulation ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:10px">模拟</span>' : ''}
+            </div>
+            <div style="font-size:13px;font-weight:600;margin-top:4px">${item.product_name}</div>
+            <div style="font-size:12px;color:#8e8e93;margin-top:4px">${machineText} · ${item.matched_responsible}</div>
+          </div>
+          <span class="badge ${statusCls}" style="flex-shrink:0">${statusLabel}</span>
+        </div>
+        <div style="margin-top:10px">${nodesHtml}</div>
+        <button class="btn btn-blue btn-sm" style="margin-top:4px" onclick="openTodoBatch('${item.batch_no}')">去操作</button>
+      </div>`;
+  }).join('');
+}
+
+/** 「去操作」：切到扫描页并按批次码直接加载（与扫批次标签效果一致）*/
+async function openTodoBatch(batchNo) {
+  switchTab('scan');
+  await Machine.loadBatchByNo(batchNo);
 }
 
 
