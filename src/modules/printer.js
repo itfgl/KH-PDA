@@ -67,10 +67,10 @@ export async function reset() {
  * 打印批次标签（一维码），处理完整的多张打印流程。
  *
  * 流程：
- *   prepareToPrintLabel → PREPARE_LABEL_OK
- *     → printBatchLabel → PRINT_OK
- *     → checkBlack → PREPARE_LABEL_OK（若还有下一张）
- *     → ... 循环
+ *   printBatchLabel → PRINT_OK
+ *     → checkBlack → PREPARE_LABEL_OK
+ *     → ... 循环（每张打完都走纸，含最后一张，使打印机停在下一张空白标签起始位，
+ *               避免下次打印时位置错位、错位内容溢到上一张标签上造成空白页）
  *
  * @param {{ batchNo, machineId, productType, date }} params
  *   - batchNo     15位批次码
@@ -90,12 +90,10 @@ export async function printBatches(params, count = 1, onProgress) {
     await _plugin.printBatchLabel(params);
     await pPrint;
 
-    // 最后一张不需要走纸
-    if (i < count - 1) {
-      const pNext = waitPrintStatus('PREPARE_LABEL_OK');
-      await _plugin.checkBlack();
-      await pNext;
-    }
+    // 每张打完都走纸到下一张标签起始位，确保下一次打印（同批或下一批）位置正确
+    const pNext = waitPrintStatus('PREPARE_LABEL_OK');
+    await _plugin.checkBlack();
+    await pNext;
   }
 }
 
@@ -122,12 +120,10 @@ export async function printBatchList(list, onProgress) {
     await _plugin.printBatchLabel(list[i]);
     await pPrint;
 
-    // 最后一张不需要走纸
-    if (i < total - 1) {
-      const pNext = waitPrintStatus('PREPARE_LABEL_OK');
-      await _plugin.checkBlack();
-      await pNext;
-    }
+    // 每张打完都走纸到下一张标签起始位，确保下一次打印（同批或下一批）位置正确
+    const pNext = waitPrintStatus('PREPARE_LABEL_OK');
+    await _plugin.checkBlack();
+    await pNext;
   }
 }
 

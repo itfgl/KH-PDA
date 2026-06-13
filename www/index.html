@@ -374,6 +374,7 @@ Events.on('machine:loading', ({ code }) => {
   // 重置上次结果，防止 doPrintGroup() 使用旧批次
   _currentBatch = null; _currentMachine = null;
   _groupBatches = [];
+  _isMachineScan = false;
   setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
   hide('machine-card'); hide('batch-card'); hide('group-wrap');
   stopCamera(); // 任何方式识别到机器码后停相机
@@ -432,6 +433,7 @@ Events.on('batch:error', ({ msg }) => {
 
 // 扫机器码：打印这一炉的全部标签（按穴号拆分过则为同组全部子批次，否则就是这一个批次）
 Events.on('batch:group', ({ batches }) => {
+  _isMachineScan = true;
   _groupBatches = batches;
   document.getElementById('group-body').innerHTML = batches.map(b => `
     <div class="info-row">
@@ -467,6 +469,7 @@ Events.on('printer:status', ({ connection, status, error }) => {
 let _currentBatch   = null;
 let _currentMachine = null;
 let _groupBatches   = []; // 当前批次按穴号拆分出的同组子批次（扫机器码时填充）
+let _isMachineScan  = false; // 本次是否为扫机器码（true 时隐藏「批次推进」，只显示整批标签打印）
 
 // 批次状态映射
 const BATCH_STATUS     = { created:'已创建', inspecting:'质检中', done:'已完成', failed:'已失败' };
@@ -590,7 +593,8 @@ async function loadProcessState(batchNo) {
 
   try {
     const ps = await API.getProcessState(batchNo);
-    if (ps.is_terminal || !ps.active_nodes.length) return; // 已完成，不显示推进区块
+    // 已完成 / 扫机器码（只看「当前机器批次标签」整批打印，不展示单个穴号子批次的推进）时不显示推进区块
+    if (ps.is_terminal || !ps.active_nodes.length || _isMachineScan) return;
     renderAdvance(ps.active_nodes);
     show('advance-wrap');
     hide('advance-status');
