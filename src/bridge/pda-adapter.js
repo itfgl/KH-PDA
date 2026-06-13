@@ -114,18 +114,19 @@ export const PrintPlugin = {
   /**
    * 批次标签（一维码）
    * 与 PrintPlugin.java 的 printBatchLabel 布局一致：
-   *   384×240  一维码(10,0 364×80)  批次码文字(10,96)  机器/日期(10,124)  品类(10,152)
+   *   384×460  一维码(10,0 364×160)  批次码文字(0,190)  机器/日期(0,252)  品类(0,312)  穴号(0,372)
    */
-  async printBatchLabel({ batchNo, machineId = '', productType = '', date = '' }) {
+  async printBatchLabel({ batchNo, machineId = '', productType = '', cavityNo = '', date = '' }) {
     _send({
       name: 'printBmpLabel',
-      width: 384, height: 240, top: 8, concentration: 15,
+      width: 384, height: 460, top: 8, concentration: 15,
       data: [
         { printType: 1, text: batchNo,
-          desiredWidth: 364, desiredHeight: 80, displayCode: false, left: 10, top: 0 },
-        { printType: 0, text: batchNo,                           textSize: 22, x: 10, y: 96  },
-        { printType: 0, text: `机器：${machineId}  日期：${date}`, textSize: 20, x: 10, y: 124 },
-        { printType: 0, text: `品类：${productType}`,             textSize: 20, x: 10, y: 152 },
+          desiredWidth: 364, desiredHeight: 160, displayCode: false, left: 10, top: 0 },
+        { printType: 0, text: batchNo,                           textSize: 44, x: 0, y: 190 },
+        { printType: 0, text: `机器：${machineId}  日期：${date}`, textSize: 40, x: 0, y: 252 },
+        { printType: 0, text: `品类：${productType}`,             textSize: 40, x: 0, y: 312 },
+        { printType: 0, text: `穴号：${cavityNo}`,                textSize: 40, x: 0, y: 372 },
       ],
     });
   },

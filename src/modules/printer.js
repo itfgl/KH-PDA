@@ -78,8 +78,9 @@ export async function reset() {
  *   - date        YYMMDD（从批次码中提取：batchNo.slice(3,9)）
  * @param {number} [count=1]  打印张数
  * @param {function} [onProgress]  进度回调 (current, total) => void
+ * @param {function} [afterEach]  每张成功后的暂停回调 (current, total, params) => Promise<void>
  */
-export async function printBatches(params, count = 1, onProgress) {
+export async function printBatches(params, count = 1, onProgress, afterEach) {
   if (!_plugin) throw new Error('打印机未初始化');
   if (!_connected) throw new Error('打印机未连接，请先重连');
 
@@ -88,6 +89,7 @@ export async function printBatches(params, count = 1, onProgress) {
     const pPrint = waitPrintStatus('PRINT_OK');
     await _plugin.printBatchLabel(params);
     await pPrint;
+    if (i < count - 1) await afterEach?.(i + 1, count, params);
   }
 }
 
@@ -104,8 +106,9 @@ export async function printBatch(params) {
  *
  * @param {Array<{batchNo,machineId,productType,date}>} list  每张标签的参数
  * @param {function} [onProgress]  进度回调 (current, total, params) => void
+ * @param {function} [afterEach]  每张成功后的暂停回调 (current, total, params) => Promise<void>
  */
-export async function printBatchList(list, onProgress) {
+export async function printBatchList(list, onProgress, afterEach) {
   if (!_plugin) throw new Error('打印机未初始化');
   if (!_connected) throw new Error('打印机未连接，请先重连');
 
@@ -115,6 +118,7 @@ export async function printBatchList(list, onProgress) {
     const pPrint = waitPrintStatus('PRINT_OK');
     await _plugin.printBatchLabel(list[i]);
     await pPrint;
+    if (i < total - 1) await afterEach?.(i + 1, total, list[i]);
   }
 }
 

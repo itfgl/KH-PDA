@@ -129,13 +129,14 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 批次标签（一维码）
-     * 布局 384×240：条码 80高，下方批次码 + 机器/日期/品类
+     * 布局 384×460：条码高度与文字字号约为旧版 2 倍，下方批次码 + 机器/日期/品类/穴号
      */
     @PluginMethod
     public void printBatchLabel(PluginCall call) {
         String batchNo     = call.getString("batchNo", "");
         String machineId   = call.getString("machineId", "");
         String productType = call.getString("productType", "");
+        String cavityNo    = call.getString("cavityNo", "");
         String date        = call.getString("date", "");
 
         if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
@@ -144,15 +145,16 @@ public class PrintPlugin extends Plugin {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
                 Bitmap barcode = BarcodeCreater.createBarcode(
-                    getContext(), batchNo, 364, 80, false, 1
+                    getContext(), batchNo, 364, 160, false, 1
                 );
                 if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
-                Bitmap label = new AbsoluteLayoutBitmap(384, 240)
+                Bitmap label = new AbsoluteLayoutBitmap(384, 460)
                     .addBmp(barcode, 10, 0)
-                    .addText(batchNo, 22, 10, 96)
-                    .addText("机器：" + machineId + "  日期：" + date, 20, 10, 124)
-                    .addText("品类：" + productType, 20, 10, 152)
+                    .addText(batchNo, 44, 0, 190)
+                    .addText("机器：" + machineId + "  日期：" + date, 40, 0, 252)
+                    .addText("品类：" + productType, 40, 0, 312)
+                    .addText("穴号：" + cavityNo, 40, 0, 372)
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 

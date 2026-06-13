@@ -26,6 +26,14 @@
                   letter-spacing: .4px; margin-bottom: 10px; }
     .card-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .card-title-row .card-title { margin-bottom: 0; }
+    .collapse-toggle { border: none; background: #f2f2f7; color: #007aff; border-radius: 7px;
+                       padding: 5px 9px; font-size: 12px; font-weight: 700; }
+    .collapsible-body.is-collapsed { display: none; }
+    .summary-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .summary-pill { display: inline-flex; align-items: center; min-height: 26px; padding: 4px 8px;
+                    border-radius: 8px; background: #f2f2f7; color: #3a3a3c; font-size: 12px;
+                    font-weight: 600; max-width: 100%; }
+    .summary-pill.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #1e40af; background: #dbeafe; }
 
     .status { padding: 10px 12px; border-radius: 8px; font-size: 14px; min-height: 40px;
               background: #f2f2f7; color: #3a3a3c; margin-bottom: 10px; line-height: 1.5; }
@@ -67,6 +75,21 @@
     .badge-inspecting { background: #fef3c7; color: #92400e; }
     .badge-done       { background: #d1fae5; color: #065f46; }
     .badge-failed     { background: #fee2e2; color: #991b1b; }
+    .multi-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+                        gap: 6px; }
+    .field .multi-check-item { display: flex; align-items: center; gap: 6px; min-height: 34px;
+                               padding: 6px 8px; border: 1px solid #e5e5ea; border-radius: 8px;
+                               background: #f9f9fb; font-size: 13px; font-weight: 600; color: #1c1c1e;
+                               margin-bottom: 0; }
+    .multi-check-item input { width: 16px; height: 16px; flex: 0 0 auto; }
+    .todo-group { border: 1px solid #e5e5ea; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
+    .todo-group-head { display: flex; justify-content: space-between; align-items: center;
+                       padding: 8px 10px; background: #f2f2f7; font-size: 13px; font-weight: 700; }
+    .todo-count { color: #8e8e93; font-size: 12px; font-weight: 600; }
+    .transition-btn { display:block;width:100%;padding:10px 12px;border:0;border-top:1px solid #e5e5ea;
+                      background:#fff;text-align:left;cursor:pointer;font-size:14px;font-weight:600;color:#1c1c1e; }
+    .transition-btn.is-active { background:#e8f4fd;color:#007aff; }
+    .transition-meta { font-size:11px;color:#8e8e93;margin-top:2px;font-weight:500; }
 
     .barcode-wrap { text-align: center; padding: 8px 0; }
     .barcode-wrap svg { max-width: 100%; }
@@ -146,16 +169,26 @@
   <div class="status" id="scan-hint">靠近机器 NFC 标签 / 扫描条码</div>
 
   <div class="card" id="machine-card" style="display:none">
-    <div class="card-title">机器信息</div>
-    <div id="machine-body"></div>
+    <div class="card-title-row">
+      <span class="card-title">机器信息</span>
+      <button class="collapse-toggle" id="machine-toggle" onclick="toggleSection('machine-body','machine-toggle')">展开</button>
+    </div>
+    <div id="machine-summary" class="summary-pills"></div>
+    <div id="machine-body" class="collapsible-body is-collapsed"></div>
   </div>
 
   <div class="card" id="batch-card" style="display:none">
-    <div class="card-title">批次</div>
-    <div id="batch-body"></div>
-    <div class="barcode-wrap" id="barcode-wrap" style="display:none">
-      <svg id="batch-barcode"></svg>
-      <div class="barcode-no" id="batch-no-text"></div>
+    <div class="card-title-row">
+      <span class="card-title">批次信息</span>
+      <button class="collapse-toggle" id="batch-toggle" onclick="toggleSection('batch-info-wrap','batch-toggle')">展开</button>
+    </div>
+    <div id="batch-summary" class="summary-pills"></div>
+    <div id="batch-info-wrap" class="collapsible-body is-collapsed">
+      <div id="batch-body"></div>
+      <div class="barcode-wrap" id="barcode-wrap" style="display:none">
+        <svg id="batch-barcode"></svg>
+        <div class="barcode-no" id="batch-no-text"></div>
+      </div>
     </div>
     <div class="status" id="print-status" style="display:none"></div>
 
@@ -165,10 +198,9 @@
       <div id="group-body" style="margin-bottom:8px"></div>
       <button class="btn btn-green" onclick="doPrintGroup()">打印标签（<span id="group-count">0</span> 张）</button>
     </div>
-
     <!-- ── 流程推进（表单按流程定义动态渲染）── -->
     <div id="advance-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
-      <div class="card-title">流程推进</div>
+      <div class="card-title">扫码后待办事项</div>
       <div id="advance-node" style="font-size:15px; font-weight:700; color:#1c1c1e; margin-bottom:2px"></div>
       <div id="advance-resp" style="font-size:12px; color:#8e8e93; margin-bottom:10px"></div>
       <div id="advance-display" style="margin-bottom:10px"></div>
@@ -321,11 +353,31 @@ function setStatus(id, msg, type = '') {
 }
 function hide(id) { const el = document.getElementById(id); if(el) el.style.display='none'; }
 function show(id) { const el = document.getElementById(id); if(el) el.style.display=''; }
+function toggleSection(bodyId, btnId) {
+  const body = document.getElementById(bodyId);
+  const btn = document.getElementById(btnId);
+  if (!body || !btn) return;
+  const collapsed = body.classList.toggle('is-collapsed');
+  btn.textContent = collapsed ? '展开' : '收起';
+}
+function collapseSection(bodyId, btnId) {
+  const body = document.getElementById(bodyId);
+  const btn = document.getElementById(btnId);
+  if (body) body.classList.add('is-collapsed');
+  if (btn) btn.textContent = '展开';
+}
+function pill(text, cls = '') {
+  return `<span class="summary-pill ${cls}">${text || '—'}</span>`;
+}
 
 function resetScanUI() {
   hide('machine-card'); hide('batch-card');
   hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('advance-wrap');
   _selIdx = -1; _advTransitions = []; _formValues = {}; _scanTarget = null;
+  document.getElementById('machine-summary').innerHTML = '';
+  document.getElementById('batch-summary').innerHTML = '';
+  collapseSection('machine-body', 'machine-toggle');
+  collapseSection('batch-info-wrap', 'batch-toggle');
   setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
   log('扫描界面已重置', 'info');
 }
@@ -381,6 +433,11 @@ Events.on('machine:loading', ({ code }) => {
   switchTab('scan');
 });
 Events.on('machine:loaded', ({ machine: m }) => {
+  document.getElementById('machine-summary').innerHTML = [
+    pill(m.name),
+    pill(m.code, 'code'),
+    `<span class="badge ${STATUS_CLS[m.status]}">${STATUS_MAP[m.status]}</span>`,
+  ].join('');
   document.getElementById('machine-body').innerHTML = `
     <div class="info-row"><span class="lbl">名称</span><span class="val">${m.name}</span></div>
     <div class="info-row"><span class="lbl">编号</span><span class="val">${m.code}</span></div>
@@ -389,11 +446,14 @@ Events.on('machine:loaded', ({ machine: m }) => {
     <div class="info-row"><span class="lbl">产品</span>
       <span class="val">${m.current_product_name ? m.current_product_name+'（'+m.current_product_type+'）' : '—'}</span></div>
   `;
+  collapseSection('machine-body', 'machine-toggle');
   show('machine-card');
   // 显示批次占位，等待 batch:loaded / batch:created / batch:none
   show('batch-card');
+  document.getElementById('batch-summary').innerHTML = pill('批次查询中…');
   document.getElementById('batch-body').innerHTML =
     '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次查询中…</div>';
+  collapseSection('batch-info-wrap', 'batch-toggle');
   hide('barcode-wrap'); hide('group-wrap'); hide('print-status');
   setStatus('scan-hint', '机器 ' + m.code + '，获取批次…', 'info');
   log('机器：' + m.code + ' status=' + m.status, 'ok');
@@ -417,6 +477,7 @@ Events.on('batch:loaded', ({ batch, machine }) => {
 
 // 无批次且不会自动创建（机器非运行状态）
 Events.on('batch:none', ({ machine }) => {
+  document.getElementById('batch-summary').innerHTML = pill('暂无批次记录');
   document.getElementById('batch-body').innerHTML =
     '<div style="color:#8e8e93;font-size:14px;padding:4px 0">暂无批次记录</div>';
   hide('barcode-wrap'); hide('group-wrap');
@@ -427,6 +488,7 @@ Events.on('batch:none', ({ machine }) => {
 Events.on('batch:error', ({ msg }) => {
   setStatus('scan-hint', '批次操作失败：' + msg, 'err');
   log('批次错误：' + msg, 'err');
+  document.getElementById('batch-summary').innerHTML = pill('批次操作失败');
   document.getElementById('batch-body').innerHTML =
     `<div style="color:#991b1b;font-size:14px;padding:4px 0">${msg}</div>`;
 });
@@ -470,6 +532,7 @@ let _currentBatch   = null;
 let _currentMachine = null;
 let _groupBatches   = []; // 当前批次按穴号拆分出的同组子批次（扫机器码时填充）
 let _isMachineScan  = false; // 本次是否为扫机器码（true 时隐藏「批次推进」，只显示整批标签打印）
+const PRINT_GAP_MS = 1500;
 
 // 批次状态映射
 const BATCH_STATUS     = { created:'已创建', inspecting:'质检中', done:'已完成', failed:'已失败' };
@@ -484,6 +547,12 @@ function renderBatch(batch, isNew) {
   show('batch-card');
   const statusLabel = BATCH_STATUS[batch.status] || batch.status;
   const statusCls   = BATCH_STATUS_CLS[batch.status] || '';
+  document.getElementById('batch-summary').innerHTML = [
+    pill(batch.batch_no, 'code'),
+    pill(batch.product_name),
+    `<span class="badge ${statusCls}">${statusLabel}</span>`,
+  ].join('');
+  collapseSection('batch-info-wrap', 'batch-toggle');
   document.getElementById('batch-body').innerHTML = `
     <div class="info-row">
       <span class="lbl">${isNew ? '新批次' : '最新批次'}</span>
@@ -506,32 +575,43 @@ function renderBatch(batch, isNew) {
  * 按批次码列表逐张打印（开机按穴号拆分后，每个穴号子批次打一张）。
  * 每张标签的批次码不同，product_name/日期沿用各自批次码推导。
  */
-async function doPrintBatches(batchNos) {
-  if (!_currentMachine || !batchNos || !batchNos.length) return;
+async function doPrintBatches(batchRefs) {
+  if (!_currentMachine || !batchRefs || !batchRefs.length) return;
   setStatus('print-status', '就绪检测中…', 'info');
   show('print-status');
   try {
-    const list = batchNos.map(bn => ({
-      batchNo:     bn,
+    const list = batchRefs.map(ref => {
+      const batch = typeof ref === 'string'
+        ? (_groupBatches.find(b => b.batch_no === ref) || (_currentBatch && _currentBatch.batch_no === ref ? _currentBatch : null))
+        : ref;
+      const batchNo = typeof ref === 'string' ? ref : ref.batch_no;
+      return {
+      batchNo,
       machineId:   _currentMachine.code,
       productType: _currentBatch ? _currentBatch.product_name : '',
-      date:        bn.slice(3, 9), // 子批次码前缀与父批次相同，第 4~9 位仍是 YYMMDD
-    }));
+      cavityNo:    batch && batch.cavity_no ? batch.cavity_no : '',
+      date:        batchNo.slice(3, 9), // 子批次码前缀与父批次相同，第 4~9 位仍是 YYMMDD
+    };});
     await Printer.printBatchList(list, (cur, total, p) => {
       setStatus('print-status', `打印第 ${cur} / ${total} 张：${p.batchNo}`, 'info');
+    }, async (cur, total, p) => {
+      setStatus('print-status', `第 ${cur} / ${total} 张已完成：${p.batchNo}，${PRINT_GAP_MS / 1000} 秒后继续。`, 'ok');
+      await delay(PRINT_GAP_MS);
     });
     setStatus('print-status', `打印完成（共 ${list.length} 张）`, 'ok');
-    log(`按穴号打印 ${list.length} 张：${batchNos.join(', ')}`, 'ok');
+    log(`按穴号打印 ${list.length} 张：${list.map(x => x.batchNo).join(', ')}`, 'ok');
   } catch(e) {
     setStatus('print-status', '打印失败：' + e.message, 'err');
     log('打印失败：' + e.message, 'err');
   }
 }
 
+function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
 /** 本炉标签打印：扫机器码时，把当前这一炉（按穴号拆分则为全部子批次，否则为这一个批次）各打一张 */
 async function doPrintGroup() {
   if (!_groupBatches.length) return;
-  await doPrintBatches(_groupBatches.map(b => b.batch_no));
+  await doPrintBatches(_groupBatches);
 }
 
 // ── 流程推进（表单/动作均按流程定义动态渲染，见服务端 transitions[].form/action）──
@@ -619,19 +699,35 @@ function renderAdvance(nodes) {
   // 展平多轨道的可触发事件（waiting_join 的轨道服务端不下发事件）
   _advTransitions = nodes.flatMap(n => n.valid_transitions.map(t => ({
     from_node: n.node_id, node_name: n.node_name,
+    responsible: n.responsible || '未指定',
     event: t.event, label: t.label, form: t.form || [], action: t.action || null,
   })));
   const multiTrack = nodes.length > 1;
 
-  document.getElementById('transition-btns').innerHTML = _advTransitions.map((t, i) => `
-    <button id="tbtn-${i}" onclick="selectTransition(${i})"
-      style="display:block;width:100%;padding:11px 14px;margin-bottom:8px;
-             border:2px solid #e5e5ea;border-radius:10px;background:#f9f9f9;
-             text-align:left;cursor:pointer;font-size:14px;font-weight:500;color:#1c1c1e">
-      ${t.label}
-      ${t.form.length ? `<span style="font-size:11px;color:#8e8e93">（${t.form.length} 项填写）</span>` : ''}
-      ${multiTrack ? `<div style="font-size:11px;color:#8e8e93;margin-top:2px">来自：${t.node_name}</div>` : ''}
-    </button>
+  const groups = [];
+  const groupMap = new Map();
+  _advTransitions.forEach((t, i) => {
+    if (!groupMap.has(t.responsible)) {
+      const g = { responsible: t.responsible, items: [] };
+      groupMap.set(t.responsible, g);
+      groups.push(g);
+    }
+    groupMap.get(t.responsible).items.push({ ...t, idx: i });
+  });
+  document.getElementById('transition-btns').innerHTML = groups.map(g => `
+    <div class="todo-group">
+      <div class="todo-group-head">
+        <span>操作人：${g.responsible}</span>
+        <span class="todo-count">${g.items.length} 项</span>
+      </div>
+      ${g.items.map(t => `
+        <button id="tbtn-${t.idx}" class="transition-btn" onclick="selectTransition(${t.idx})">
+          ${t.label}
+          ${t.form.length ? `<span class="transition-meta">（${t.form.length} 项填写）</span>` : ''}
+          ${multiTrack ? `<div class="transition-meta">来自：${t.node_name}</div>` : ''}
+        </button>
+      `).join('')}
+    </div>
   `).join('');
 
   document.getElementById('form-fields').innerHTML = '';
@@ -640,11 +736,8 @@ function renderAdvance(nodes) {
 
 function selectTransition(idx) {
   _selIdx = idx;
-  document.querySelectorAll('[id^="tbtn-"]').forEach((el, i) => {
-    el.style.borderColor = i === idx ? '#007aff' : '#e5e5ea';
-    el.style.background  = i === idx ? '#e8f4fd' : '#f9f9f9';
-    el.style.color       = i === idx ? '#007aff' : '#1c1c1e';
-    el.style.fontWeight  = i === idx ? '700' : '500';
+  document.querySelectorAll('.transition-btn').forEach(el => {
+    el.classList.toggle('is-active', el.id === `tbtn-${idx}`);
   });
   // 重建表单值：default_value（服务端解析的默认值）预填
   _formValues = {}; _scanTarget = null;
@@ -688,8 +781,8 @@ function renderFormFields() {
     if (f.type === 'multiselect') {
       const sel = Array.isArray(val) ? val : [];
       return `<div class="field"><label>${label}</label>
-        <div data-fmulti="${f.key}">${(f.options || []).map(o => `
-          <label style="display:flex;align-items:center;gap:8px;padding:7px 4px;font-size:14px;color:#1c1c1e">
+        <div data-fmulti="${f.key}" class="multi-check-grid">${(f.options || []).map(o => `
+          <label class="multi-check-item">
             <input type="checkbox" value="${o}" ${sel.includes(o) ? 'checked' : ''}> ${o}
           </label>`).join('')}
         </div></div>`;
