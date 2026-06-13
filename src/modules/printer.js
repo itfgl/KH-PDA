@@ -105,6 +105,33 @@ export async function printBatch(params) {
 }
 
 /**
+ * 打印一组「不同批次码」的标签，每个批次一张（用于开机按穴号拆分后逐穴号打码）。
+ * 与 printBatches 的区别：printBatches 重复同一份 params N 张，这里每张 params 不同。
+ *
+ * @param {Array<{batchNo,machineId,productType,date}>} list  每张标签的参数
+ * @param {function} [onProgress]  进度回调 (current, total, params) => void
+ */
+export async function printBatchList(list, onProgress) {
+  if (!_plugin) throw new Error('打印机未初始化');
+  if (!_connected) throw new Error('打印机未连接，请先重连');
+
+  const total = list.length;
+  for (let i = 0; i < total; i++) {
+    onProgress?.(i + 1, total, list[i]);
+    const pPrint = waitPrintStatus('PRINT_OK');
+    await _plugin.printBatchLabel(list[i]);
+    await pPrint;
+
+    // 最后一张不需要走纸
+    if (i < total - 1) {
+      const pNext = waitPrintStatus('PREPARE_LABEL_OK');
+      await _plugin.checkBlack();
+      await pNext;
+    }
+  }
+}
+
+/**
  * 打印机器标签（二维码）
  * 用于设置页绑定机器 NFC 时同步打印一张机器标识标签。
  * @param {{ machineId, productType, date }} params

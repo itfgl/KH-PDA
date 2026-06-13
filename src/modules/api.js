@@ -4,13 +4,69 @@
  */
 const SERVER_BASE = 'http://115.29.178.34:2974';
 
+// ── 登录态（token + 当前用户，持久化到 localStorage）──────────────────────────
+const TOKEN_KEY = 'kh_token';
+const USER_KEY  = 'kh_user';
+
+export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
+
+export function getCurrentUser() {
+  try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); }
+  catch { return null; }
+}
+
+function setSession(token, user) {
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function logout() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+/** 401 时抛出此错误，外层据此跳回登录页 */
+export class AuthError extends Error {}
+
+/** 登录失效时广播全局事件，UI 层据此弹回登录页（与 DOM 解耦） */
+function notifyAuthExpired() {
+  try { window.dispatchEvent(new CustomEvent('kh:auth-expired')); } catch { /* 非浏览器环境忽略 */ }
+}
+
+function authHeaders() {
+  const t = getToken();
+  return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
 export async function apiFetch(path, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  const headers = { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) };
   const url = path.startsWith('http') ? path : `${SERVER_BASE}${path}`;
   const res = await fetch(url, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { logout(); notifyAuthExpired(); throw new AuthError(data.detail ?? '登录已失效'); }
   if (!res.ok) throw new Error(data.detail ?? `请求失败 ${res.status}`);
   return data;
+}
+
+/** 用户名/密码登录，成功后持久化 token + 用户信息并返回 user */
+export async function login(username, password) {
+  const res = await fetch(`${SERVER_BASE}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail ?? `登录失败 ${res.status}`);
+  setSession(data.token, data.user);
+  return data.user;
+}
+
+/** 用已存 token 拉当前用户，校验登录是否仍有效（失败抛 AuthError） */
+export async function fetchMe() {
+  if (!getToken()) throw new AuthError('未登录');
+  const user = await apiFetch('/api/auth/me');
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  return user;
 }
 
 export const getMachineByCode = (code) =>
@@ -55,8 +111,12 @@ export async function uploadEventFile(batchNo, file) {
   const fd = new FormData();
   fd.append('batch_no', batchNo);
   fd.append('file', file);
-  const res = await fetch(`${SERVER_BASE}/api/events/upload`, { method: 'POST', body: fd });
+  // 不要手设 Content-Type，让浏览器带上 multipart 边界；仅注入鉴权头
+  const res = await fetch(`${SERVER_BASE}/api/events/upload`, {
+    method: 'POST', body: fd, headers: { ...authHeaders() },
+  });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) { logout(); notifyAuthExpired(); throw new AuthError(data.detail ?? '登录已失效'); }
   if (!res.ok) throw new Error(data.detail ?? `上传失败 ${res.status}`);
   return data;
 }

@@ -8,7 +8,8 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, sans-serif; background: #f2f2f7; color: #1c1c1e; }
 
-    .header { background: #1c1c1e; color: #fff; padding: 14px 16px; font-size: 17px; font-weight: 600; }
+    .header { background: #1c1c1e; color: #fff; padding: 14px 16px; font-size: 17px; font-weight: 600;
+              display: flex; align-items: center; gap: 8px; }
     .header small { font-size: 11px; opacity: .45; display: block; margin-top: 1px; }
 
     .tab-bar { display: flex; background: #fff; border-bottom: 1px solid #e5e5ea; }
@@ -99,9 +100,33 @@
 </head>
 <body>
 
+<!-- ══ 登录遮罩（未登录时覆盖全屏）══ -->
+<div id="login-overlay" style="position:fixed;inset:0;z-index:9998;background:#f2f2f7;
+     display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
+  <div class="card" style="width:100%;max-width:340px;">
+    <div class="card-title" style="text-align:center;font-size:18px;margin-bottom:16px;">凯航扫码 · 登录</div>
+    <div class="field">
+      <label>用户名</label>
+      <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
+             onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input id="login-password" type="password" autocomplete="current-password" placeholder="密码"
+             onkeydown="if(event.key==='Enter')doLogin()" />
+    </div>
+    <button class="btn btn-blue" id="login-btn" onclick="doLogin()" style="margin-top:6px;">登录</button>
+    <div class="status" id="login-status" style="display:none;margin-top:8px;"></div>
+  </div>
+</div>
+
 <div class="header">
   凯航扫码
   <small id="build-info">—</small>
+  <span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:13px;">
+    <span id="current-user"></span>
+    <button class="btn-sm btn-gray" onclick="doLogout()" style="padding:2px 8px;">退出</button>
+  </span>
 </div>
 
 <div class="tab-bar">
@@ -154,7 +179,8 @@
       <div id="advance-display" style="margin-bottom:10px"></div>
       <div class="field">
         <label>操作人</label>
-        <input id="actor-input" type="text" placeholder="填写姓名" autocomplete="off" oninput="updateAdvanceBtn()" />
+        <div id="actor-display" style="padding:10px 12px;border:1px solid #e5e5ea;border-radius:8px;
+             background:#f2f2f7;color:#1c1c1e;font-size:15px;">—</div>
       </div>
       <div id="transition-btns" style="margin-bottom:10px"></div>
       <div id="form-fields" style="margin-bottom:10px"></div>
@@ -549,12 +575,39 @@ async function doPrint(count) {
   }
 }
 
+/**
+ * 按批次码列表逐张打印（开机按穴号拆分后，每个穴号子批次打一张）。
+ * 每张标签的批次码不同，product_name/日期沿用各自批次码推导。
+ */
+async function doPrintBatches(batchNos) {
+  if (!_currentMachine || !batchNos || !batchNos.length) return;
+  setStatus('print-status', '就绪检测中…', 'info');
+  show('print-status');
+  try {
+    const list = batchNos.map(bn => ({
+      batchNo:     bn,
+      machineId:   _currentMachine.code,
+      productType: _currentBatch ? _currentBatch.product_name : '',
+      date:        bn.slice(3, 9), // 子批次码前缀与父批次相同，第 4~9 位仍是 YYMMDD
+    }));
+    await Printer.printBatchList(list, (cur, total, p) => {
+      setStatus('print-status', `打印第 ${cur} / ${total} 张：${p.batchNo}`, 'info');
+    });
+    setStatus('print-status', `打印完成（共 ${list.length} 张）`, 'ok');
+    log(`按穴号打印 ${list.length} 张：${batchNos.join(', ')}`, 'ok');
+  } catch(e) {
+    setStatus('print-status', '打印失败：' + e.message, 'err');
+    log('打印失败：' + e.message, 'err');
+  }
+}
+
 // ── 流程推进（表单/动作均按流程定义动态渲染，见服务端 transitions[].form/action）──
 let _advTransitions = [];   // 展平的可触发事件 [{from_node,node_name,event,label,form,action}]
 let _selIdx = -1;           // 当前选中事件下标
 let _formValues = {};       // 当前表单值 {key: value}
 let _scanTarget = null;     // 聚焦中的 scan/nfc/scan_list 字段 key（扫码结果优先填它）
 let _uploading = 0;         // 进行中的附件上传数
+let _moldCavities = [];     // 当前机台模具的全部穴号，供 dynamic_options 多选（开机穴号）动态填充
 
 function normalizeScanValue(raw) {
   let s = String(raw ?? '');
@@ -594,6 +647,17 @@ Machine.setCapture(raw => {
 async function loadProcessState(batchNo) {
   hide('advance-wrap');
   _advTransitions = []; _selIdx = -1; _formValues = {}; _scanTarget = null;
+
+  // 拉本机台模具的全部穴号，供开机表单里 cavity_no（dynamic_options 多选）动态填充
+  _moldCavities = [];
+  try {
+    const mid = _currentBatch && _currentBatch.machine_id;
+    if (mid) {
+      const detail = await API.apiFetch('/api/machines/' + mid);
+      _moldCavities = (detail.mold && detail.mold.cavity_nos) || [];
+    }
+  } catch(_) { /* 取不到穴号不阻断，多选会显示为空 */ }
+
   try {
     const ps = await API.getProcessState(batchNo);
     if (ps.is_terminal || !ps.active_nodes.length) return; // 已完成，不显示推进区块
@@ -651,7 +715,13 @@ function selectTransition(idx) {
   // 重建表单值：default_value（服务端解析的默认值）预填
   _formValues = {}; _scanTarget = null;
   for (const f of currentForm()) {
-    if (f.default_value !== undefined && f.default_value !== null) _formValues[f.key] = f.default_value;
+    // dynamic_options 多选（开机穴号）：选项取本机台模具全部穴号，默认全选（整机所有穴号各打一张）
+    if (f.type === 'multiselect' && f.dynamic_options) {
+      f.options = _moldCavities;
+      _formValues[f.key] = [..._moldCavities];
+    } else if (f.default_value !== undefined && f.default_value !== null) {
+      _formValues[f.key] = f.default_value;
+    }
   }
   renderFormFields();
   updateAdvanceBtn();
@@ -818,15 +888,15 @@ function missingRequired() {
 }
 
 function updateAdvanceBtn() {
-  const actor = (document.getElementById('actor-input')?.value || '').trim();
-  document.getElementById('advance-btn').disabled = !(actor && _selIdx >= 0 && _uploading === 0);
+  // 操作人由登录用户决定，不再要求手填；仅需选中事件且无上传中
+  document.getElementById('advance-btn').disabled = !(_selIdx >= 0 && _uploading === 0);
 }
 
 async function doAdvance() {
   if (_selIdx < 0 || !_currentBatch) return;
   const t = _advTransitions[_selIdx];
-  const actor = document.getElementById('actor-input').value.trim();
-  if (!actor) return;
+  // actor 仅用于本地展示/日志；服务端按登录 token 派生为操作手，忽略此值
+  const actor = (API.getCurrentUser()?.display_name) || '';
 
   const missing = missingRequired();
   if (missing.length) {
@@ -844,7 +914,7 @@ async function doAdvance() {
   for (const f of t.form) if (f.formula) delete payload[f.key];
 
   try {
-    await API.postEvent({
+    const res = await API.postEvent({
       batch_no:   _currentBatch.batch_no,
       event_type: t.event,
       actor,
@@ -858,8 +928,12 @@ async function doAdvance() {
     // 连线级动作：pda_print → 打印批次标签
     // （旧版本流程快照无 action 字段，保留 batch_ready 事件名兜底，待在途批次清空后可删）
     if ((t.action && t.action.type === 'pda_print') || (!t.action && t.event === 'batch_ready')) {
+      // 开机按穴号拆分：服务端返回各穴号子批次 new_batches，每个穴号打一张批次码；
+      // 非拆分场景（如 batch_ready）回落到当前批次打一张。
+      const batchNos = (res && res.new_batches && res.new_batches.length)
+        ? res.new_batches : [_currentBatch.batch_no];
       setStatus('advance-status', '✓ 已推进，打印中…', 'ok');
-      try { await doPrint(1); } catch(_) { /* doPrint 内部已处理 */ }
+      try { await doPrintBatches(batchNos); } catch(_) { /* doPrintBatches 内部已处理 */ }
     }
 
     // 刷新流程状态
@@ -995,6 +1069,49 @@ async function debugClearTag() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// 登录
+// ══════════════════════════════════════════════════════════════════════════════
+function renderUser() {
+  const u = API.getCurrentUser();
+  const name = u ? (u.display_name || u.username) : '';
+  document.getElementById('current-user').textContent = name ? ('👤 ' + name) : '';
+  const ad = document.getElementById('actor-display');
+  if (ad) ad.textContent = name || '—';
+}
+function showLogin() { document.getElementById('login-overlay').style.display = 'flex'; renderUser(); }
+function hideLogin() { document.getElementById('login-overlay').style.display = 'none'; }
+
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  if (!username || !password) { setStatus('login-status', '请输入用户名和密码', 'err'); show('login-status'); return; }
+  document.getElementById('login-btn').disabled = true;
+  setStatus('login-status', '登录中…', 'info'); show('login-status');
+  try {
+    await API.login(username, password);
+    document.getElementById('login-password').value = '';
+    hide('login-status');
+    renderUser();
+    hideLogin();
+    log('登录成功：' + (API.getCurrentUser()?.display_name || username), 'ok');
+  } catch (e) {
+    setStatus('login-status', '登录失败：' + e.message, 'err'); show('login-status');
+  } finally {
+    document.getElementById('login-btn').disabled = false;
+  }
+}
+
+function doLogout() { API.logout(); renderUser(); showLogin(); log('已退出登录', 'info'); }
+
+async function bootAuth() {
+  try { await API.fetchMe(); renderUser(); hideLogin(); }
+  catch (e) { showLogin(); }
+}
+
+// 任意请求遇 401 → 弹回登录页
+window.addEventListener('kh:auth-expired', () => { renderUser(); showLogin(); });
+
+// ══════════════════════════════════════════════════════════════════════════════
 // 启动
 // ══════════════════════════════════════════════════════════════════════════════
 log('build: ' + (window.BUILD_TIME ?? '—'), 'plain');
@@ -1006,6 +1123,7 @@ NFC.init(window.KaihangNfc);
 Machine.init();
 Printer.init(window.PrintPlugin);
 
+bootAuth();   // 校验已存 token；未登录则弹出登录遮罩
 refreshDebug();
 
 // ── 自动更新相关逻辑 ─────────────────────────────────────────────────────────
