@@ -144,10 +144,10 @@ export const PrintPlugin = {
   /**
    * 批次标签（一维码）
    * 与 PrintPlugin.java 的 printBatchLabel 布局一致：
-   *   384×560  一维码(10,0 364×140)  批次码(0,180)  机器(0,234)  日期(0,282)
-   *             品类最多两行(0,336...)  穴号紧随其后；批次间额外走纸 96
+   *   384×644  一维码(10,0 364×140)  批次码(0,180)  机器(0,234)  日期(0,282)
+   *             品类最多两行(0,336...)  穴号、周期、栏号依次紧随其后；批次间额外走纸 96
    */
-  async printBatchLabel({ batchNo, machineId = '', productType = '', cavityNo = '', date = '' }) {
+  async printBatchLabel({ batchNo, machineId = '', productType = '', cavityNo = '', date = '', periodLabel = '', laneNo = '' }) {
     const productLines = wrapLabeledText('品类：', productType, 18);
     const data = [
       { printType: 1, text: batchNo,
@@ -161,10 +161,13 @@ export const PrintPlugin = {
       data.push({ printType: 0, text: line, textSize: 34, x: 0, y });
       y += 42;
     }
-    data.push({ printType: 0, text: `穴号：${cavityNo}`, textSize: 34, x: 0, y: y + 16 });
+    y += 16;
+    data.push({ printType: 0, text: `穴号：${cavityNo}`,    textSize: 34, x: 0, y });
+    data.push({ printType: 0, text: `周期：${periodLabel}`, textSize: 34, x: 0, y: y + 42 });
+    data.push({ printType: 0, text: `栏号：${laneNo}`,      textSize: 34, x: 0, y: y + 84 });
     _send({
       name: 'printBmpLabel',
-      width: 384, height: 560, top: 8, concentration: 15, forwardMorePaper: 96,
+      width: 384, height: 644, top: 8, concentration: 15, forwardMorePaper: 96,
       data,
     });
   },

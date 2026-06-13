@@ -193,6 +193,18 @@
     </div>
     <div class="status" id="print-status" style="display:none"></div>
 
+    <!-- ── 打印前确认栏号（货架/料盘列号），默认按周期续号，可手动调整 ── -->
+    <div id="lane-confirm-wrap" style="display:none; margin-bottom:10px">
+      <div class="field">
+        <label>栏号（周期 <span id="lane-period-label"></span>，默认续号，可手动调整）</label>
+        <input type="number" id="lane-no-input" min="1" step="1" inputmode="numeric">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-green" onclick="_confirmPrint()">开始打印</button>
+        <button class="btn btn-gray" onclick="_cancelPrint()">取消</button>
+      </div>
+    </div>
+
     <!-- ── 当前机器批次标签（扫机器码：按穴号拆分则为同组全部子批次，否则为该批次自身；各打一张）── -->
     <div id="group-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
       <div class="card-title">当前机器批次标签</div>
@@ -402,7 +414,8 @@ function pill(text, cls = '') {
 
 function resetScanUI() {
   hide('machine-card'); hide('batch-card');
-  hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('advance-wrap');
+  hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('advance-wrap'); hide('lane-confirm-wrap');
+  _pendingPrintRefs = null; _pendingPrintInfo = null;
   _selIdx = -1; _advTransitions = []; _formValues = {}; _scanTarget = null;
   document.getElementById('machine-summary').innerHTML = '';
   document.getElementById('batch-summary').innerHTML = '';
@@ -458,7 +471,8 @@ Events.on('machine:loading', ({ code }) => {
   _groupBatches = [];
   _isMachineScan = false;
   setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
-  hide('machine-card'); hide('batch-card'); hide('group-wrap');
+  hide('machine-card'); hide('batch-card'); hide('group-wrap'); hide('lane-confirm-wrap');
+  _pendingPrintRefs = null; _pendingPrintInfo = null;
   stopCamera(); // 任何方式识别到机器码后停相机
   switchTab('scan');
 });
@@ -484,7 +498,8 @@ Events.on('machine:loaded', ({ machine: m }) => {
   document.getElementById('batch-body').innerHTML =
     '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次查询中…</div>';
   collapseSection('batch-info-wrap', 'batch-toggle');
-  hide('barcode-wrap'); hide('group-wrap'); hide('print-status');
+  hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('lane-confirm-wrap');
+  _pendingPrintRefs = null; _pendingPrintInfo = null;
   setStatus('scan-hint', '机器 ' + m.code + '，获取批次…', 'info');
   log('机器：' + m.code + ' status=' + m.status, 'ok');
 });
@@ -564,6 +579,10 @@ let _groupBatches   = []; // 当前批次按穴号拆分出的同组子批次（
 let _isMachineScan  = false; // 本次是否为扫机器码（true 时隐藏「批次推进」，只显示整批标签打印）
 const PRINT_GAP_MS = 1500;
 
+// 打印前栏号确认：fetch 到的周期/建议栏号 + 待打印的批次引用
+let _pendingPrintRefs = null;
+let _pendingPrintInfo = null;
+
 // 批次状态映射
 const BATCH_STATUS     = { created:'已创建', inspecting:'质检中', done:'已完成', failed:'已失败' };
 const BATCH_STATUS_CLS = { created:'badge-created', inspecting:'badge-inspecting', done:'badge-done', failed:'badge-failed' };
@@ -602,37 +621,80 @@ function renderBatch(batch, isNew) {
 }
 
 /**
- * 按批次码列表逐张打印（开机按穴号拆分后，每个穴号子批次打一张）。
- * 每张标签的批次码不同，product_name/日期沿用各自批次码推导。
+ * 按批次码列表打印前：先查当前机器的打印周期（0点起算，每2小时一段）+ 建议续打栏号
+ * （该机器该周期内已出现过的最大栏号 + 1），展示给操作员确认/调整，再实际打印。
  */
 async function doPrintBatches(batchRefs) {
   if (!_currentMachine || !batchRefs || !batchRefs.length) return;
-  setStatus('print-status', '就绪检测中…', 'info');
+  setStatus('print-status', '正在获取栏号信息…', 'info');
   show('print-status');
+  hide('lane-confirm-wrap');
   try {
-    const list = batchRefs.map(ref => {
-      const batch = typeof ref === 'string'
-        ? (_groupBatches.find(b => b.batch_no === ref) || (_currentBatch && _currentBatch.batch_no === ref ? _currentBatch : null))
-        : ref;
-      const batchNo = typeof ref === 'string' ? ref : ref.batch_no;
-      return {
+    const info = await API.getPrintInfo(_currentMachine.id);
+    _pendingPrintRefs = batchRefs;
+    _pendingPrintInfo = info;
+    document.getElementById('lane-period-label').textContent = `${info.period_date} ${info.period_label}`;
+    document.getElementById('lane-no-input').value = info.lane_no;
+    setStatus('print-status', `共 ${batchRefs.length} 张，请确认栏号后打印`, 'info');
+    show('lane-confirm-wrap');
+  } catch(e) {
+    setStatus('print-status', '获取栏号信息失败：' + e.message, 'err');
+    log('获取栏号信息失败：' + e.message, 'err');
+  }
+}
+
+/** 取消打印：放弃本次待打印列表，隐藏栏号确认面板 */
+function _cancelPrint() {
+  _pendingPrintRefs = null;
+  _pendingPrintInfo = null;
+  hide('lane-confirm-wrap');
+  hide('print-status');
+}
+
+/** 确认栏号后实际执行打印：每张标签附带周期标注与栏号；打印完成后回报栏号更新该周期最大值 */
+async function _confirmPrint() {
+  const batchRefs = _pendingPrintRefs;
+  const info      = _pendingPrintInfo;
+  if (!batchRefs || !info) return;
+
+  let laneNo = parseInt(document.getElementById('lane-no-input').value, 10);
+  if (!Number.isFinite(laneNo) || laneNo < 1) laneNo = info.lane_no;
+  hide('lane-confirm-wrap');
+
+  const list = batchRefs.map(ref => {
+    const batch = typeof ref === 'string'
+      ? (_groupBatches.find(b => b.batch_no === ref) || (_currentBatch && _currentBatch.batch_no === ref ? _currentBatch : null))
+      : ref;
+    const batchNo = typeof ref === 'string' ? ref : ref.batch_no;
+    return {
       batchNo,
       machineId:   _currentMachine.code,
       productType: _currentBatch ? _currentBatch.product_name : '',
       cavityNo:    batch && batch.cavity_no ? batch.cavity_no : '',
       date:        batchNo.slice(3, 9), // 子批次码前缀与父批次相同，第 4~9 位仍是 YYMMDD
-    };});
+      periodLabel: info.period_label,
+      laneNo,
+    };
+  });
+
+  setStatus('print-status', '就绪检测中…', 'info');
+  show('print-status');
+  try {
     await Printer.printBatchList(list, (cur, total, p) => {
       setStatus('print-status', `打印第 ${cur} / ${total} 张：${p.batchNo}`, 'info');
     }, async (cur, total, p) => {
       setStatus('print-status', `第 ${cur} / ${total} 张已完成：${p.batchNo}，${PRINT_GAP_MS / 1000} 秒后继续。`, 'ok');
       await delay(PRINT_GAP_MS);
     });
-    setStatus('print-status', `打印完成（共 ${list.length} 张）`, 'ok');
-    log(`按穴号打印 ${list.length} 张：${list.map(x => x.batchNo).join(', ')}`, 'ok');
+    setStatus('print-status', `打印完成（共 ${list.length} 张，栏号 ${laneNo}）`, 'ok');
+    log(`打印 ${list.length} 张（栏号 ${laneNo}）：${list.map(x => x.batchNo).join(', ')}`, 'ok');
+    try { await API.postPrintInfo(_currentMachine.id, info.period_key, laneNo); } catch(_) { /* 不影响本次打印结果 */ }
   } catch(e) {
     setStatus('print-status', '打印失败：' + e.message, 'err');
     log('打印失败：' + e.message, 'err');
+  } finally {
+    _pendingPrintRefs = null;
+    _pendingPrintInfo = null;
   }
 }
 
@@ -669,18 +731,83 @@ function fieldInput(key) { return document.querySelector(`[data-fkey="${_esc(key
 function _isImageFile(name) { return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(name || ''); }
 // 展示信息里的字段值是否为 /api/events/upload 生成的图片文件名（<32位hex>_<原文件名>），区分普通文本
 function _isUploadedImage(val) { return typeof val === 'string' && /^[0-9a-f]{32}_.+\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(val); }
+// 展示信息里的字段值是否为 /api/events/upload 生成的文件名（不限扩展名），用于 SEARCH() 结果里的通用文件展示
+function _isUploadedFile(val) { return typeof val === 'string' && /^[0-9a-f]{32}_.+/i.test(val); }
 // 拼出已上传文件的预览/下载地址
 function _fileUrl(filename) {
-  return SERVER_BASE + '/api/events/files/' + encodeURIComponent(_currentBatch.batch_no) + '/' + encodeURIComponent(filename);
+  return _fileUrlFor(_currentBatch.batch_no, filename);
 }
-// photo/file 字段已上传值的展示 HTML（缩略图 + 链接，或纯下载链接）
-function _fileFieldPreview(f, val) {
-  if (!val) return '';
-  const url = _fileUrl(val);
-  if (f.type === 'photo' || _isImageFile(val)) {
-    return `<a href="${url}" target="_blank"><img src="${url}" alt="" style="display:block;max-width:100%;max-height:160px;border-radius:8px;border:1px solid #d1d1d6;margin-top:4px;object-fit:contain"></a>`;
+function _fileUrlFor(batchNo, filename) {
+  return SERVER_BASE + '/api/events/files/' + encodeURIComponent(batchNo) + '/' + encodeURIComponent(filename);
+}
+// SEARCH() 结果单元格：批次号对应的数据可能是图片/文件/数组/普通文本
+function _searchCellHtml(batchNo, val) {
+  const vals = Array.isArray(val) ? val : [val];
+  const images = vals.filter(_isUploadedImage);
+  if (images.length) {
+    return '<div style="display:flex;flex-wrap:wrap;gap:6px">' + images.map(v =>
+      `<a href="${_fileUrlFor(batchNo, v)}" target="_blank"><img src="${_fileUrlFor(batchNo, v)}" alt="" style="display:block;max-width:80px;max-height:80px;border-radius:6px;border:1px solid #d1d1d6;object-fit:contain"></a>`
+    ).join('') + '</div>';
   }
-  return `<a href="${url}" target="_blank" style="color:#065f46">${val}（点击下载）</a>`;
+  const files = vals.filter(_isUploadedFile);
+  if (files.length) {
+    return '<div style="display:flex;flex-direction:column;gap:2px">' + files.map(v =>
+      `<a href="${_fileUrlFor(batchNo, v)}" target="_blank">${v.replace(/^[0-9a-f]{32}_/i, '')}</a>`
+    ).join('') + '</div>';
+  }
+  return vals.map(v => String(v)).join('、');
+}
+// SEARCH() 按钮：点击时按需向后端请求历史关联记录，渲染为可滚动大表格
+let _advDisplayRows = [];
+async function _onSearchBtnClick(i) {
+  const d = _advDisplayRows[i];
+  if (!d || d.node_id == null || d.index == null) return;
+  const btn = document.querySelector(`#advance-display .search-btn[data-search-idx="${i}"]`);
+  const result = document.querySelector(`#advance-display .search-result[data-search-idx="${i}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '检索中…'; }
+  try {
+    const res = await API.getDisplaySearch(_currentBatch.batch_no, d.node_id, d.index);
+    if (result) result.innerHTML = _searchTableHtml(res.value);
+    if (btn) btn.remove();
+  } catch (e) {
+    if (result) result.innerHTML = `<span style="color:#ef4444;margin-left:6px">${e.message}</span>`;
+    if (btn) { btn.disabled = false; btn.textContent = '检索历史关联记录'; }
+  }
+}
+// SEARCH() 结果：最近若干条历史记录，按 批次号/数据 渲染为可滚动大表格
+function _searchTableHtml(records) {
+  if (!records || !records.length) {
+    return '<span style="color:#9ca3af;margin-left:6px">暂无历史数据</span>';
+  }
+  const rows = records.map(r => `
+    <tr style="border-top:1px solid #e5e7eb">
+      <td style="padding:4px 8px;white-space:nowrap;vertical-align:top">${r.batch_no}</td>
+      <td style="padding:4px 8px">${_searchCellHtml(r.batch_no, r.value)}</td>
+    </tr>`).join('');
+  return `<div style="margin-top:4px;max-height:240px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="position:sticky;top:0;background:#f9fafb">
+        <th style="text-align:left;padding:4px 8px">批次号</th>
+        <th style="text-align:left;padding:4px 8px">数据</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+// photo/file 字段已上传值的展示 HTML（多个文件均缩略图/链接展示，每个带删除按钮；val 可为字符串或字符串数组）
+function _fileFieldPreview(f, val) {
+  const list = Array.isArray(val) ? val : (val ? [val] : []);
+  if (!list.length) return '';
+  return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">' + list.map((fn, idx) => {
+    const url = _fileUrl(fn);
+    const inner = (f.type === 'photo' || _isImageFile(fn))
+      ? `<img src="${url}" alt="" style="display:block;max-width:120px;max-height:120px;border-radius:8px;border:1px solid #d1d1d6;object-fit:contain">`
+      : `<span style="display:inline-block;padding:4px 8px;border:1px solid #d1d1d6;border-radius:6px;color:#065f46;font-size:12px">${fn}（点击下载）</span>`;
+    return `<div style="position:relative;display:inline-block">
+      <a href="${url}" target="_blank">${inner}</a>
+      <span data-fremove="${f.key}" data-fidx="${idx}" style="position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;font-size:11px;line-height:18px;text-align:center;cursor:pointer">×</span>
+    </div>`;
+  }).join('') + '</div>';
 }
 
 // 扫码捕获：scan/nfc 字段聚焦时，扫码枪/NFC 结果填入该字段而不触发机器查询
@@ -738,15 +865,37 @@ function renderAdvance(nodes) {
 
   // 节点展示信息（流程定义 display 表达式，服务端已求值）
   const displayRows = nodes.flatMap(n => n.display || [])
-    .filter(d => d.value !== null && d.value !== undefined && d.value !== '');
-  document.getElementById('advance-display').innerHTML = displayRows.map(d => {
-    const valHtml = _isUploadedImage(d.value)
-      ? `<a href="${_fileUrl(d.value)}" target="_blank"><img src="${_fileUrl(d.value)}" alt="" style="display:block;max-width:100%;max-height:160px;border-radius:8px;border:1px solid #d1d1d6;margin-top:4px;object-fit:contain"></a>`
-      : d.value;
+    .filter(d => d.kind === 'search_button' || d.kind === 'search_table'
+      || (d.value !== null && d.value !== undefined && d.value !== ''
+          && !(Array.isArray(d.value) && !d.value.length)));
+  document.getElementById('advance-display').innerHTML = displayRows.map((d, i) => {
+    if (d.kind === 'search_button') {
+      return `<div class="info-row" style="padding:6px 0;display:block">
+        <span class="lbl">${d.label}</span>
+        <button type="button" class="search-btn" data-search-idx="${i}" style="margin-left:8px;font-size:12px;padding:2px 10px;border-radius:6px;border:1px solid #d1d1d6;background:#f9fafb;color:#1d4ed8">检索历史关联记录</button>
+        <div class="search-result" data-search-idx="${i}"></div>
+      </div>`;
+    }
+    if (d.kind === 'search_table') {
+      return `<div class="info-row" style="padding:6px 0;display:block">
+        <span class="lbl">${d.label}</span>${_searchTableHtml(d.value)}
+      </div>`;
+    }
+    const vals = Array.isArray(d.value) ? d.value : [d.value];
+    const images = vals.filter(_isUploadedImage);
+    const valHtml = images.length
+      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + images.map(v =>
+          `<a href="${_fileUrl(v)}" target="_blank"><img src="${_fileUrl(v)}" alt="" style="display:block;max-width:160px;max-height:160px;border-radius:8px;border:1px solid #d1d1d6;object-fit:contain"></a>`
+        ).join('') + '</div>'
+      : (Array.isArray(d.value) ? d.value.join('、') : d.value);
     return `<div class="info-row" style="padding:6px 0">
       <span class="lbl">${d.label}</span><span class="val">${valHtml}</span>
     </div>`;
   }).join('');
+  _advDisplayRows = displayRows;
+  document.querySelectorAll('#advance-display .search-btn').forEach(btn => {
+    btn.addEventListener('click', () => _onSearchBtnClick(Number(btn.dataset.searchIdx)));
+  });
 
   // 展平多轨道的可触发事件（waiting_join 的轨道服务端不下发事件）
   _advTransitions = nodes.flatMap(n => n.valid_transitions.map(t => ({
@@ -854,13 +1003,14 @@ function renderFormFields() {
           style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:15px;font-family:inherit">${val ?? ''}</textarea></div>`;
     }
     if (f.type === 'photo' || f.type === 'file') {
-      const done = typeof val === 'string' && val;
+      const list = Array.isArray(val) ? val : (typeof val === 'string' && val ? [val] : []);
+      const done = list.length > 0;
       return `<div class="field"><label>${label}</label>
-        <input data-fupload="${f.key}" type="file" ${f.type === 'photo' ? 'accept="image/*" capture="environment"' : ''}
+        <input data-fupload="${f.key}" type="file" multiple ${f.type === 'photo' ? 'accept="image/*" capture="environment"' : ''}
           style="font-size:13px">
         <div data-fstatus="${f.key}" style="font-size:12px;margin-top:4px;color:${done ? '#065f46' : '#8e8e93'}">
-          ${done ? '✓ 已上传：' + val : '未上传'}</div>
-        <div data-fpreview="${f.key}">${done ? _fileFieldPreview(f, val) : ''}</div></div>`;
+          ${done ? `✓ 已上传 ${list.length} 个文件` : '未上传'}</div>
+        <div data-fpreview="${f.key}">${done ? _fileFieldPreview(f, list) : ''}</div></div>`;
     }
     if (f.type === 'scan_list') {
       return `<div class="field"><label>${label}（聚焦后连续扫码，自动去重）</label>
@@ -917,19 +1067,26 @@ function renderFormFields() {
     const key = el.getAttribute('data-fupload');
     const f = form.find(x => x.key === key);
     el.addEventListener('change', async () => {
-      const file = el.files && el.files[0];
-      if (!file || !_currentBatch) return;
+      const files = el.files ? Array.from(el.files) : [];
+      if (!files.length || !_currentBatch) return;
       const st = wrap.querySelector(`[data-fstatus="${_esc(key)}"]`);
       const pv = wrap.querySelector(`[data-fpreview="${_esc(key)}"]`);
       _uploading++; updateAdvanceBtn();
       if (st) { st.textContent = '上传中…'; st.style.color = '#92400e'; }
-      if (pv) pv.innerHTML = '';
       try {
-        const r = await API.uploadEventFile(_currentBatch.batch_no, file);
-        _formValues[key] = r.filename;
-        if (st) { st.textContent = '✓ 已上传：' + (r.original_filename || r.filename); st.style.color = '#065f46'; }
-        if (pv) pv.innerHTML = _fileFieldPreview(f, r.filename);
-        log(`附件上传成功：${r.original_filename}`, 'ok');
+        const existing = Array.isArray(_formValues[key]) ? _formValues[key]
+          : (typeof _formValues[key] === 'string' && _formValues[key] ? [_formValues[key]] : []);
+        const uploaded = [];
+        for (const file of files) {
+          const r = await API.uploadEventFile(_currentBatch.batch_no, file);
+          uploaded.push(r.filename);
+          log(`附件上传成功：${r.original_filename}`, 'ok');
+        }
+        const list = [...existing, ...uploaded];
+        _formValues[key] = list;
+        el.value = '';
+        if (st) { st.textContent = `✓ 已上传 ${list.length} 个文件`; st.style.color = '#065f46'; }
+        if (pv) pv.innerHTML = _fileFieldPreview(f, list);
       } catch(e) {
         if (st) { st.textContent = '上传失败：' + e.message; st.style.color = '#991b1b'; }
         log('附件上传失败：' + e.message, 'err');
@@ -938,6 +1095,22 @@ function renderFormFields() {
       }
     });
   });
+  // 点击预览图右上角的 × 移除该文件（事件委托，避免重复绑定用 onclick 覆盖式赋值）
+  wrap.onclick = (e) => {
+    const rm = e.target.closest && e.target.closest('[data-fremove]');
+    if (!rm) return;
+    const key = rm.getAttribute('data-fremove');
+    const idx = Number(rm.getAttribute('data-fidx'));
+    const f = form.find(x => x.key === key);
+    const list = Array.isArray(_formValues[key]) ? _formValues[key] : [];
+    list.splice(idx, 1);
+    _formValues[key] = list;
+    const st = wrap.querySelector(`[data-fstatus="${_esc(key)}"]`);
+    const pv = wrap.querySelector(`[data-fpreview="${_esc(key)}"]`);
+    if (st) { st.textContent = list.length ? `✓ 已上传 ${list.length} 个文件` : '未上传'; st.style.color = list.length ? '#065f46' : '#8e8e93'; }
+    if (pv) pv.innerHTML = _fileFieldPreview(f, list);
+    updateAdvanceBtn();
+  };
   // 渲染 scan_list 既有值
   form.filter(f => f.type === 'scan_list').forEach(f => renderScanListChips(f.key));
 }
@@ -1016,7 +1189,7 @@ async function doAdvance() {
       // 非拆分场景（如 batch_ready）回落到当前批次打一张。
       const batchNos = (res && res.new_batches && res.new_batches.length)
         ? res.new_batches : [_currentBatch.batch_no];
-      setStatus('advance-status', '✓ 已推进，打印中…', 'ok');
+      setStatus('advance-status', '✓ 已推进，请确认栏号后打印', 'ok');
       try { await doPrintBatches(batchNos); } catch(_) { /* doPrintBatches 内部已处理 */ }
     }
 

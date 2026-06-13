@@ -163,7 +163,8 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 批次标签（一维码）
-     * 布局 384×560：条码放大，文字略缩小；机器/日期分行；品类支持换行；批次间额外走纸明显加大。
+     * 布局 384×644：条码放大，文字略缩小；机器/日期分行；品类支持换行；
+     * 穴号/周期/栏号依次紧随其后；批次间额外走纸明显加大。
      */
     @PluginMethod
     public void printBatchLabel(PluginCall call) {
@@ -172,6 +173,8 @@ public class PrintPlugin extends Plugin {
         String productType = call.getString("productType", "");
         String cavityNo    = call.getString("cavityNo", "");
         String date        = call.getString("date", "");
+        String periodLabel = call.getString("periodLabel", "");
+        String laneNo      = call.getString("laneNo", "");
 
         if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
 
@@ -184,7 +187,7 @@ public class PrintPlugin extends Plugin {
                 );
                 if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 560)
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 644)
                     .addBmp(barcode, 10, 0)
                     .addText(batchNo, 38, 0, 180)
                     .addText("机器：" + machineId, 34, 0, 234)
@@ -194,8 +197,11 @@ public class PrintPlugin extends Plugin {
                     builder.addText(line, 34, 0, y);
                     y += 42;
                 }
+                y += 16;
                 Bitmap label = builder
-                    .addText("穴号：" + cavityNo, 34, 0, y + 16)
+                    .addText("穴号：" + cavityNo, 34, 0, y)
+                    .addText("周期：" + periodLabel, 34, 0, y + 42)
+                    .addText("栏号：" + laneNo, 34, 0, y + 84)
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 

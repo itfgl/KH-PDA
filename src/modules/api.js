@@ -91,6 +91,17 @@ export const getMachineByCode = (code) =>
 export const getMachineById = (id) =>
   apiFetch('/api/machines/' + id);
 
+/** 打印批次标签前查询：当前 2 小时周期标注 + 建议续打的栏号 */
+export const getPrintInfo = (machineId) =>
+  apiFetch('/api/machines/' + machineId + '/print-info');
+
+/** 打印完成后回报实际使用的栏号，更新该机器该周期内的最大栏号 */
+export const postPrintInfo = (machineId, periodKey, laneNo) =>
+  apiFetch('/api/machines/' + machineId + '/print-info', {
+    method: 'POST',
+    body: JSON.stringify({ period_key: periodKey, lane_no: laneNo }),
+  });
+
 /** 按批次码查批次详情（含产品名/类型/状态/质检结果） */
 export const getBatchByNo = (batchNo) =>
   apiFetch('/api/batches/' + encodeURIComponent(batchNo));
@@ -102,6 +113,10 @@ export const getBatchesByParent = (parentBatchNo) =>
 /** 查批次当前流程状态（活跃节点 + 可触发事件） */
 export const getProcessState = (batchNo) =>
   apiFetch('/api/process/' + encodeURIComponent(batchNo));
+
+/** 按需求值某节点 display[index] 的表达式（SEARCH() 检索历史关联记录按钮点击时调用） */
+export const getDisplaySearch = (batchNo, nodeId, index) =>
+  apiFetch('/api/process/' + encodeURIComponent(batchNo) + '/nodes/' + encodeURIComponent(nodeId) + '/display/' + index);
 
 /**
  * 提交流程事件，推进批次到下一个节点。
