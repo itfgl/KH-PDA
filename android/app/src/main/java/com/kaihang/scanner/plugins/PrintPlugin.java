@@ -169,6 +169,17 @@ public class PrintPlugin extends Plugin {
         }
     }
 
+    private static String getCallString(PluginCall call, String key) {
+        Object value = call.getData().get(key);
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private static String getPrintedBatchText(String batchNo, String laneNo) {
+        String printedLane = getPrintedLaneLabel(laneNo);
+        if (printedLane == null || printedLane.trim().isEmpty()) return batchNo;
+        return batchNo + "-" + printedLane;
+    }
+
     /**
      * 批次标签（一维码）
      * 布局 384×644：条码放大，文字略缩小；机器/日期分行；品类支持换行；
@@ -176,13 +187,13 @@ public class PrintPlugin extends Plugin {
      */
     @PluginMethod
     public void printBatchLabel(PluginCall call) {
-        String batchNo     = call.getString("batchNo", "");
-        String machineId   = call.getString("machineId", "");
-        String productType = call.getString("productType", "");
-        String cavityNo    = call.getString("cavityNo", "");
-        String date        = call.getString("date", "");
-        String periodLabel = call.getString("periodLabel", "");
-        String laneNo      = call.getString("laneNo", "");
+        String batchNo     = getCallString(call, "batchNo");
+        String machineId   = getCallString(call, "machineId");
+        String productType = getCallString(call, "productType");
+        String cavityNo    = getCallString(call, "cavityNo");
+        String date        = getCallString(call, "date");
+        String periodLabel = getCallString(call, "periodLabel");
+        String laneNo      = getCallString(call, "laneNo");
 
         if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
 
@@ -195,9 +206,12 @@ public class PrintPlugin extends Plugin {
                 );
                 if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
+                String printedBatchText = getPrintedBatchText(batchNo, laneNo);
+                String printedLaneLabel = getPrintedLaneLabel(laneNo);
+
                 AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 644)
                     .addBmp(barcode, 10, 0)
-                    .addText(batchNo, 36, 0, 180)
+                    .addText(printedBatchText, 36, 0, 180)
                     .addText("机器：" + machineId, 30, 0, 234)
                     .addText("日期：" + date, 30, 0, 282);
                 int y = 336;
@@ -209,7 +223,7 @@ public class PrintPlugin extends Plugin {
                 Bitmap label = builder
                     .addText("穴号：" + cavityNo, 30, 0, y)
                     .addText("周期：" + periodLabel, 30, 0, y + 42)
-                    .addText("栏号：" + getPrintedLaneLabel(laneNo), 30, 0, y + 84)
+                    .addText("栏号：" + printedLaneLabel, 30, 0, y + 84)
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 

@@ -69,6 +69,11 @@ function getPrintedLaneLabel(laneNo) {
   return Number.isFinite(parsed) ? String(parsed - 1) : String(laneNo ?? '');
 }
 
+function getPrintedBatchText(batchNo, laneNo) {
+  const printedLane = getPrintedLaneLabel(laneNo);
+  return printedLane ? `${batchNo}-${printedLane}` : batchNo;
+}
+
 // ── ScanPlugin ───────────────────────────────────────────────────────────────
 // Capacitor 接口：addListener('scanResult', cb({ value })) / startScan() / stopScan()
 
@@ -157,7 +162,7 @@ export const PrintPlugin = {
     const data = [
       { printType: 1, text: batchNo,
         desiredWidth: 364, desiredHeight: 140, displayCode: false, left: 10, top: 0 },
-      { printType: 0, text: batchNo,             textSize: 36, x: 0, y: 180 },
+      { printType: 0, text: getPrintedBatchText(batchNo, laneNo), textSize: 36, x: 0, y: 180 },
       { printType: 0, text: `机器：${machineId}`, textSize: 30, x: 0, y: 234 },
       { printType: 0, text: `日期：${date}`,      textSize: 30, x: 0, y: 282 },
     ];
