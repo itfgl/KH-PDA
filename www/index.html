@@ -621,8 +621,8 @@ function renderBatch(batch, isNew) {
 }
 
 /**
- * 按批次码列表打印前：先查当前机器的打印周期（0点起算，每2小时一段）+ 建议续打栏号
- * （该机器该周期内已出现过的最大栏号 + 1），展示给操作员确认/调整，再实际打印。
+ * 按批次码列表打印前：先查当前机器的打印周期（0点起算，每2小时一段），
+ * 栏号输入默认固定为 1，允许操作员手动调整后再实际打印。
  */
 async function doPrintBatches(batchRefs) {
   if (!_currentMachine || !batchRefs || !batchRefs.length) return;
@@ -634,7 +634,7 @@ async function doPrintBatches(batchRefs) {
     _pendingPrintRefs = batchRefs;
     _pendingPrintInfo = info;
     document.getElementById('lane-period-label').textContent = `${info.period_date} ${info.period_label}`;
-    document.getElementById('lane-no-input').value = info.lane_no;
+    document.getElementById('lane-no-input').value = 1;
     setStatus('print-status', `共 ${batchRefs.length} 张，请确认栏号后打印`, 'info');
     show('lane-confirm-wrap');
   } catch(e) {
@@ -658,7 +658,7 @@ async function _confirmPrint() {
   if (!batchRefs || !info) return;
 
   let laneNo = parseInt(document.getElementById('lane-no-input').value, 10);
-  if (!Number.isFinite(laneNo) || laneNo < 1) laneNo = info.lane_no;
+  if (!Number.isFinite(laneNo) || laneNo < 1) laneNo = 1;
   hide('lane-confirm-wrap');
 
   const list = batchRefs.map(ref => {

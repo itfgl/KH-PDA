@@ -161,6 +161,14 @@ public class PrintPlugin extends Plugin {
         return ch <= 0x7f ? 1 : 2;
     }
 
+    private static String getPrintedLaneLabel(String laneNo) {
+        try {
+            return String.valueOf(Integer.parseInt(laneNo.trim()) - 1);
+        } catch (Exception ignore) {
+            return laneNo == null ? "" : laneNo;
+        }
+    }
+
     /**
      * 批次标签（一维码）
      * 布局 384×644：条码放大，文字略缩小；机器/日期分行；品类支持换行；
@@ -189,19 +197,19 @@ public class PrintPlugin extends Plugin {
 
                 AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 644)
                     .addBmp(barcode, 10, 0)
-                    .addText(batchNo, 38, 0, 180)
-                    .addText("机器：" + machineId, 34, 0, 234)
-                    .addText("日期：" + date, 34, 0, 282);
+                    .addText(batchNo, 36, 0, 180)
+                    .addText("机器：" + machineId, 30, 0, 234)
+                    .addText("日期：" + date, 30, 0, 282);
                 int y = 336;
                 for (String line : productLines) {
-                    builder.addText(line, 34, 0, y);
+                    builder.addText(line, 30, 0, y);
                     y += 42;
                 }
                 y += 16;
                 Bitmap label = builder
-                    .addText("穴号：" + cavityNo, 34, 0, y)
-                    .addText("周期：" + periodLabel, 34, 0, y + 42)
-                    .addText("栏号：" + laneNo, 34, 0, y + 84)
+                    .addText("穴号：" + cavityNo, 30, 0, y)
+                    .addText("周期：" + periodLabel, 30, 0, y + 42)
+                    .addText("栏号：" + getPrintedLaneLabel(laneNo), 30, 0, y + 84)
                     .getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 

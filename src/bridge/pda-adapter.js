@@ -64,6 +64,11 @@ function charUnits(ch) {
   return ch.charCodeAt(0) <= 0x7f ? 1 : 2;
 }
 
+function getPrintedLaneLabel(laneNo) {
+  const parsed = Number.parseInt(laneNo, 10);
+  return Number.isFinite(parsed) ? String(parsed - 1) : String(laneNo ?? '');
+}
+
 // ── ScanPlugin ───────────────────────────────────────────────────────────────
 // Capacitor 接口：addListener('scanResult', cb({ value })) / startScan() / stopScan()
 
@@ -152,19 +157,19 @@ export const PrintPlugin = {
     const data = [
       { printType: 1, text: batchNo,
         desiredWidth: 364, desiredHeight: 140, displayCode: false, left: 10, top: 0 },
-      { printType: 0, text: batchNo,             textSize: 38, x: 0, y: 180 },
-      { printType: 0, text: `机器：${machineId}`, textSize: 34, x: 0, y: 234 },
-      { printType: 0, text: `日期：${date}`,      textSize: 34, x: 0, y: 282 },
+      { printType: 0, text: batchNo,             textSize: 36, x: 0, y: 180 },
+      { printType: 0, text: `机器：${machineId}`, textSize: 30, x: 0, y: 234 },
+      { printType: 0, text: `日期：${date}`,      textSize: 30, x: 0, y: 282 },
     ];
     let y = 336;
     for (const line of productLines) {
-      data.push({ printType: 0, text: line, textSize: 34, x: 0, y });
+      data.push({ printType: 0, text: line, textSize: 30, x: 0, y });
       y += 42;
     }
     y += 16;
-    data.push({ printType: 0, text: `穴号：${cavityNo}`,    textSize: 34, x: 0, y });
-    data.push({ printType: 0, text: `周期：${periodLabel}`, textSize: 34, x: 0, y: y + 42 });
-    data.push({ printType: 0, text: `栏号：${laneNo}`,      textSize: 34, x: 0, y: y + 84 });
+    data.push({ printType: 0, text: `穴号：${cavityNo}`,    textSize: 30, x: 0, y });
+    data.push({ printType: 0, text: `周期：${periodLabel}`, textSize: 30, x: 0, y: y + 42 });
+    data.push({ printType: 0, text: `栏号：${getPrintedLaneLabel(laneNo)}`, textSize: 30, x: 0, y: y + 84 });
     _send({
       name: 'printBmpLabel',
       width: 384, height: 644, top: 8, concentration: 15, forwardMorePaper: 96,
