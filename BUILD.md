@@ -57,47 +57,32 @@ Android APK（Capacitor 壳）
 
 ### 构建环境
 
+- Node.js 20
 - Java 17
 - Gradle Wrapper `8.14.3`
 - Android Gradle Plugin `8.13.0`
-
-远程构建环境不再负责前端编译。
 
 ### 流程
 
 ```text
 1. checkout
-2. 安装 Java 17
-3. 直接在 `android/` 下执行 `./gradlew assembleDebug`
-4. 上传 debug APK artifact
+2. 安装 Node 20 / Java 17
+3. npm install
+4. npm run build
+5. npx cap sync android
+6. ./gradlew assembleDebug
+7. 上传 debug APK artifact
 ```
 
 ### 什么时候会让你误以为“没生效”
 
 - 你推送到的不是 `android-entry` 对应的 GitHub 仓库
-- 你改了前端源码，但没有先在本地执行 `npm run build` / `npx cap sync android` 并提交生成结果
 - 你更新的是服务端业务页，结果却去等 APK 生效
 - 你装上的还是旧 artifact，或者没卸载旧包
 
-### 远程构建现在包含什么
-
-- 只编译当前仓库里已经存在的 Android 工程
-- 不安装 Node
-- 不构建前端
-- 不同步 Capacitor 资源
-
-如果你改了 `src/`、`www/` 或需要重新同步 Capacitor 资源，先在本地完成以下步骤，再提交到仓库：
-
-```bash
-cd android-entry
-npm ci
-npm run build
-npx cap sync android
-```
-
 ## 本地构建
 
-建议本地环境：
+建议本地环境与 CI 保持一致：
 
 - Node.js 20
 - Java 17
