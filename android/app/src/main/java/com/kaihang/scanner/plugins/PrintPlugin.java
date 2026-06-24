@@ -26,6 +26,8 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.json.JSONException;
+
 @CapacitorPlugin(name = "PrintPlugin")
 public class PrintPlugin extends Plugin {
 
@@ -170,8 +172,12 @@ public class PrintPlugin extends Plugin {
     }
 
     private static String getCallString(PluginCall call, String key) {
-        Object value = call.getData().get(key);
-        return value == null ? "" : String.valueOf(value);
+        try {
+            Object value = call.getData().get(key);
+            return value == null ? "" : String.valueOf(value);
+        } catch (JSONException ignore) {
+            return "";
+        }
     }
 
     private static String getPrintedBatchText(String batchNo, String laneNo) {
