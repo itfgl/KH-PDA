@@ -186,6 +186,36 @@ public class PrintPlugin extends Plugin {
         return batchNo + "-" + printedLane;
     }
 
+    private static List<String> wrapPlainText(String text, int maxUnits) {
+        List<String> lines = new ArrayList<>();
+        if (text == null || text.trim().isEmpty()) return lines;
+        String[] rawLines = text.replace("\r", "").split("\n");
+        for (String rawLine : rawLines) {
+            String line = rawLine == null ? "" : rawLine.trim();
+            if (line.isEmpty()) {
+                lines.add("");
+                continue;
+            }
+            StringBuilder current = new StringBuilder();
+            int currentUnits = 0;
+            for (int i = 0; i < line.length(); i++) {
+                char ch = line.charAt(i);
+                int units = charUnits(ch);
+                if (currentUnits + units > maxUnits && current.length() > 0) {
+                    lines.add(current.toString());
+                    current = new StringBuilder();
+                    currentUnits = 0;
+                }
+                current.append(ch);
+                currentUnits += units;
+            }
+            if (current.length() > 0) {
+                lines.add(current.toString());
+            }
+        }
+        return lines;
+    }
+
     /**
      * 批次标签（一维码）
      * 布局 384×644：条码放大，文字略缩小；机器/日期分行；品类支持换行；
@@ -285,6 +315,68 @@ public class PrintPlugin extends Plugin {
                 call.resolve();
             } catch (Exception e) {
                 call.reject("printMachineQR error: " + e.getMessage(), e);
+            }
+        });
+    }
+
+    /**
+     * 通用标签：
+     * - barcodeValue: 一维码内容
+     * - qrCodeValue: 二维码内容
+     * - textValue: 多行正文，支持换行
+     */
+    @PluginMethod
+    public void printLabel(PluginCall call) {
+        String barcodeValue = getCallString(call, "barcodeValue");
+        String qrCodeValue = getCallString(call, "qrCodeValue");
+        String textValue = getCallString(call, "textValue");
+
+        if (barcodeValue.isEmpty() && qrCodeValue.isEmpty() && textValue.trim().isEmpty()) {
+            call.reject("printLabel requires barcodeValue, qrCodeValue or textValue");
+            return;
+        }
+
+        printExecutor.execute(() -> {
+            if (destroyed) { call.reject("printer destroyed"); return; }
+            try {
+                Bitmap barcode = null;
+                Bitmap qr = null;
+                if (!barcodeValue.isEmpty()) {
+                    barcode = BarcodeCreater.createBarcode(getContext(), barcodeValue, 228, 96, false, 1);
+                    if (barcode == null) { call.reject("barcode bitmap null"); return; }
+                }
+                if (!qrCodeValue.isEmpty()) {
+                    qr = BarcodeCreater.createBarcode(getContext(), qrCodeValue, 120, 120, false, 2);
+                    if (qr == null) { call.reject("qr bitmap null"); return; }
+                }
+
+                List<String> textLines = wrapPlainText(textValue, 26);
+                int bodyTop = (barcode != null || qr != null) ? 140 : 16;
+                int bodyHeight = Math.max(1, textLines.size()) * 32;
+                int labelHeight = Math.max(bodyTop + bodyHeight + 24, 180);
+
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, labelHeight);
+                if (barcode != null) {
+                    builder.addBmp(barcode, 8, 8);
+                }
+                if (qr != null) {
+                    builder.addBmp(qr, 256, 8);
+                }
+
+                int y = bodyTop;
+                for (String line : textLines) {
+                    builder.addText(line, 24, 8, y);
+                    y += 32;
+                }
+
+                Bitmap label = builder.getBitmap();
+                if (label == null) { call.reject("label bitmap null"); return; }
+
+                if (destroyed) { call.reject("printer destroyed"); return; }
+                Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "generic_label", false);
+                call.resolve();
+            } catch (Exception e) {
+                call.reject("printLabel error: " + e.getMessage(), e);
             }
         });
     }

@@ -202,6 +202,53 @@ export const PrintPlugin = {
   },
 
   /**
+   * 通用标签：
+   * - barcodeValue: 一维码内容
+   * - qrCodeValue: 二维码内容
+   * - textValue: 多行正文
+   */
+  async printLabel({ barcodeValue = '', qrCodeValue = '', textValue = '' }) {
+    const lines = String(textValue || '').replace(/\r/g, '').split('\n');
+    const data = [];
+    if (barcodeValue) {
+      data.push({
+        printType: 1,
+        text: barcodeValue,
+        desiredWidth: 228,
+        desiredHeight: 96,
+        displayCode: false,
+        left: 8,
+        top: 8,
+      });
+    }
+    if (qrCodeValue) {
+      data.push({
+        printType: 2,
+        text: qrCodeValue,
+        desiredWidth: 120,
+        desiredHeight: 120,
+        displayCode: false,
+        left: 256,
+        top: 8,
+      });
+    }
+    let y = (barcodeValue || qrCodeValue) ? 140 : 16;
+    for (const line of lines) {
+      data.push({ printType: 0, text: String(line || ''), textSize: 24, x: 8, y });
+      y += 32;
+    }
+    _send({
+      name: 'printBmpLabel',
+      width: 384,
+      height: Math.max(y + 16, 180),
+      top: 8,
+      concentration: 15,
+      forwardMorePaper: 96,
+      data,
+    });
+  },
+
+  /**
    * 每张 PRINT_OK 后走纸到下一张起始位（PDA 模式与 prepareToPrintLabel 等价）
    */
   async checkBlack() {
