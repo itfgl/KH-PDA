@@ -9,15 +9,15 @@ set REMOTE_PORT=22
 
 set LOCAL_STATIC=..\server\h5
 
-echo [1/3] Building plugins.js ...
-call npm run build
+echo [1/4] Building web assets and syncing Android project ...
+call npm run sync
 if errorlevel 1 (
-    echo [ERROR] Build failed.
+    echo [ERROR] Build or Android sync failed.
     pause & exit /b 1
 )
 
 echo.
-echo [2/3] Copying to local server\static ...
+echo [2/4] Copying to local server\static ...
 if not exist "%LOCAL_STATIC%" (
     echo [ERROR] %LOCAL_STATIC% not found.
     pause & exit /b 1
@@ -27,7 +27,12 @@ copy /Y www\plugins.js  "%LOCAL_STATIC%\plugins.js"
 echo Copied: index.html + plugins.js
 
 echo.
-echo [3/3] Pushing to remote %REMOTE_HOST% ...
+echo [3/4] Verifying Android asset timestamps ...
+dir /T:W android\app\src\main\assets\public\index.html
+dir /T:W android\app\src\main\assets\public\plugins.js
+
+echo.
+echo [4/4] Pushing to remote %REMOTE_HOST% ...
 if "%REMOTE_HOST%"=="" (
     echo [SKIP] REMOTE_HOST not set.
     goto done
