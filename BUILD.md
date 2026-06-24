@@ -58,7 +58,7 @@ Android APK（Capacitor 壳）
 ### 构建环境
 
 - Node.js 20
-- Java 21
+- Java 17
 - Gradle Wrapper `8.14.3`
 - Android Gradle Plugin `8.13.0`
 
@@ -70,7 +70,7 @@ Android APK（Capacitor 壳）
 1. checkout
 2. 安装 Node 20
 3. 执行 `npm ci`
-4. 安装 Java 21
+4. 安装 Java 17
 5. 直接在 `android/` 下执行 `./gradlew assembleDebug`
 6. 上传 debug APK artifact
 ```
@@ -113,7 +113,7 @@ npx cap sync android
 建议本地环境：
 
 - Node.js 20
-- Java 21
+- Java 17
 - Android SDK
 
 ```bash
