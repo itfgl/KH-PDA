@@ -4,6 +4,7 @@
  */
 const DEFAULT_SERVER_BASE = 'http://115.29.178.34:2974';
 const SERVER_BASE_KEY = 'kh_server_base_url';
+const UPDATE_BASE_KEY = 'kh_update_base_url';
 const DEFAULT_AUTHENTICATOR = 'basic';
 const STORAGE_APP_NAME = 'main';
 const ROLE_ROUTES_API_PATH = '/api/client_role_routes:list?pageSize=200';
@@ -33,6 +34,16 @@ export function getServerBase() {
 export function setServerBase(value) {
   const base = normalizeBaseUrl(value);
   localStorage.setItem(SERVER_BASE_KEY, base);
+  return base;
+}
+
+export function getUpdateBase() {
+  return normalizeBaseUrl(localStorage.getItem(UPDATE_BASE_KEY) || getServerBase());
+}
+
+export function setUpdateBase(value) {
+  const base = normalizeBaseUrl(value);
+  localStorage.setItem(UPDATE_BASE_KEY, base);
   return base;
 }
 

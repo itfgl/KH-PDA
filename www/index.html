@@ -134,6 +134,11 @@
              onkeydown="if(event.key==='Enter')document.getElementById('login-username').focus()" />
     </div>
     <div class="field">
+      <label>更新地址</label>
+      <input id="login-update-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000"
+             onkeydown="if(event.key==='Enter')document.getElementById('login-username').focus()" />
+    </div>
+    <div class="field">
       <label>用户名</label>
       <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
              onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
@@ -177,6 +182,7 @@
     <div class="card-title">启动页</div>
     <div class="status" id="launcher-status">登录后可进入角色页面，也可以先做调试和更新。</div>
     <div class="info-row"><span class="lbl">服务地址</span><span class="val" id="launcher-server">—</span></div>
+    <div class="info-row"><span class="lbl">更新地址</span><span class="val" id="launcher-update-server">—</span></div>
     <div class="info-row"><span class="lbl">当前用户</span><span class="val" id="launcher-user">—</span></div>
     <div class="info-row"><span class="lbl">目标页面</span><span class="val" id="launcher-role-page">—</span></div>
     <div class="btn-row" style="margin-top:12px;">
@@ -1448,6 +1454,7 @@ async function refreshDebug() {
     ['KaihangNfc',  !!window.KaihangNfc  ? `ok (mode=${NFC.getMode()})` : false],
     ['UpdatePlugin',!!window.UpdatePlugin],
     ['Server',      API.getServerBase()],
+    ['UpdateBase',  API.getUpdateBase()],
     ['APK Version', apkVer],
     ['Platform',    window.Capacitor?.getPlatform?.() ?? (window.PDAJsBridge ? 'X8-PDA' : 'unknown')],
   ].map(([k,v]) => typeof v === 'boolean'
@@ -1477,9 +1484,13 @@ function renderUser() {
 }
 function renderServerBase() {
   const input = document.getElementById('login-server-base');
+  const updateInput = document.getElementById('login-update-base');
   if (input) input.value = API.getServerBase();
+  if (updateInput) updateInput.value = API.getUpdateBase();
   const launcherServer = document.getElementById('launcher-server');
+  const launcherUpdateServer = document.getElementById('launcher-update-server');
   if (launcherServer) launcherServer.textContent = API.getServerBase();
+  if (launcherUpdateServer) launcherUpdateServer.textContent = API.getUpdateBase();
 }
 function renderLauncher() {
   const user = API.getCurrentUser();
@@ -1523,14 +1534,17 @@ function openRolePage() {
 
 async function doLogin() {
   const serverBase = document.getElementById('login-server-base').value.trim();
+  const updateBase = document.getElementById('login-update-base').value.trim();
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
   if (!serverBase) { setStatus('login-status', '请输入服务地址', 'err'); show('login-status'); return; }
+  if (!updateBase) { setStatus('login-status', '请输入更新地址', 'err'); show('login-status'); return; }
   if (!username || !password) { setStatus('login-status', '请输入用户名和密码', 'err'); show('login-status'); return; }
   document.getElementById('login-btn').disabled = true;
   setStatus('login-status', '登录中…', 'info'); show('login-status');
   try {
     API.setServerBase(serverBase);
+    API.setUpdateBase(updateBase);
     await API.login(username, password);
     document.getElementById('login-password').value = '';
     hide('login-status');
@@ -1538,6 +1552,7 @@ async function doLogin() {
     renderLauncher();
     log('登录成功：' + (API.getCurrentUser()?.display_name || API.getCurrentUser()?.nickname || username), 'ok');
     log('当前服务地址：' + API.getServerBase(), 'info');
+    log('当前更新地址：' + API.getUpdateBase(), 'info');
     if (API.getCurrentRole()) log('当前角色：' + API.getCurrentRole(), 'info');
     log('角色目标页：' + API.getRolePageUrl(), 'info');
     hideLogin();
@@ -1571,6 +1586,7 @@ window.addEventListener('kh:auth-expired', () => { renderUser(); renderLauncher(
 log('build: ' + (window.BUILD_TIME ?? '—'), 'plain');
 log('platform: ' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
 log('server: ' + API.getServerBase(), 'info');
+log('update-server: ' + API.getUpdateBase(), 'info');
 
 // 各模块初始化
 Scanner.init(window.ScanPlugin);
@@ -1596,7 +1612,7 @@ async function triggerAppUpdate() {
     const localInfo = await window.UpdatePlugin.getVersionInfo();
     log(`当前版本: Code=${localInfo.versionCode}, Name=${localInfo.versionName}`, 'info');
 
-    const res = await fetch(API.getServerBase() + '/api/app/version');
+    const res = await fetch(API.getUpdateBase() + '/api/app/version');
     if (!res.ok) {
       log('获取服务器版本失败', 'err');
       alert('无法获取最新版本信息');
@@ -1626,7 +1642,7 @@ async function autoCheckUpdate() {
   if (_updateStarted) return; // 本次会话已触发，不重复
   try {
     const localInfo = await window.UpdatePlugin.getVersionInfo();
-    const res = await fetch(API.getServerBase() + '/api/app/version');
+    const res = await fetch(API.getUpdateBase() + '/api/app/version');
     if (!res.ok) return;
     const serverInfo = await res.json();
     if (serverInfo.versionCode > localInfo.versionCode) {
@@ -1645,7 +1661,7 @@ async function autoCheckUpdate() {
 }
 
 function startApkDownload(url, expectedVersionCode) {
-  const absoluteUrl = new URL(url, API.getServerBase()).href;
+  const absoluteUrl = new URL(url, API.getUpdateBase()).href;
   let overlay = document.getElementById('update-progress-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
