@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>凯航扫码</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #eef4ff 0%, #f6f7fb 52%, #ffffff 100%);
+      color: #1c1c1e;
+      padding: 24px 16px 32px;
+    }
+    .shell {
+      width: 100%;
+      max-width: 380px;
+      margin: 0 auto;
+    }
+    .hero {
+      margin-bottom: 16px;
+      padding: 8px 4px 0;
+    }
+    .hero h1 {
+      font-size: 28px;
+      line-height: 1.15;
+      font-weight: 800;
+      color: #101828;
+      letter-spacing: -.02em;
+    }
+    .hero p {
+      margin-top: 8px;
+      color: #667085;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .build-chip {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .card {
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(15,23,42,.06);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(15,23,42,.08);
+      margin-bottom: 14px;
+      backdrop-filter: blur(8px);
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #667085;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .status {
+      min-height: 44px;
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #f2f4f7;
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .status.ok { background: #dcfae6; color: #166534; }
+    .status.err { background: #fee4e2; color: #b42318; }
+    .status.info { background: #dbeafe; color: #1d4ed8; }
+    .status.warn { background: #fef0c7; color: #b54708; }
+    .field { margin-bottom: 12px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #667085;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 12px 13px;
+      border: 1px solid #d0d5dd;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 15px;
+      outline: none;
+    }
+    .field input:focus, .field select:focus {
+      border-color: #1570ef;
+      box-shadow: 0 0 0 3px rgba(21,112,239,.12);
+    }
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn-blue { background: #1570ef; color: #fff; }
+    .btn-gray { background: #eaecf0; color: #101828; }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .btn-row .btn {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f2f4f7;
+      font-size: 14px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .lbl { color: #667085; }
+    .info-row .val {
+      max-width: 62%;
+      text-align: right;
+      font-weight: 600;
+      color: #101828;
+      word-break: break-all;
+    }
+    .mini {
+      font-size: 12px;
+      color: #667085;
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15,23,42,.28);
+      padding: 18px;
+    }
+    .overlay .card {
+      width: 100%;
+      max-width: 380px;
+      margin-bottom: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="hero">
+      <h1>凯航扫码</h1>
+      <p>客户端只负责登录、设置和进入 NocoBase 业务页。扫码、日志、打印动作都在业务页内执行。</p>
+      <div class="build-chip" id="build-chip">编译时间：—</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">登录</div>
+      <div id="login-status" class="status info">请先登录，成功后会按当前角色自动进入业务页。</div>
+      <div class="field">
+        <label>用户名</label>
+        <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
+               onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="密码"
+               onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-blue" id="login-btn" onclick="doLogin()">登录</button>
+        <button class="btn btn-gray" onclick="openSettingsOverlay()">设置</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
+        <button class="btn btn-gray" onclick="doLogout()">退出</button>
+      </div>
+      <div class="mini">登录成功后会直接跳到角色对应页面，不再保留旧扫描壳页面。</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">当前配置</div>
+      <div class="info-row"><span class="lbl">服务地址</span><span class="val" id="summary-server">—</span></div>
+      <div class="info-row"><span class="lbl">更新地址</span><span class="val" id="summary-update">—</span></div>
+      <div class="info-row"><span class="lbl">打印默认值</span><span class="val" id="summary-print">—</span></div>
+      <div class="info-row"><span class="lbl">当前用户</span><span class="val" id="summary-user">—</span></div>
+      <div class="info-row"><span class="lbl">当前角色</span><span class="val" id="summary-role">—</span></div>
+      <div class="info-row"><span class="lbl">目标页面</span><span class="val" id="summary-page">—</span></div>
+      <div class="mini" id="build-info">build: —</div>
+    </div>
+  </div>
+
+  <div class="overlay" id="settings-overlay" onclick="if(event.target===this)closeSettingsOverlay()">
+    <div class="card">
+      <div class="card-title">客户端设置</div>
+      <div id="settings-status" class="status info" style="display:none;"></div>
+      <div class="field">
+        <label>服务地址</label>
+        <input id="settings-server-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000">
+      </div>
+      <div class="field">
+        <label>更新地址</label>
+        <input id="settings-update-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000">
+      </div>
+      <div class="field">
+        <label>纸张类型</label>
+        <select id="settings-paper-type">
+          <option value="thermal">普通热敏纸</option>
+          <option value="black_mark">黑标标签纸</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>排版预设</label>
+        <select id="settings-layout-preset">
+          <option value="standard">标准排版</option>
+          <option value="compact">紧凑排版</option>
+          <option value="large">大字排版</option>
+        </select>
+      </div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-blue" id="save-settings-btn" onclick="saveSettingsOverlay()">保存</button>
+        <button class="btn btn-gray" onclick="closeSettingsOverlay()">取消</button>
+      </div>
+      <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
+    </div>
+  </div>
+
+  <script src="plugins.js"></script>
+  <script>
+  'use strict';
+
+  const { API } = window;
+
+  function getPaperTypeLabel(value = API.getPrintPaperType()) {
+    return value === 'black_mark' ? '黑标标签纸' : '普通热敏纸';
+  }
+
+  function getLayoutPresetLabel(value = API.getPrintLayoutPreset()) {
+    return ({ standard: '标准排版', compact: '紧凑排版', large: '大字排版' }[value] || value || '标准排版');
+  }
+
+  function setStatus(id, msg, type = '') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'status' + (type ? ' ' + type : '');
+    el.style.display = '';
+  }
+
+  function hide(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  }
+
+  function renderSettingsInputs() {
+    const server = document.getElementById('settings-server-base');
+    const update = document.getElementById('settings-update-base');
+    const paper = document.getElementById('settings-paper-type');
+    const layout = document.getElementById('settings-layout-preset');
+    if (server) server.value = API.getServerBase();
+    if (update) update.value = API.getUpdateBase();
+    if (paper) paper.value = API.getPrintPaperType();
+    if (layout) layout.value = API.getPrintLayoutPreset();
+  }
+
+  function renderSummary() {
+    const user = API.getCurrentUser();
+    const role = API.getCurrentRole();
+    const buildText = 'build: ' + (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh-CN') : '—');
+    document.getElementById('summary-server').textContent = API.getServerBase();
+    document.getElementById('summary-update').textContent = API.getUpdateBase();
+    document.getElementById('summary-print').textContent = `${getPaperTypeLabel()} / ${getLayoutPresetLabel()}`;
+    document.getElementById('summary-user').textContent = user ? (user.display_name || user.nickname || user.username || user.email || '已登录') : '未登录';
+    document.getElementById('summary-role').textContent = role || '—';
+    document.getElementById('summary-page').textContent = user ? API.getRolePageUrl(role) : '—';
+    document.getElementById('build-info').textContent = buildText;
+    document.getElementById('build-chip').textContent = '编译时间：' + buildText.replace(/^build:\s*/, '');
+  }
+
+  function openSettingsOverlay() {
+    renderSettingsInputs();
+    hide('settings-status');
+    document.getElementById('settings-overlay').style.display = 'flex';
+  }
+
+  function closeSettingsOverlay() {
+    document.getElementById('settings-overlay').style.display = 'none';
+  }
+
+  function saveSettingsOverlay(showMessage = true) {
+    const serverBase = document.getElementById('settings-server-base').value.trim();
+    const updateBase = document.getElementById('settings-update-base').value.trim();
+    if (!serverBase) {
+      setStatus('settings-status', '请输入服务地址', 'err');
+      return false;
+    }
+    if (!updateBase) {
+      setStatus('settings-status', '请输入更新地址', 'err');
+      return false;
+    }
+    API.setServerBase(serverBase);
+    API.setUpdateBase(updateBase);
+    API.setPrintPaperType(document.getElementById('settings-paper-type').value);
+    API.setPrintLayoutPreset(document.getElementById('settings-layout-preset').value);
+    renderSummary();
+    if (showMessage) setStatus('settings-status', '配置已保存', 'ok');
+    return true;
+  }
+
+  function openRolePage() {
+    const user = API.getCurrentUser();
+    if (!user || !API.getToken()) {
+      setStatus('login-status', '请先登录后再进入业务页面', 'warn');
+      return;
+    }
+    const nextUrl = API.getRoleBootstrapUrl();
+    setStatus('login-status', '登录成功，正在进入业务页…', 'info');
+    window.location.replace(nextUrl);
+  }
+
+  async function doLogin() {
+    if (!API.getServerBase() || !API.getUpdateBase()) {
+      setStatus('login-status', '请先点设置，保存服务地址和更新地址', 'warn');
+      return;
+    }
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+      setStatus('login-status', '请输入用户名和密码', 'err');
+      return;
+    }
+    document.getElementById('login-btn').disabled = true;
+    setStatus('login-status', '登录中…', 'info');
+    try {
+      await API.login(username, password);
+      document.getElementById('login-password').value = '';
+      renderSummary();
+      openRolePage();
+    } catch (e) {
+      setStatus('login-status', '登录失败：' + e.message, 'err');
+    } finally {
+      document.getElementById('login-btn').disabled = false;
+    }
+  }
+
+  function doLogout() {
+    API.logout();
+    renderSummary();
+    setStatus('login-status', '已退出登录', 'info');
+  }
+
+  async function bootAuth() {
+    renderSummary();
+    try {
+      await API.fetchMe();
+      renderSummary();
+      setStatus('login-status', '已恢复登录态，正在进入业务页…', 'info');
+      openRolePage();
+    } catch (_) {
+      setStatus('login-status', '请先登录，成功后会按当前角色自动进入业务页。', 'info');
+    }
+  }
+
+  window.addEventListener('kh:auth-expired', () => {
+    renderSummary();
+    setStatus('login-status', '登录已失效，请重新登录', 'warn');
+  });
+
+  let _updateStarted = false;
+
+  async function triggerAppUpdate() {
+    if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) {
+      setStatus('login-status', '当前环境不支持原生更新检测', 'warn');
+      return;
+    }
+    setStatus('login-status', '正在检查更新…', 'info');
+    try {
+      const localInfo = await window.UpdatePlugin.getVersionInfo();
+      const res = await fetch(API.getUpdateBase() + '/api/app/version');
+      if (!res.ok) throw new Error('无法获取最新版本信息');
+      const serverInfo = await res.json();
+      if (serverInfo.versionCode > localInfo.versionCode) {
+        const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
+        if (ok) {
+          _updateStarted = true;
+          startApkDownload(serverInfo.apkUrl);
+        } else {
+          setStatus('login-status', '已取消更新', 'warn');
+        }
+      } else {
+        setStatus('login-status', `当前已是最新版本 (v${localInfo.versionName})`, 'ok');
+      }
+    } catch (e) {
+      setStatus('login-status', '检查更新失败：' + e.message, 'err');
+    }
+  }
+
+  function startApkDownload(url) {
+    const absoluteUrl = new URL(url, API.getUpdateBase()).href;
+    let overlay = document.getElementById('update-progress-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'update-progress-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.78);color:#fff;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+      overlay.innerHTML = '<div style="width:100%;max-width:320px;background:#111827;border-radius:18px;padding:22px;text-align:center;"><div style="font-size:18px;font-weight:700;margin-bottom:10px;">正在下载更新</div><div style="font-size:13px;color:#cbd5e1;margin-bottom:18px;">请勿关闭应用</div><div style="height:8px;background:#374151;border-radius:999px;overflow:hidden;margin-bottom:10px;"><div id="update-progress-bar" style="width:0%;height:100%;background:#34d399;"></div></div><div id="update-progress-text" style="font-size:14px;">0%</div></div>';
+      document.body.appendChild(overlay);
+    } else {
+      overlay.style.display = 'flex';
+    }
+
+    const bar = document.getElementById('update-progress-bar');
+    const text = document.getElementById('update-progress-text');
+    bar.style.width = '0%';
+    text.textContent = '0%';
+
+    window.UpdatePlugin.addListener('installPermissionRequired', (data) => {
+      overlay.style.display = 'none';
+      _updateStarted = false;
+      setStatus('login-status', data.reason, 'warn');
+    });
+
+    window.UpdatePlugin.addListener('downloadProgress', (data) => {
+      const progress = data.progress;
+      bar.style.width = progress + '%';
+      text.textContent = progress + '%';
+    }).then(listener => {
+      window.UpdatePlugin.downloadAndInstallApk({ url: absoluteUrl })
+        .then(() => {
+          listener.remove();
+          bar.style.width = '100%';
+          text.textContent = '下载完成，请在通知栏点击安装…';
+          setTimeout(() => { window.UpdatePlugin?.exitApp?.(); }, 1500);
+        })
+        .catch(err => {
+          listener.remove();
+          overlay.style.display = 'none';
+          _updateStarted = false;
+          setStatus('login-status', '下载 APK 失败：' + err.message, 'err');
+        });
+    });
+  }
+
+  renderSettingsInputs();
+  renderSummary();
+  bootAuth();
+  </script>
+</body>
+</html>

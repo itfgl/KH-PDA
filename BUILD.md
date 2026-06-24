@@ -95,6 +95,16 @@ npm run build
 npx cap sync android
 ```
 
+注意：
+
+- `android/capacitor-cordova-android-plugins/`
+- `android/app/src/main/assets/public/`
+- `android/app/src/main/assets/capacitor.config.json`
+- `android/app/src/main/assets/capacitor.plugins.json`
+- `android/app/src/main/res/xml/config.xml`
+
+这些 Capacitor 生成文件现在需要一并提交，因为远程 CI 已经不再执行 `cap sync`。
+
 ## 本地构建
 
 建议本地环境：
