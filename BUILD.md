@@ -57,22 +57,19 @@ Android APK（Capacitor 壳）
 
 ### 构建环境
 
-- Node.js 20
 - Java 17
 - Gradle Wrapper `8.14.3`
 - Android Gradle Plugin `8.13.0`
 
-远程构建环境不再负责前端编译，但仍会安装 Node 依赖，用来提供 Capacitor Android 模块。
+远程构建环境不再负责前端编译。
 
 ### 流程
 
 ```text
 1. checkout
-2. 安装 Node 20
-3. 执行 `npm ci`
-4. 安装 Java 17
-5. 直接在 `android/` 下执行 `./gradlew assembleDebug`
-6. 上传 debug APK artifact
+2. 安装 Java 17
+3. 直接在 `android/` 下执行 `./gradlew assembleDebug`
+4. 上传 debug APK artifact
 ```
 
 ### 什么时候会让你误以为“没生效”
@@ -85,7 +82,7 @@ Android APK（Capacitor 壳）
 ### 远程构建现在包含什么
 
 - 只编译当前仓库里已经存在的 Android 工程
-- 会安装 Node 依赖，仅用于提供 `@capacitor/android`
+- 不安装 Node
 - 不构建前端
 - 不同步 Capacitor 资源
 
