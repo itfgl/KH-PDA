@@ -9,7 +9,7 @@ const PRINT_PAPER_TYPE_KEY = 'kh_print_paper_type';
 const PRINT_LAYOUT_PRESET_KEY = 'kh_print_layout_preset';
 const DEFAULT_AUTHENTICATOR = 'basic';
 const STORAGE_APP_NAME = 'main';
-const ROLE_ROUTES_API_PATH = '/api/client_role_routes:list?pageSize=200';
+const ROLE_ROUTES_API_PATH = '/api/scanner_page_bindings:list?pageSize=200';
 const DEFAULT_PRINT_PAPER_TYPE = 'thermal';
 const DEFAULT_PRINT_LAYOUT_PRESET = 'standard';
 
