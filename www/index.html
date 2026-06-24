@@ -129,31 +129,6 @@
   <div class="card" style="width:100%;max-width:340px;">
     <div class="card-title" style="text-align:center;font-size:18px;margin-bottom:16px;">凯航扫码 · 登录</div>
     <div class="field">
-      <label>服务地址</label>
-      <input id="login-server-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000"
-             onkeydown="if(event.key==='Enter')document.getElementById('login-username').focus()" />
-    </div>
-    <div class="field">
-      <label>更新地址</label>
-      <input id="login-update-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000"
-             onkeydown="if(event.key==='Enter')document.getElementById('login-username').focus()" />
-    </div>
-    <div class="field">
-      <label>纸张类型</label>
-      <select id="login-paper-type" onchange="savePrintPrefsFromLogin()">
-        <option value="thermal">普通热敏纸</option>
-        <option value="black_mark">黑标标签纸</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>排版预设</label>
-      <select id="login-layout-preset" onchange="savePrintPrefsFromLogin()">
-        <option value="standard">标准排版</option>
-        <option value="compact">紧凑排版</option>
-        <option value="large">大字排版</option>
-      </select>
-    </div>
-    <div class="field">
       <label>用户名</label>
       <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
              onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
@@ -163,15 +138,54 @@
       <input id="login-password" type="password" autocomplete="current-password" placeholder="密码"
              onkeydown="if(event.key==='Enter')doLogin()" />
     </div>
-    <div style="font-size:12px;color:#8e8e93;line-height:1.6;margin:-2px 0 8px">
-      登录后会按当前角色读取目标页面配置。你也可以先留在启动页做调试或检查更新，再决定是否进入业务页面。
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="btn btn-blue" id="login-btn" onclick="doLogin()">登录</button>
+      <button class="btn btn-gray" onclick="openSettingsOverlay()">设置</button>
     </div>
-    <button class="btn btn-blue" id="login-btn" onclick="doLogin()" style="margin-top:6px;">登录</button>
+    <div style="font-size:12px;color:#8e8e93;line-height:1.6;margin:-2px 0 8px">
+      登录成功后会按当前角色读取目标页面；是否进入业务页，由启动页单独控制。
+    </div>
     <div class="btn-row" style="margin-top:8px;">
       <button class="btn btn-gray" onclick="openStartupDebug()">调试页</button>
       <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
     </div>
     <div class="status" id="login-status" style="display:none;margin-top:8px;"></div>
+  </div>
+</div>
+
+<div id="settings-overlay" style="position:fixed;inset:0;z-index:9999;background:rgba(28,28,30,.35);
+     display:none;align-items:center;justify-content:center;padding:24px;">
+  <div class="card" style="width:100%;max-width:360px;max-height:90vh;overflow:auto;">
+    <div class="card-title" style="text-align:center;font-size:18px;margin-bottom:16px;">客户端设置</div>
+    <div class="field">
+      <label>服务地址</label>
+      <input id="settings-server-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000" />
+    </div>
+    <div class="field">
+      <label>更新地址</label>
+      <input id="settings-update-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000" />
+    </div>
+    <div class="field">
+      <label>纸张类型</label>
+      <select id="settings-paper-type">
+        <option value="thermal">普通热敏纸</option>
+        <option value="black_mark">黑标标签纸</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>排版预设</label>
+      <select id="settings-layout-preset">
+        <option value="standard">标准排版</option>
+        <option value="compact">紧凑排版</option>
+        <option value="large">大字排版</option>
+      </select>
+    </div>
+    <div class="btn-row" style="margin-top:6px;">
+      <button class="btn btn-blue" id="save-settings-btn" onclick="saveSettingsOverlay()">保存</button>
+      <button class="btn btn-gray" onclick="closeSettingsOverlay()">取消</button>
+    </div>
+    <button class="btn btn-gray" style="margin-top:8px;" onclick="triggerAppUpdate()">检查更新</button>
+    <div class="status" id="settings-status" style="display:none;margin-top:8px;"></div>
   </div>
 </div>
 
@@ -218,7 +232,7 @@
       </select>
     </div>
     <div class="btn-row" style="margin-top:12px;">
-      <button class="btn btn-blue" onclick="openRolePage()">进入业务页</button>
+      <button class="btn btn-blue" onclick="openRolePage()">3. 进入业务页</button>
       <button class="btn btn-gray" onclick="switchTab('debug')">打开调试</button>
     </div>
     <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
@@ -1521,10 +1535,10 @@ function getLayoutPresetLabel(value = API.getPrintLayoutPreset()) {
   return ({ standard: '标准排版', compact: '紧凑排版', large: '大字排版' }[value] || value || '标准排版');
 }
 function renderServerBase() {
-  const input = document.getElementById('login-server-base');
-  const updateInput = document.getElementById('login-update-base');
-  const loginPaper = document.getElementById('login-paper-type');
-  const loginLayout = document.getElementById('login-layout-preset');
+  const input = document.getElementById('settings-server-base');
+  const updateInput = document.getElementById('settings-update-base');
+  const loginPaper = document.getElementById('settings-paper-type');
+  const loginLayout = document.getElementById('settings-layout-preset');
   const launcherPaperInput = document.getElementById('launcher-paper-type-input');
   const launcherLayoutInput = document.getElementById('launcher-layout-preset-input');
   if (input) input.value = API.getServerBase();
@@ -1553,28 +1567,59 @@ function renderLauncher() {
   if (launcherRolePage) launcherRolePage.textContent = rolePage || '—';
   if (launcherStatus) {
     launcherStatus.textContent = user
-      ? `当前角色：${role || '未识别'}，当前按${getPaperTypeLabel()} + ${getLayoutPresetLabel()}打印。`
-      : '请先登录，或先进入调试页检查设备状态。';
+      ? `当前角色：${role || '未识别'}。当前默认打印：${getPaperTypeLabel()} + ${getLayoutPresetLabel()}。如无问题，继续第 3 步进入业务页。`
+      : '请先登录；也可以先进入调试页检查设备状态。';
   }
 }
-function savePrintPrefs(paperType, layoutPreset) {
+function savePrintPrefs(paperType, layoutPreset, writeLog = true) {
   API.setPrintPaperType(paperType);
   API.setPrintLayoutPreset(layoutPreset);
   renderServerBase();
   renderLauncher();
-  log('打印配置已更新：' + getPaperTypeLabel() + ' / ' + getLayoutPresetLabel(), 'info');
-}
-function savePrintPrefsFromLogin() {
-  savePrintPrefs(
-    document.getElementById('login-paper-type')?.value || API.getPrintPaperType(),
-    document.getElementById('login-layout-preset')?.value || API.getPrintLayoutPreset(),
-  );
+  if (writeLog) log('打印配置已更新：' + getPaperTypeLabel() + ' / ' + getLayoutPresetLabel(), 'info');
 }
 function savePrintPrefsFromLauncher() {
   savePrintPrefs(
     document.getElementById('launcher-paper-type-input')?.value || API.getPrintPaperType(),
     document.getElementById('launcher-layout-preset-input')?.value || API.getPrintLayoutPreset(),
   );
+}
+function openSettingsOverlay() {
+  renderServerBase();
+  hide('settings-status');
+  document.getElementById('settings-overlay').style.display = 'flex';
+}
+function closeSettingsOverlay() {
+  document.getElementById('settings-overlay').style.display = 'none';
+}
+function saveSettingsOverlay(showMessage = true) {
+  const serverBase = document.getElementById('settings-server-base').value.trim();
+  const updateBase = document.getElementById('settings-update-base').value.trim();
+  if (!serverBase) {
+    setStatus('settings-status', '请输入服务地址', 'err');
+    show('settings-status');
+    return false;
+  }
+  if (!updateBase) {
+    setStatus('settings-status', '请输入更新地址', 'err');
+    show('settings-status');
+    return false;
+  }
+  API.setServerBase(serverBase);
+  API.setUpdateBase(updateBase);
+  savePrintPrefs(
+    document.getElementById('settings-paper-type')?.value || API.getPrintPaperType(),
+    document.getElementById('settings-layout-preset')?.value || API.getPrintLayoutPreset(),
+    false,
+  );
+  renderServerBase();
+  renderLauncher();
+  if (showMessage) {
+    setStatus('settings-status', '配置已保存', 'ok');
+    show('settings-status');
+  }
+  log('客户端配置已保存：' + API.getServerBase(), 'info');
+  return true;
 }
 function showLogin() {
   document.getElementById('login-overlay').style.display = 'flex';
@@ -1602,22 +1647,18 @@ function openRolePage() {
 }
 
 async function doLogin() {
-  const serverBase = document.getElementById('login-server-base').value.trim();
-  const updateBase = document.getElementById('login-update-base').value.trim();
-  savePrintPrefs(
-    document.getElementById('login-paper-type')?.value || API.getPrintPaperType(),
-    document.getElementById('login-layout-preset')?.value || API.getPrintLayoutPreset(),
-  );
+  if (!API.getServerBase() || !API.getUpdateBase()) {
+    setStatus('login-status', '请先点设置，保存服务地址和更新地址', 'warn');
+    show('login-status');
+    return;
+  }
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
-  if (!serverBase) { setStatus('login-status', '请输入服务地址', 'err'); show('login-status'); return; }
-  if (!updateBase) { setStatus('login-status', '请输入更新地址', 'err'); show('login-status'); return; }
   if (!username || !password) { setStatus('login-status', '请输入用户名和密码', 'err'); show('login-status'); return; }
+  hide('login-status');
   document.getElementById('login-btn').disabled = true;
   setStatus('login-status', '登录中…', 'info'); show('login-status');
   try {
-    API.setServerBase(serverBase);
-    API.setUpdateBase(updateBase);
     await API.login(username, password);
     document.getElementById('login-password').value = '';
     hide('login-status');
@@ -1629,7 +1670,7 @@ async function doLogin() {
     if (API.getCurrentRole()) log('当前角色：' + API.getCurrentRole(), 'info');
     log('角色目标页：' + API.getRolePageUrl(), 'info');
     hideLogin();
-    switchTab('scan');
+    openRolePage();
   } catch (e) {
     setStatus('login-status', '登录失败：' + e.message, 'err'); show('login-status');
   } finally {
