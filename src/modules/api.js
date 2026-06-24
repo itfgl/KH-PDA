@@ -2,27 +2,94 @@
  * 服务端 API 调用封装
  * 所有接口统一走 apiFetch，非 2xx 抛出含 detail 的 Error
  */
-const SERVER_BASE = 'http://115.29.178.34:2974';
+const DEFAULT_SERVER_BASE = 'http://115.29.178.34:2974';
+const SERVER_BASE_KEY = 'kh_server_base_url';
+const DEFAULT_AUTHENTICATOR = 'basic';
+const STORAGE_APP_NAME = 'main';
+const ROLE_ROUTES_API_PATH = '/api/client_role_routes:list?pageSize=200';
 
 // ── 登录态（token + 当前用户，持久化到 localStorage）──────────────────────────
 const TOKEN_KEY = 'kh_token';
 const USER_KEY  = 'kh_user';
+const ROLE_KEY = 'kh_role';
+const AUTHENTICATOR_KEY = 'kh_authenticator';
+const ROLE_ROUTE_KEY = 'kh_role_route';
+const ROLE_ROUTES_KEY = 'kh_role_routes_json';
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
+export const getCurrentRole = () => localStorage.getItem(ROLE_KEY) || '';
+export const getAuthenticator = () => localStorage.getItem(AUTHENTICATOR_KEY) || DEFAULT_AUTHENTICATOR;
+
+function normalizeBaseUrl(value) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return DEFAULT_SERVER_BASE;
+  return raw.replace(/\/+$/, '');
+}
+
+export function getServerBase() {
+  return normalizeBaseUrl(localStorage.getItem(SERVER_BASE_KEY) || DEFAULT_SERVER_BASE);
+}
+
+export function setServerBase(value) {
+  const base = normalizeBaseUrl(value);
+  localStorage.setItem(SERVER_BASE_KEY, base);
+  return base;
+}
+
+function getRoleRouteMap() {
+  try {
+    const value = JSON.parse(localStorage.getItem(ROLE_ROUTES_KEY) || '{}');
+    return value && typeof value === 'object' ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getRoleRoute(roleName = '') {
+  const routeMap = getRoleRouteMap();
+  const normalizedRole = String(roleName || getCurrentRole()).trim().toLowerCase();
+  const route = normalizedRole ? routeMap[normalizedRole] : '';
+  const fallback = route || routeMap.default || '/admin/dufm0qvyxcn';
+  if (/^https?:\/\//i.test(fallback)) return fallback;
+  return fallback.startsWith('/') ? fallback : `/${fallback}`;
+}
+
+export function getRolePageUrl(roleName = '') {
+  const route = getRoleRoute(roleName);
+  if (/^https?:\/\//i.test(route)) return route;
+  return `${getServerBase()}${route}`;
+}
+
+export function getRoleBootstrapUrl(roleName = '') {
+  const targetUrl = getRolePageUrl(roleName);
+  const url = new URL('/signin', `${getServerBase()}/`);
+  url.searchParams.set('redirect', targetUrl);
+  url.searchParams.set('kh_token', getToken());
+  url.searchParams.set('kh_auth', getAuthenticator());
+  url.searchParams.set('kh_role', roleName || getCurrentRole());
+  url.searchParams.set('kh_app', STORAGE_APP_NAME);
+  return url.toString();
+}
 
 export function getCurrentUser() {
   try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null'); }
   catch { return null; }
 }
 
-function setSession(token, user) {
+function setSession(token, user, roleName = '', authenticator = DEFAULT_AUTHENTICATOR) {
   localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  localStorage.setItem(USER_KEY, JSON.stringify({ ...(user || {}), role: roleName || user?.role || '' }));
+  localStorage.setItem(ROLE_KEY, roleName || user?.role || '');
+  localStorage.setItem(AUTHENTICATOR_KEY, authenticator || DEFAULT_AUTHENTICATOR);
+  localStorage.setItem(ROLE_ROUTE_KEY, getRoleRoute(roleName || user?.role || ''));
 }
 
 export function logout() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(ROLE_KEY);
+  localStorage.removeItem(AUTHENTICATOR_KEY);
+  localStorage.removeItem(ROLE_ROUTE_KEY);
 }
 
 /** 401 时抛出此错误，外层据此跳回登录页 */
@@ -35,12 +102,179 @@ function notifyAuthExpired() {
 
 function authHeaders() {
   const t = getToken();
-  return t ? { Authorization: `Bearer ${t}` } : {};
+  const headers = {};
+  const authenticator = getAuthenticator();
+  if (authenticator) headers['X-Authenticator'] = authenticator;
+  if (t) headers.Authorization = `Bearer ${t}`;
+  return headers;
+}
+
+function unwrapResponseData(payload) {
+  if (payload && typeof payload === 'object' && payload.data !== undefined) return payload.data;
+  return payload;
+}
+
+function normalizeRoleName(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'object') return String(value.name || value.title || value.role || '').trim();
+  return String(value).trim();
+}
+
+function extractRoleName(authPayload, rolesPayload) {
+  const authData = unwrapResponseData(authPayload);
+  const rolesData = unwrapResponseData(rolesPayload);
+
+  const candidates = [];
+  if (authData && typeof authData === 'object') {
+    candidates.push(
+      authData.role,
+      authData.roleName,
+      authData.currentRole,
+      authData.current_role,
+      authData.user?.role,
+      authData.user?.roleName,
+      authData.user?.currentRole,
+      authData.user?.current_role,
+    );
+  }
+
+  for (const candidate of candidates) {
+    const roleName = normalizeRoleName(candidate);
+    if (roleName) return roleName;
+  }
+
+  const items = Array.isArray(rolesData)
+    ? rolesData
+    : Array.isArray(rolesData?.roles)
+      ? rolesData.roles
+      : Array.isArray(rolesData?.items)
+        ? rolesData.items
+        : Array.isArray(rolesData?.data)
+          ? rolesData.data
+          : [];
+
+  for (const item of items) {
+    if (item?.current) {
+      const roleName = normalizeRoleName(item.name);
+      if (roleName) return roleName;
+    }
+  }
+  for (const item of items) {
+    if (item?.default) {
+      const roleName = normalizeRoleName(item.name);
+      if (roleName) return roleName;
+    }
+  }
+  for (const item of items) {
+    const roleName = normalizeRoleName(item?.name || item);
+    if (roleName) return roleName;
+  }
+  return '';
+}
+
+function extractToken(payload) {
+  const data = unwrapResponseData(payload);
+  if (typeof data === 'string') return data;
+  return String(
+    data?.token ||
+    data?.jwt ||
+    data?.accessToken ||
+    data?.access_token ||
+    data?.user?.token ||
+    '',
+  ).trim();
+}
+
+function extractUser(payload) {
+  const data = unwrapResponseData(payload);
+  if (!data || typeof data !== 'object') return null;
+  if (data.user && typeof data.user === 'object') return data.user;
+  return data;
+}
+
+function extractListPayload(payload) {
+  const data = unwrapResponseData(payload);
+  if (Array.isArray(data)) return data.filter((item) => item && typeof item === 'object');
+  if (data && typeof data === 'object') {
+    for (const key of ['items', 'rows', 'data']) {
+      if (Array.isArray(data[key])) return data[key].filter((item) => item && typeof item === 'object');
+    }
+  }
+  return [];
+}
+
+function normalizeRoleRoute(item, index) {
+  if (!item || typeof item !== 'object') return null;
+  let options = item.options;
+  if (typeof options === 'string' && options.trim()) {
+    try { options = JSON.parse(options); } catch { options = {}; }
+  }
+  if (!options || typeof options !== 'object') options = {};
+
+  const roleName = normalizeRoleName(
+    item.role_name ??
+    item.roleName ??
+    item.role ??
+    options.role_name ??
+    options.role ??
+    '',
+  ).toLowerCase();
+  const routePath = String(
+    item.route_path ??
+    item.routePath ??
+    item.path ??
+    item.page_path ??
+    item.pagePath ??
+    options.route_path ??
+    options.page_path ??
+    '',
+  ).trim();
+  const platform = String(item.platform ?? options.platform ?? '').trim().toLowerCase();
+  const enabled = item.enabled !== undefined ? item.enabled : true;
+  const sortOrder = Number.parseInt(item.sort ?? item.sortOrder ?? options.sort ?? index, 10);
+
+  if (!routePath) return null;
+
+  return {
+    roleName,
+    routePath: /^https?:\/\//i.test(routePath) || routePath.startsWith('/') ? routePath : `/${routePath}`,
+    platform,
+    enabled: enabled !== false && enabled !== 'false' && enabled !== 0 && enabled !== '0',
+    sortOrder: Number.isFinite(sortOrder) ? sortOrder : index,
+  };
+}
+
+function buildRoleRouteMap(items = []) {
+  const map = {};
+  const routes = items
+    .map((item, index) => normalizeRoleRoute(item, index))
+    .filter(Boolean)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  for (const route of routes) {
+    if (!route.enabled) continue;
+    if (!['', 'android', 'mobile', 'all'].includes(route.platform)) continue;
+    const key = route.roleName || 'default';
+    if (!(key in map)) map[key] = route.routePath;
+  }
+  return map;
+}
+
+async function refreshRoleRoutes() {
+  try {
+    const payload = await apiFetch(ROLE_ROUTES_API_PATH);
+    const routeMap = buildRoleRouteMap(extractListPayload(payload));
+    localStorage.setItem(ROLE_ROUTES_KEY, JSON.stringify(routeMap));
+    return routeMap;
+  } catch {
+    return getRoleRouteMap();
+  }
 }
 
 export async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) };
-  const url = path.startsWith('http') ? path : `${SERVER_BASE}${path}`;
+  const url = path.startsWith('http') ? path : `${getServerBase()}${path}`;
   const res = await fetch(url, { ...opts, headers });
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) { logout(); notifyAuthExpired(); throw new AuthError(data.detail ?? '登录已失效'); }
@@ -50,27 +284,59 @@ export async function apiFetch(path, opts = {}) {
 
 /** 用户名/密码登录，成功后持久化 token + 用户信息并返回 user */
 export async function login(username, password) {
-  const res = await fetch(`${SERVER_BASE}/api/auth/login`, {
+  const authenticator = getAuthenticator() || DEFAULT_AUTHENTICATOR;
+  const res = await fetch(`${getServerBase()}/api/auth:signIn`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password }),
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Authenticator': authenticator,
+    },
+    body: JSON.stringify({ account: username, password }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail ?? `登录失败 ${res.status}`);
-  setSession(data.token, data.user);
-  return data.user;
+
+  const token = extractToken(data);
+  if (!token) throw new Error('登录成功，但未返回 token');
+
+  localStorage.setItem(TOKEN_KEY, token);
+  localStorage.setItem(AUTHENTICATOR_KEY, authenticator);
+
+  const [authInfo, rolesInfo] = await Promise.all([
+    apiFetch('/api/auth:check'),
+    apiFetch('/api/roles:check').catch(() => []),
+  ]);
+  const roleName = extractRoleName(authInfo, rolesInfo);
+  const user = extractUser(authInfo) || extractUser(data) || { username };
+  await refreshRoleRoutes();
+  setSession(token, user, roleName, authenticator);
+  return getCurrentUser();
 }
 
 /** 用已存 token 拉当前用户，校验登录是否仍有效（失败抛 AuthError） */
 export async function fetchMe() {
   if (!getToken()) throw new AuthError('未登录');
-  const user = await apiFetch('/api/auth/me');
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-  return user;
+  const [authInfo, rolesInfo] = await Promise.all([
+    apiFetch('/api/auth:check'),
+    apiFetch('/api/roles:check').catch(() => []),
+  ]);
+  const roleName = extractRoleName(authInfo, rolesInfo);
+  const user = extractUser(authInfo) || getCurrentUser() || {};
+  await refreshRoleRoutes();
+  setSession(getToken(), user, roleName, getAuthenticator());
+  return getCurrentUser();
 }
 
 /** 角色列表（用于「代办批次」的模拟角色筛选） */
-export const getRoles = () => apiFetch('/api/roles');
+export async function getRoles() {
+  const payload = await apiFetch('/api/roles:check');
+  const data = unwrapResponseData(payload);
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.roles)) return data.roles;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
 
 /**
  * 代办批次列表：按模拟角色 / 机器筛选。
@@ -137,7 +403,7 @@ export async function uploadEventFile(batchNo, file) {
   fd.append('batch_no', batchNo);
   fd.append('file', file);
   // 不要手设 Content-Type，让浏览器带上 multipart 边界；仅注入鉴权头
-  const res = await fetch(`${SERVER_BASE}/api/events/upload`, {
+  const res = await fetch(`${getServerBase()}/api/events/upload`, {
     method: 'POST', body: fd, headers: { ...authHeaders() },
   });
   const data = await res.json().catch(() => ({}));

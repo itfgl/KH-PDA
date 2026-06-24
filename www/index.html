@@ -129,6 +129,11 @@
   <div class="card" style="width:100%;max-width:340px;">
     <div class="card-title" style="text-align:center;font-size:18px;margin-bottom:16px;">凯航扫码 · 登录</div>
     <div class="field">
+      <label>服务地址</label>
+      <input id="login-server-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000"
+             onkeydown="if(event.key==='Enter')document.getElementById('login-username').focus()" />
+    </div>
+    <div class="field">
       <label>用户名</label>
       <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
              onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
@@ -138,7 +143,14 @@
       <input id="login-password" type="password" autocomplete="current-password" placeholder="密码"
              onkeydown="if(event.key==='Enter')doLogin()" />
     </div>
+    <div style="font-size:12px;color:#8e8e93;line-height:1.6;margin:-2px 0 8px">
+      登录后会按当前角色读取目标页面配置。你也可以先留在启动页做调试或检查更新，再决定是否进入业务页面。
+    </div>
     <button class="btn btn-blue" id="login-btn" onclick="doLogin()" style="margin-top:6px;">登录</button>
+    <div class="btn-row" style="margin-top:8px;">
+      <button class="btn btn-gray" onclick="openStartupDebug()">调试页</button>
+      <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
+    </div>
     <div class="status" id="login-status" style="display:none;margin-top:8px;"></div>
   </div>
 </div>
@@ -161,6 +173,19 @@
 
 <!-- ══ 扫描页 ══ -->
 <div class="page active" id="page-scan">
+  <div class="card" id="launcher-card">
+    <div class="card-title">启动页</div>
+    <div class="status" id="launcher-status">登录后可进入角色页面，也可以先做调试和更新。</div>
+    <div class="info-row"><span class="lbl">服务地址</span><span class="val" id="launcher-server">—</span></div>
+    <div class="info-row"><span class="lbl">当前用户</span><span class="val" id="launcher-user">—</span></div>
+    <div class="info-row"><span class="lbl">目标页面</span><span class="val" id="launcher-role-page">—</span></div>
+    <div class="btn-row" style="margin-top:12px;">
+      <button class="btn btn-blue" onclick="openRolePage()">进入业务页</button>
+      <button class="btn btn-gray" onclick="switchTab('debug')">打开调试</button>
+    </div>
+    <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
+  </div>
+
   <div class="card">
     <div class="card-title">扫描方式</div>
     <div id="nfc-status-bar" class="status ok">📡 NFC 监听中，贴卡即识别</div>
@@ -738,7 +763,7 @@ function _fileUrl(filename) {
   return _fileUrlFor(_currentBatch.batch_no, filename);
 }
 function _fileUrlFor(batchNo, filename) {
-  return SERVER_BASE + '/api/events/files/' + encodeURIComponent(batchNo) + '/' + encodeURIComponent(filename);
+  return API.getServerBase() + '/api/events/files/' + encodeURIComponent(batchNo) + '/' + encodeURIComponent(filename);
 }
 // SEARCH() 结果单元格：批次号对应的数据可能是图片/文件/数组/普通文本
 function _searchCellHtml(batchNo, val) {
@@ -1422,6 +1447,7 @@ async function refreshDebug() {
     ['PrintPlugin', !!window.PrintPlugin],
     ['KaihangNfc',  !!window.KaihangNfc  ? `ok (mode=${NFC.getMode()})` : false],
     ['UpdatePlugin',!!window.UpdatePlugin],
+    ['Server',      API.getServerBase()],
     ['APK Version', apkVer],
     ['Platform',    window.Capacitor?.getPlatform?.() ?? (window.PDAJsBridge ? 'X8-PDA' : 'unknown')],
   ].map(([k,v]) => typeof v === 'boolean'
@@ -1443,27 +1469,79 @@ async function debugClearTag() {
 // ══════════════════════════════════════════════════════════════════════════════
 function renderUser() {
   const u = API.getCurrentUser();
-  const name = u ? (u.display_name || u.username) : '';
-  document.getElementById('current-user').textContent = name ? ('👤 ' + name) : '';
+  const name = u ? (u.display_name || u.nickname || u.username || u.email) : '';
+  const role = API.getCurrentRole();
+  document.getElementById('current-user').textContent = name ? ('👤 ' + name + (role ? ` · ${role}` : '')) : '';
   const ad = document.getElementById('actor-display');
   if (ad) ad.textContent = name || '—';
 }
-function showLogin() { document.getElementById('login-overlay').style.display = 'flex'; renderUser(); }
+function renderServerBase() {
+  const input = document.getElementById('login-server-base');
+  if (input) input.value = API.getServerBase();
+  const launcherServer = document.getElementById('launcher-server');
+  if (launcherServer) launcherServer.textContent = API.getServerBase();
+}
+function renderLauncher() {
+  const user = API.getCurrentUser();
+  const role = API.getCurrentRole();
+  const rolePage = role ? API.getRolePageUrl(role) : API.getRolePageUrl();
+  const launcherUser = document.getElementById('launcher-user');
+  const launcherRolePage = document.getElementById('launcher-role-page');
+  const launcherStatus = document.getElementById('launcher-status');
+  if (launcherUser) launcherUser.textContent = user ? (user.display_name || user.nickname || user.username || user.email || '已登录') : '未登录';
+  if (launcherRolePage) launcherRolePage.textContent = rolePage || '—';
+  if (launcherStatus) {
+    launcherStatus.textContent = user
+      ? `当前角色：${role || '未识别'}，可以先调试或点击进入业务页。`
+      : '请先登录，或先进入调试页检查设备状态。';
+  }
+}
+function showLogin() {
+  document.getElementById('login-overlay').style.display = 'flex';
+  renderServerBase();
+  renderUser();
+  renderLauncher();
+}
 function hideLogin() { document.getElementById('login-overlay').style.display = 'none'; }
+function openStartupDebug() {
+  hideLogin();
+  switchTab('debug');
+  renderLauncher();
+}
+function openRolePage() {
+  const user = API.getCurrentUser();
+  if (!user || !API.getToken()) {
+    showLogin();
+    setStatus('login-status', '请先登录后再进入业务页面', 'warn');
+    show('login-status');
+    return;
+  }
+  const nextUrl = API.getRoleBootstrapUrl();
+  log('准备进入角色页面…', 'info');
+  window.location.replace(nextUrl);
+}
 
 async function doLogin() {
+  const serverBase = document.getElementById('login-server-base').value.trim();
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
+  if (!serverBase) { setStatus('login-status', '请输入服务地址', 'err'); show('login-status'); return; }
   if (!username || !password) { setStatus('login-status', '请输入用户名和密码', 'err'); show('login-status'); return; }
   document.getElementById('login-btn').disabled = true;
   setStatus('login-status', '登录中…', 'info'); show('login-status');
   try {
+    API.setServerBase(serverBase);
     await API.login(username, password);
     document.getElementById('login-password').value = '';
     hide('login-status');
     renderUser();
+    renderLauncher();
+    log('登录成功：' + (API.getCurrentUser()?.display_name || API.getCurrentUser()?.nickname || username), 'ok');
+    log('当前服务地址：' + API.getServerBase(), 'info');
+    if (API.getCurrentRole()) log('当前角色：' + API.getCurrentRole(), 'info');
+    log('角色目标页：' + API.getRolePageUrl(), 'info');
     hideLogin();
-    log('登录成功：' + (API.getCurrentUser()?.display_name || username), 'ok');
+    switchTab('scan');
   } catch (e) {
     setStatus('login-status', '登录失败：' + e.message, 'err'); show('login-status');
   } finally {
@@ -1471,21 +1549,28 @@ async function doLogin() {
   }
 }
 
-function doLogout() { API.logout(); renderUser(); showLogin(); log('已退出登录', 'info'); }
+function doLogout() { API.logout(); renderUser(); renderLauncher(); showLogin(); log('已退出登录', 'info'); }
 
 async function bootAuth() {
-  try { await API.fetchMe(); renderUser(); hideLogin(); }
-  catch (e) { showLogin(); }
+  try {
+    await API.fetchMe();
+    renderUser();
+    renderLauncher();
+    hideLogin();
+    log('已恢复登录态，停留在启动页，可直接进入角色页面或先调试。', 'info');
+  }
+  catch (e) { renderLauncher(); showLogin(); }
 }
 
 // 任意请求遇 401 → 弹回登录页
-window.addEventListener('kh:auth-expired', () => { renderUser(); showLogin(); });
+window.addEventListener('kh:auth-expired', () => { renderUser(); renderLauncher(); showLogin(); });
 
 // ══════════════════════════════════════════════════════════════════════════════
 // 启动
 // ══════════════════════════════════════════════════════════════════════════════
 log('build: ' + (window.BUILD_TIME ?? '—'), 'plain');
 log('platform: ' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
+log('server: ' + API.getServerBase(), 'info');
 
 // 各模块初始化
 Scanner.init(window.ScanPlugin);
@@ -1497,8 +1582,6 @@ bootAuth();   // 校验已存 token；未登录则弹出登录遮罩
 refreshDebug();
 
 // ── 自动更新相关逻辑 ─────────────────────────────────────────────────────────
-const SERVER_BASE = 'http://115.29.178.34:2974';
-
 // 内存标志：防同一次 JS 会话内重复触发（不持久化，靠 versionCode 比较来彻底终止循环）
 let _updateStarted = false;
 
@@ -1513,7 +1596,7 @@ async function triggerAppUpdate() {
     const localInfo = await window.UpdatePlugin.getVersionInfo();
     log(`当前版本: Code=${localInfo.versionCode}, Name=${localInfo.versionName}`, 'info');
 
-    const res = await fetch(SERVER_BASE + '/api/app/version');
+    const res = await fetch(API.getServerBase() + '/api/app/version');
     if (!res.ok) {
       log('获取服务器版本失败', 'err');
       alert('无法获取最新版本信息');
@@ -1543,7 +1626,7 @@ async function autoCheckUpdate() {
   if (_updateStarted) return; // 本次会话已触发，不重复
   try {
     const localInfo = await window.UpdatePlugin.getVersionInfo();
-    const res = await fetch(SERVER_BASE + '/api/app/version');
+    const res = await fetch(API.getServerBase() + '/api/app/version');
     if (!res.ok) return;
     const serverInfo = await res.json();
     if (serverInfo.versionCode > localInfo.versionCode) {
@@ -1562,7 +1645,7 @@ async function autoCheckUpdate() {
 }
 
 function startApkDownload(url, expectedVersionCode) {
-  const absoluteUrl = new URL(url, SERVER_BASE).href;
+  const absoluteUrl = new URL(url, API.getServerBase()).href;
   let overlay = document.getElementById('update-progress-overlay');
   if (!overlay) {
     overlay = document.createElement('div');
