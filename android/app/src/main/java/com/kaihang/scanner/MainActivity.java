@@ -3,6 +3,10 @@ package com.kaihang.scanner;
 import android.content.Intent;
 import android.net.Uri;
 import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.os.Message;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.WebViewListener;
 import com.kaihang.scanner.plugins.ClientConfigPlugin;
@@ -16,6 +20,7 @@ public class MainActivity extends BridgeActivity {
     private static final String DEFAULT_STORAGE_APP_NAME = "main";
     private static final String DEFAULT_PAGE_ACTIONS_API_PATH = "/api/scanner_page_binding_actions:list?pageSize=200";
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
+    private static final String DEFAULT_LOGIN_PATH = "/signin";
 
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
@@ -45,11 +50,14 @@ public class MainActivity extends BridgeActivity {
     protected void load() {
         super.load();
 
-        String launchUrl = ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE);
-        bridge.getWebView().post(() -> {
-            String current = bridge.getWebView().getUrl();
+        WebView webView = bridge.getWebView();
+        configureInAppNavigation(webView);
+
+        String launchUrl = buildLoginUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
+        webView.post(() -> {
+            String current = webView.getUrl();
             if (current == null || current.startsWith("http://localhost")) {
-                bridge.getWebView().loadUrl(launchUrl);
+                webView.loadUrl(launchUrl);
             }
         });
 
@@ -66,6 +74,79 @@ public class MainActivity extends BridgeActivity {
                 injectClientTypeHeader(view);
             }
         });
+    }
+
+    private void configureInAppNavigation(WebView webView) {
+        webView.getSettings().setSupportMultipleWindows(false);
+        webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(true);
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                return handleNavigation(view, request != null && request.getUrl() != null ? request.getUrl().toString() : null);
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return handleNavigation(view, url);
+            }
+        });
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                String url = null;
+                WebView.HitTestResult result = view.getHitTestResult();
+                if (result != null) {
+                    url = result.getExtra();
+                }
+                if (handleNavigation(view, url)) {
+                    return false;
+                }
+                WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+                transport.setWebView(view);
+                resultMsg.sendToTarget();
+                return true;
+            }
+        });
+    }
+
+    private boolean handleNavigation(WebView view, String url) {
+        if (url == null || url.trim().isEmpty()) {
+            return false;
+        }
+        Uri uri;
+        try {
+            uri = Uri.parse(url);
+        } catch (Exception ignored) {
+            return false;
+        }
+        String scheme = uri.getScheme();
+        if (scheme == null) {
+            return false;
+        }
+        if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
+            view.loadUrl(url);
+            return true;
+        }
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            return true;
+        } catch (Exception ignored) {
+            return true;
+        }
+    }
+
+    private String buildLoginUrl(String serverBase) {
+        String base = safe(serverBase).trim();
+        if (base.isEmpty()) {
+            base = DEFAULT_SERVER_BASE;
+        }
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        if (base.endsWith(DEFAULT_LOGIN_PATH)) {
+            return base;
+        }
+        return base + DEFAULT_LOGIN_PATH;
     }
 
     // App 已在前台时收到 NFC Intent，转发给 Capacitor Bridge（@capgo/capacitor-nfc 依赖此回调）
