@@ -57,9 +57,9 @@
 
     .field { margin-bottom: 12px; }
     .field label { display: block; font-size: 12px; color: #8e8e93; margin-bottom: 4px; }
-    .field input { width: 100%; padding: 10px 12px; border: 1px solid #d1d1d6; border-radius: 8px;
+    .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid #d1d1d6; border-radius: 8px;
                    font-size: 15px; outline: none; background: #fff; }
-    .field input:focus { border-color: #007aff; }
+    .field input:focus, .field select:focus { border-color: #007aff; }
 
     .info-row { display: flex; justify-content: space-between; padding: 9px 0;
                 border-bottom: 1px solid #f2f2f7; font-size: 14px; }
@@ -139,6 +139,21 @@
              onkeydown="if(event.key==='Enter')document.getElementById('login-username').focus()" />
     </div>
     <div class="field">
+      <label>纸张类型</label>
+      <select id="login-paper-type" onchange="savePrintPrefsFromLogin()">
+        <option value="thermal">普通热敏纸</option>
+        <option value="black_mark">黑标标签纸</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>排版预设</label>
+      <select id="login-layout-preset" onchange="savePrintPrefsFromLogin()">
+        <option value="standard">标准排版</option>
+        <option value="compact">紧凑排版</option>
+        <option value="large">大字排版</option>
+      </select>
+    </div>
+    <div class="field">
       <label>用户名</label>
       <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
              onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
@@ -183,8 +198,25 @@
     <div class="status" id="launcher-status">登录后可进入角色页面，也可以先做调试和更新。</div>
     <div class="info-row"><span class="lbl">服务地址</span><span class="val" id="launcher-server">—</span></div>
     <div class="info-row"><span class="lbl">更新地址</span><span class="val" id="launcher-update-server">—</span></div>
+    <div class="info-row"><span class="lbl">纸张类型</span><span class="val" id="launcher-paper-type">—</span></div>
+    <div class="info-row"><span class="lbl">排版预设</span><span class="val" id="launcher-layout-preset">—</span></div>
     <div class="info-row"><span class="lbl">当前用户</span><span class="val" id="launcher-user">—</span></div>
     <div class="info-row"><span class="lbl">目标页面</span><span class="val" id="launcher-role-page">—</span></div>
+    <div class="field" style="margin-top:12px;">
+      <label>切换纸张类型</label>
+      <select id="launcher-paper-type-input" onchange="savePrintPrefsFromLauncher()">
+        <option value="thermal">普通热敏纸</option>
+        <option value="black_mark">黑标标签纸</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>切换排版预设</label>
+      <select id="launcher-layout-preset-input" onchange="savePrintPrefsFromLauncher()">
+        <option value="standard">标准排版</option>
+        <option value="compact">紧凑排版</option>
+        <option value="large">大字排版</option>
+      </select>
+    </div>
     <div class="btn-row" style="margin-top:12px;">
       <button class="btn btn-blue" onclick="openRolePage()">进入业务页</button>
       <button class="btn btn-gray" onclick="switchTab('debug')">打开调试</button>
@@ -1482,15 +1514,33 @@ function renderUser() {
   const ad = document.getElementById('actor-display');
   if (ad) ad.textContent = name || '—';
 }
+function getPaperTypeLabel(value = API.getPrintPaperType()) {
+  return value === 'black_mark' ? '黑标标签纸' : '普通热敏纸';
+}
+function getLayoutPresetLabel(value = API.getPrintLayoutPreset()) {
+  return ({ standard: '标准排版', compact: '紧凑排版', large: '大字排版' }[value] || value || '标准排版');
+}
 function renderServerBase() {
   const input = document.getElementById('login-server-base');
   const updateInput = document.getElementById('login-update-base');
+  const loginPaper = document.getElementById('login-paper-type');
+  const loginLayout = document.getElementById('login-layout-preset');
+  const launcherPaperInput = document.getElementById('launcher-paper-type-input');
+  const launcherLayoutInput = document.getElementById('launcher-layout-preset-input');
   if (input) input.value = API.getServerBase();
   if (updateInput) updateInput.value = API.getUpdateBase();
+  if (loginPaper) loginPaper.value = API.getPrintPaperType();
+  if (loginLayout) loginLayout.value = API.getPrintLayoutPreset();
+  if (launcherPaperInput) launcherPaperInput.value = API.getPrintPaperType();
+  if (launcherLayoutInput) launcherLayoutInput.value = API.getPrintLayoutPreset();
   const launcherServer = document.getElementById('launcher-server');
   const launcherUpdateServer = document.getElementById('launcher-update-server');
+  const launcherPaper = document.getElementById('launcher-paper-type');
+  const launcherLayout = document.getElementById('launcher-layout-preset');
   if (launcherServer) launcherServer.textContent = API.getServerBase();
   if (launcherUpdateServer) launcherUpdateServer.textContent = API.getUpdateBase();
+  if (launcherPaper) launcherPaper.textContent = getPaperTypeLabel();
+  if (launcherLayout) launcherLayout.textContent = getLayoutPresetLabel();
 }
 function renderLauncher() {
   const user = API.getCurrentUser();
@@ -1503,9 +1553,28 @@ function renderLauncher() {
   if (launcherRolePage) launcherRolePage.textContent = rolePage || '—';
   if (launcherStatus) {
     launcherStatus.textContent = user
-      ? `当前角色：${role || '未识别'}，可以先调试或点击进入业务页。`
+      ? `当前角色：${role || '未识别'}，当前按${getPaperTypeLabel()} + ${getLayoutPresetLabel()}打印。`
       : '请先登录，或先进入调试页检查设备状态。';
   }
+}
+function savePrintPrefs(paperType, layoutPreset) {
+  API.setPrintPaperType(paperType);
+  API.setPrintLayoutPreset(layoutPreset);
+  renderServerBase();
+  renderLauncher();
+  log('打印配置已更新：' + getPaperTypeLabel() + ' / ' + getLayoutPresetLabel(), 'info');
+}
+function savePrintPrefsFromLogin() {
+  savePrintPrefs(
+    document.getElementById('login-paper-type')?.value || API.getPrintPaperType(),
+    document.getElementById('login-layout-preset')?.value || API.getPrintLayoutPreset(),
+  );
+}
+function savePrintPrefsFromLauncher() {
+  savePrintPrefs(
+    document.getElementById('launcher-paper-type-input')?.value || API.getPrintPaperType(),
+    document.getElementById('launcher-layout-preset-input')?.value || API.getPrintLayoutPreset(),
+  );
 }
 function showLogin() {
   document.getElementById('login-overlay').style.display = 'flex';
@@ -1535,6 +1604,10 @@ function openRolePage() {
 async function doLogin() {
   const serverBase = document.getElementById('login-server-base').value.trim();
   const updateBase = document.getElementById('login-update-base').value.trim();
+  savePrintPrefs(
+    document.getElementById('login-paper-type')?.value || API.getPrintPaperType(),
+    document.getElementById('login-layout-preset')?.value || API.getPrintLayoutPreset(),
+  );
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
   if (!serverBase) { setStatus('login-status', '请输入服务地址', 'err'); show('login-status'); return; }

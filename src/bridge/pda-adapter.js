@@ -207,15 +207,22 @@ export const PrintPlugin = {
    * - qrCodeValue: 二维码内容
    * - textValue: 多行正文
    */
-  async printLabel({ barcodeValue = '', qrCodeValue = '', textValue = '' }) {
+  async printLabel({ barcodeValue = '', qrCodeValue = '', textValue = '', paperType = 'thermal', layoutPreset = 'standard' }) {
+    const preset = String(layoutPreset || '').trim().toLowerCase();
+    const isBlackMark = String(paperType || '').trim().toLowerCase() === 'black_mark';
+    const layout = preset === 'compact'
+      ? { barcodeWidth: 208, barcodeHeight: 84, qrWidth: 104, qrHeight: 104, qrLeft: 264, bodyTop: 124, textSize: 22, lineHeight: 28, minHeight: 168, textLeft: 8 }
+      : preset === 'large'
+        ? { barcodeWidth: 240, barcodeHeight: 104, qrWidth: 128, qrHeight: 128, qrLeft: 248, bodyTop: 152, textSize: 26, lineHeight: 34, minHeight: 196, textLeft: 8 }
+        : { barcodeWidth: 228, barcodeHeight: 96, qrWidth: 120, qrHeight: 120, qrLeft: 256, bodyTop: 140, textSize: 24, lineHeight: 32, minHeight: 180, textLeft: 8 };
     const lines = String(textValue || '').replace(/\r/g, '').split('\n');
     const data = [];
     if (barcodeValue) {
       data.push({
         printType: 1,
         text: barcodeValue,
-        desiredWidth: 228,
-        desiredHeight: 96,
+        desiredWidth: layout.barcodeWidth,
+        desiredHeight: layout.barcodeHeight,
         displayCode: false,
         left: 8,
         top: 8,
@@ -225,27 +232,30 @@ export const PrintPlugin = {
       data.push({
         printType: 2,
         text: qrCodeValue,
-        desiredWidth: 120,
-        desiredHeight: 120,
+        desiredWidth: layout.qrWidth,
+        desiredHeight: layout.qrHeight,
         displayCode: false,
-        left: 256,
+        left: layout.qrLeft,
         top: 8,
       });
     }
-    let y = (barcodeValue || qrCodeValue) ? 140 : 16;
+    let y = (barcodeValue || qrCodeValue) ? layout.bodyTop : 16;
     for (const line of lines) {
-      data.push({ printType: 0, text: String(line || ''), textSize: 24, x: 8, y });
-      y += 32;
+      data.push({ printType: 0, text: String(line || ''), textSize: layout.textSize, x: layout.textLeft, y });
+      y += layout.lineHeight;
     }
-    _send({
+    const payload = {
       name: 'printBmpLabel',
       width: 384,
-      height: Math.max(y + 16, 180),
+      height: Math.max(y + 16, layout.minHeight),
       top: 8,
       concentration: 15,
-      forwardMorePaper: 96,
       data,
-    });
+    };
+    if (!isBlackMark) {
+      payload.forwardMorePaper = 96;
+    }
+    _send(payload);
   },
 
   /**

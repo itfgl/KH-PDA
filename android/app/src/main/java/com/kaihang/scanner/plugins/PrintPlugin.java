@@ -33,6 +33,9 @@ public class PrintPlugin extends Plugin {
 
     private static final String EVENT_STATUS = "printStatus";
     private static final int BATCH_EXTRA_FEED = 96;
+    private static final String PAPER_THERMAL = "thermal";
+    private static final String PAPER_BLACK_MARK = "black_mark";
+    private static final String LAYOUT_STANDARD = "standard";
     private boolean isConnected           = false;
     private boolean isConnecting          = false;
     private volatile boolean destroyed    = false;
@@ -186,6 +189,56 @@ public class PrintPlugin extends Plugin {
         return batchNo + "-" + printedLane;
     }
 
+    private static String normalizePaperType(String value) {
+        return PAPER_BLACK_MARK.equalsIgnoreCase(String.valueOf(value).trim()) ? PAPER_BLACK_MARK : PAPER_THERMAL;
+    }
+
+    private static String normalizeLayoutPreset(String value) {
+        String preset = String.valueOf(value).trim().toLowerCase(Locale.ROOT);
+        if ("compact".equals(preset) || "large".equals(preset)) return preset;
+        return LAYOUT_STANDARD;
+    }
+
+    private static final class GenericLabelLayout {
+        final int barcodeWidth;
+        final int barcodeHeight;
+        final int qrWidth;
+        final int qrHeight;
+        final int qrLeft;
+        final int bodyTop;
+        final int textSize;
+        final int lineHeight;
+        final int minHeight;
+        final int textLeft;
+        final int wrapUnits;
+
+        GenericLabelLayout(int barcodeWidth, int barcodeHeight, int qrWidth, int qrHeight, int qrLeft,
+                           int bodyTop, int textSize, int lineHeight, int minHeight, int textLeft, int wrapUnits) {
+            this.barcodeWidth = barcodeWidth;
+            this.barcodeHeight = barcodeHeight;
+            this.qrWidth = qrWidth;
+            this.qrHeight = qrHeight;
+            this.qrLeft = qrLeft;
+            this.bodyTop = bodyTop;
+            this.textSize = textSize;
+            this.lineHeight = lineHeight;
+            this.minHeight = minHeight;
+            this.textLeft = textLeft;
+            this.wrapUnits = wrapUnits;
+        }
+    }
+
+    private static GenericLabelLayout getGenericLabelLayout(String preset) {
+        switch (normalizeLayoutPreset(preset)) {
+            case "compact":
+                return new GenericLabelLayout(208, 84, 104, 104, 264, 124, 22, 28, 168, 8, 28);
+            case "large":
+                return new GenericLabelLayout(240, 104, 128, 128, 248, 152, 26, 34, 196, 8, 24);
+            default:
+                return new GenericLabelLayout(228, 96, 120, 120, 256, 140, 24, 32, 180, 8, 26);
+        }
+    }
+
     private static List<String> wrapPlainText(String text, int maxUnits) {
         List<String> lines = new ArrayList<>();
         if (text == null || text.trim().isEmpty()) return lines;
@@ -330,6 +383,8 @@ public class PrintPlugin extends Plugin {
         String barcodeValue = getCallString(call, "barcodeValue");
         String qrCodeValue = getCallString(call, "qrCodeValue");
         String textValue = getCallString(call, "textValue");
+        String paperType = normalizePaperType(getCallString(call, "paperType"));
+        GenericLabelLayout layout = getGenericLabelLayout(getCallString(call, "layoutPreset"));
 
         if (barcodeValue.isEmpty() && qrCodeValue.isEmpty() && textValue.trim().isEmpty()) {
             call.reject("printLabel requires barcodeValue, qrCodeValue or textValue");
@@ -342,38 +397,42 @@ public class PrintPlugin extends Plugin {
                 Bitmap barcode = null;
                 Bitmap qr = null;
                 if (!barcodeValue.isEmpty()) {
-                    barcode = BarcodeCreater.createBarcode(getContext(), barcodeValue, 228, 96, false, 1);
+                    barcode = BarcodeCreater.createBarcode(getContext(), barcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
                     if (barcode == null) { call.reject("barcode bitmap null"); return; }
                 }
                 if (!qrCodeValue.isEmpty()) {
-                    qr = BarcodeCreater.createBarcode(getContext(), qrCodeValue, 120, 120, false, 2);
+                    qr = BarcodeCreater.createBarcode(getContext(), qrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
                     if (qr == null) { call.reject("qr bitmap null"); return; }
                 }
 
-                List<String> textLines = wrapPlainText(textValue, 26);
-                int bodyTop = (barcode != null || qr != null) ? 140 : 16;
-                int bodyHeight = Math.max(1, textLines.size()) * 32;
-                int labelHeight = Math.max(bodyTop + bodyHeight + 24, 180);
+                List<String> textLines = wrapPlainText(textValue, layout.wrapUnits);
+                int bodyTop = (barcode != null || qr != null) ? layout.bodyTop : 16;
+                int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
+                int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
 
                 AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, labelHeight);
                 if (barcode != null) {
                     builder.addBmp(barcode, 8, 8);
                 }
                 if (qr != null) {
-                    builder.addBmp(qr, 256, 8);
+                    builder.addBmp(qr, layout.qrLeft, 8);
                 }
 
                 int y = bodyTop;
                 for (String line : textLines) {
-                    builder.addText(line, 24, 8, y);
-                    y += 32;
+                    builder.addText(line, layout.textSize, layout.textLeft, y);
+                    y += layout.lineHeight;
                 }
 
                 Bitmap label = builder.getBitmap();
                 if (label == null) { call.reject("label bitmap null"); return; }
 
                 if (destroyed) { call.reject("printer destroyed"); return; }
-                Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "generic_label", false);
+                if (PAPER_BLACK_MARK.equals(paperType)) {
+                    Printer.print(new BitmapData(label, 15, 0), 8, "generic_label", false);
+                } else {
+                    Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "generic_label", false);
+                }
                 call.resolve();
             } catch (Exception e) {
                 call.reject("printLabel error: " + e.getMessage(), e);

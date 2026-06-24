@@ -5,9 +5,13 @@
 const DEFAULT_SERVER_BASE = 'http://115.29.178.34:2974';
 const SERVER_BASE_KEY = 'kh_server_base_url';
 const UPDATE_BASE_KEY = 'kh_update_base_url';
+const PRINT_PAPER_TYPE_KEY = 'kh_print_paper_type';
+const PRINT_LAYOUT_PRESET_KEY = 'kh_print_layout_preset';
 const DEFAULT_AUTHENTICATOR = 'basic';
 const STORAGE_APP_NAME = 'main';
 const ROLE_ROUTES_API_PATH = '/api/client_role_routes:list?pageSize=200';
+const DEFAULT_PRINT_PAPER_TYPE = 'thermal';
+const DEFAULT_PRINT_LAYOUT_PRESET = 'standard';
 
 // ── 登录态（token + 当前用户，持久化到 localStorage）──────────────────────────
 const TOKEN_KEY = 'kh_token';
@@ -47,6 +51,37 @@ export function setUpdateBase(value) {
   return base;
 }
 
+function normalizePrintPaperType(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  return raw === 'black_mark' ? 'black_mark' : DEFAULT_PRINT_PAPER_TYPE;
+}
+
+function normalizePrintLayoutPreset(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (['compact', 'large'].includes(raw)) return raw;
+  return DEFAULT_PRINT_LAYOUT_PRESET;
+}
+
+export function getPrintPaperType() {
+  return normalizePrintPaperType(localStorage.getItem(PRINT_PAPER_TYPE_KEY) || DEFAULT_PRINT_PAPER_TYPE);
+}
+
+export function setPrintPaperType(value) {
+  const paperType = normalizePrintPaperType(value);
+  localStorage.setItem(PRINT_PAPER_TYPE_KEY, paperType);
+  return paperType;
+}
+
+export function getPrintLayoutPreset() {
+  return normalizePrintLayoutPreset(localStorage.getItem(PRINT_LAYOUT_PRESET_KEY) || DEFAULT_PRINT_LAYOUT_PRESET);
+}
+
+export function setPrintLayoutPreset(value) {
+  const preset = normalizePrintLayoutPreset(value);
+  localStorage.setItem(PRINT_LAYOUT_PRESET_KEY, preset);
+  return preset;
+}
+
 function getRoleRouteMap() {
   try {
     const value = JSON.parse(localStorage.getItem(ROLE_ROUTES_KEY) || '{}');
@@ -79,6 +114,8 @@ export function getRoleBootstrapUrl(roleName = '') {
   url.searchParams.set('kh_auth', getAuthenticator());
   url.searchParams.set('kh_role', roleName || getCurrentRole());
   url.searchParams.set('kh_app', STORAGE_APP_NAME);
+  url.searchParams.set('kh_paper', getPrintPaperType());
+  url.searchParams.set('kh_layout', getPrintLayoutPreset());
   return url.toString();
 }
 
