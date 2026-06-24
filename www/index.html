@@ -35,6 +35,19 @@
       font-size: 14px;
       line-height: 1.6;
     }
+    .build-chip {
+      margin-top: 10px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+    }
     .card {
       background: rgba(255,255,255,.96);
       border: 1px solid rgba(15,23,42,.06);
@@ -159,6 +172,7 @@
     <div class="hero">
       <h1>凯航扫码</h1>
       <p>客户端只负责登录、设置和进入 NocoBase 业务页。扫码、日志、打印动作都在业务页内执行。</p>
+      <div class="build-chip" id="build-chip">编译时间：—</div>
     </div>
 
     <div class="card">
@@ -273,14 +287,15 @@
   function renderSummary() {
     const user = API.getCurrentUser();
     const role = API.getCurrentRole();
+    const buildText = 'build: ' + (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh-CN') : '—');
     document.getElementById('summary-server').textContent = API.getServerBase();
     document.getElementById('summary-update').textContent = API.getUpdateBase();
     document.getElementById('summary-print').textContent = `${getPaperTypeLabel()} / ${getLayoutPresetLabel()}`;
     document.getElementById('summary-user').textContent = user ? (user.display_name || user.nickname || user.username || user.email || '已登录') : '未登录';
     document.getElementById('summary-role').textContent = role || '—';
     document.getElementById('summary-page').textContent = user ? API.getRolePageUrl(role) : '—';
-    document.getElementById('build-info').textContent =
-      'build: ' + (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh-CN') : '—');
+    document.getElementById('build-info').textContent = buildText;
+    document.getElementById('build-chip').textContent = '编译时间：' + buildText.replace(/^build:\s*/, '');
   }
 
   function openSettingsOverlay() {
