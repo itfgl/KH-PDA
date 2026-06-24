@@ -3,6 +3,9 @@
   "appName": "凯航扫码",
   "webDir": "www",
   "bundledWebRuntime": false,
+  "allowNavigation": [
+    "*"
+  ],
   "server": {
     "androidScheme": "http"
   }

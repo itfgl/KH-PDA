@@ -6,1878 +6,449 @@
   <title>凯航扫码</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, sans-serif; background: #f2f2f7; color: #1c1c1e; }
-
-    .header { background: #1c1c1e; color: #fff; padding: 14px 16px; font-size: 17px; font-weight: 600;
-              display: flex; align-items: center; gap: 8px; }
-    .header small { font-size: 11px; opacity: .45; display: block; margin-top: 1px; }
-
-    .tab-bar { display: flex; background: #fff; border-bottom: 1px solid #e5e5ea; }
-    .tab-btn { flex: 1; padding: 12px 4px; border: none; background: transparent; font-size: 14px;
-               color: #8e8e93; cursor: pointer; border-bottom: 2px solid transparent; }
-    .tab-btn.active { color: #007aff; border-bottom-color: #007aff; font-weight: 600; }
-
-    .page { display: none; padding: 14px; }
-    .page.active { display: block; }
-
-    .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 14px;
-            box-shadow: 0 1px 3px rgba(0,0,0,.07); }
-    .card-title { font-size: 12px; font-weight: 600; color: #8e8e93; text-transform: uppercase;
-                  letter-spacing: .4px; margin-bottom: 10px; }
-    .card-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .card-title-row .card-title { margin-bottom: 0; }
-    .collapse-toggle { border: none; background: #f2f2f7; color: #007aff; border-radius: 7px;
-                       padding: 5px 9px; font-size: 12px; font-weight: 700; }
-    .collapsible-body.is-collapsed { display: none; }
-    .summary-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-    .summary-pill { display: inline-flex; align-items: center; min-height: 26px; padding: 4px 8px;
-                    border-radius: 8px; background: #f2f2f7; color: #3a3a3c; font-size: 12px;
-                    font-weight: 600; max-width: 100%; }
-    .summary-pill.code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #1e40af; background: #dbeafe; }
-
-    .status { padding: 10px 12px; border-radius: 8px; font-size: 14px; min-height: 40px;
-              background: #f2f2f7; color: #3a3a3c; margin-bottom: 10px; line-height: 1.5; }
-    .status.ok   { background: #d1fae5; color: #065f46; }
-    .status.err  { background: #fee2e2; color: #991b1b; }
-    .status.info { background: #dbeafe; color: #1e40af; }
-    .status.warn { background: #fef3c7; color: #92400e; }
-
-    .btn { display: block; width: 100%; padding: 13px; border: none; border-radius: 10px;
-           font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px; text-align: center; }
-    .btn:last-child { margin-bottom: 0; }
-    .btn:active { opacity: .75; }
-    .btn-blue   { background: #007aff; color: #fff; }
-    .btn-green  { background: #34c759; color: #fff; }
-    .btn-red    { background: #ff3b30; color: #fff; }
-    .btn-gray   { background: #e5e5ea; color: #1c1c1e; }
-    .btn-row    { display: flex; gap: 8px; margin-bottom: 8px; }
-    .btn-row .btn { flex: 1; margin-bottom: 0; }
-    .btn:disabled { background: #c7c7cc !important; cursor: not-allowed; }
-    .btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 7px; width: auto; display: inline-block; }
-
+    body {
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #eef4ff 0%, #f6f7fb 52%, #ffffff 100%);
+      color: #1c1c1e;
+      padding: 24px 16px 32px;
+    }
+    .shell {
+      width: 100%;
+      max-width: 380px;
+      margin: 0 auto;
+    }
+    .hero {
+      margin-bottom: 16px;
+      padding: 8px 4px 0;
+    }
+    .hero h1 {
+      font-size: 28px;
+      line-height: 1.15;
+      font-weight: 800;
+      color: #101828;
+      letter-spacing: -.02em;
+    }
+    .hero p {
+      margin-top: 8px;
+      color: #667085;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .card {
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(15,23,42,.06);
+      border-radius: 20px;
+      padding: 16px;
+      box-shadow: 0 10px 28px rgba(15,23,42,.08);
+      margin-bottom: 14px;
+      backdrop-filter: blur(8px);
+    }
+    .card-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #667085;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .status {
+      min-height: 44px;
+      border-radius: 12px;
+      padding: 12px 14px;
+      background: #f2f4f7;
+      color: #344054;
+      font-size: 14px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+    .status.ok { background: #dcfae6; color: #166534; }
+    .status.err { background: #fee4e2; color: #b42318; }
+    .status.info { background: #dbeafe; color: #1d4ed8; }
+    .status.warn { background: #fef0c7; color: #b54708; }
     .field { margin-bottom: 12px; }
-    .field label { display: block; font-size: 12px; color: #8e8e93; margin-bottom: 4px; }
-    .field input, .field select { width: 100%; padding: 10px 12px; border: 1px solid #d1d1d6; border-radius: 8px;
-                   font-size: 15px; outline: none; background: #fff; }
-    .field input:focus, .field select:focus { border-color: #007aff; }
-
-    .info-row { display: flex; justify-content: space-between; padding: 9px 0;
-                border-bottom: 1px solid #f2f2f7; font-size: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      color: #667085;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .field input, .field select {
+      width: 100%;
+      padding: 12px 13px;
+      border: 1px solid #d0d5dd;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 15px;
+      outline: none;
+    }
+    .field input:focus, .field select:focus {
+      border-color: #1570ef;
+      box-shadow: 0 0 0 3px rgba(21,112,239,.12);
+    }
+    .btn {
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      padding: 13px 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 8px;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn-blue { background: #1570ef; color: #fff; }
+    .btn-gray { background: #eaecf0; color: #101828; }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .btn-row .btn {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .btn:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f2f4f7;
+      font-size: 14px;
+    }
     .info-row:last-child { border-bottom: none; }
-    .info-row .lbl { color: #8e8e93; }
-    .info-row .val { font-weight: 500; text-align: right; max-width: 65%; }
-    .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-    .badge-idle       { background: #e5e5ea; color: #6e6e73; }
-    .badge-running    { background: #fef3c7; color: #92400e; }
-    .badge-stopped    { background: #fee2e2; color: #991b1b; }
-    /* 批次状态 */
-    .badge-created    { background: #dbeafe; color: #1e40af; }
-    .badge-inspecting { background: #fef3c7; color: #92400e; }
-    .badge-done       { background: #d1fae5; color: #065f46; }
-    .badge-failed     { background: #fee2e2; color: #991b1b; }
-    .multi-check-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
-                        gap: 6px; }
-    .field .multi-check-item { display: flex; align-items: center; gap: 6px; min-height: 34px;
-                               padding: 6px 8px; border: 1px solid #e5e5ea; border-radius: 8px;
-                               background: #f9f9fb; font-size: 13px; font-weight: 600; color: #1c1c1e;
-                               margin-bottom: 0; }
-    .multi-check-item input { width: 16px; height: 16px; flex: 0 0 auto; }
-    .todo-group { border: 1px solid #e5e5ea; border-radius: 10px; overflow: hidden; margin-bottom: 8px; }
-    .todo-group-head { display: flex; justify-content: space-between; align-items: center;
-                       padding: 8px 10px; background: #f2f2f7; font-size: 13px; font-weight: 700; }
-    .todo-count { color: #8e8e93; font-size: 12px; font-weight: 600; }
-    .transition-btn { display:block;width:100%;padding:10px 12px;border:0;border-top:1px solid #e5e5ea;
-                      background:#fff;text-align:left;cursor:pointer;font-size:14px;font-weight:600;color:#1c1c1e; }
-    .transition-btn.is-active { background:#e8f4fd;color:#007aff; }
-    .transition-meta { font-size:11px;color:#8e8e93;margin-top:2px;font-weight:500; }
-
-    .barcode-wrap { text-align: center; padding: 8px 0; }
-    .barcode-wrap svg { max-width: 100%; }
-    .barcode-no { font-family: monospace; font-size: 12px; color: #8e8e93; margin-top: 4px; }
-
-    #log-body, #floating-log-body { background: #1c1c1e; border-radius: 10px; padding: 10px;
-                max-height: 280px; overflow-y: auto; }
-    .log-line { font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap;
-                word-break: break-all; border-bottom: 1px solid #2c2c2e; }
-    .log-line.info  { color: #64d2ff; }
-    .log-line.ok    { color: #30d158; }
-    .log-line.err   { color: #ff453a; }
-    .log-line.warn  { color: #ffd60a; }
-    .log-line.plain { color: #ebebf5; }
-    #floating-log-body { max-height: min(55vh, 420px); }
-    .log-fab { position: fixed; right: 18px; bottom: 22px; z-index: 9996; width: 54px; height: 54px;
-               border: none; border-radius: 999px; background: #007aff; color: #fff; font-size: 20px;
-               font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,.22); }
-    .log-fab:active { opacity: .8; }
-    #floating-log-overlay { position: fixed; inset: 0; z-index: 9997; background: rgba(28,28,30,.32);
-                            display: none; align-items: flex-end; justify-content: stretch; padding: 16px; }
-    #floating-log-panel { width: 100%; max-width: 520px; margin: 0 auto; background: #fff; border-radius: 16px;
-                          padding: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.2); }
-
-    #cam-wrap { position: relative; border-radius: 10px; overflow: hidden;
-                margin-bottom: 10px; background: #000; display: none; }
-    #cam-video { width: 100%; display: block; max-height: 220px; object-fit: cover; }
-    .vf { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
-          width: 56%; height: 44%; pointer-events: none; }
-    .vf-c { position: absolute; width: 22px; height: 22px; border-color: #007aff; border-style: solid; }
-    .vf-tl { top:0; left:0;   border-width: 3px 0 0 3px; border-radius: 3px 0 0 0; }
-    .vf-tr { top:0; right:0;  border-width: 3px 3px 0 0; border-radius: 0 3px 0 0; }
-    .vf-bl { bottom:0; left:0;  border-width: 0 0 3px 3px; border-radius: 0 0 0 3px; }
-    .vf-br { bottom:0; right:0; border-width: 0 3px 3px 0; border-radius: 0 0 3px 0; }
-    .vf-line { position: absolute; left: 4%; right: 4%; height: 2px;
-               background: linear-gradient(90deg,transparent,#007aff,transparent);
-               animation: scanline 2s ease-in-out infinite; }
-    @keyframes scanline { 0%,100%{top:8%} 50%{top:88%} }
+    .info-row .lbl { color: #667085; }
+    .info-row .val {
+      max-width: 62%;
+      text-align: right;
+      font-weight: 600;
+      color: #101828;
+      word-break: break-all;
+    }
+    .mini {
+      font-size: 12px;
+      color: #667085;
+      line-height: 1.6;
+      margin-top: 8px;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(15,23,42,.28);
+      padding: 18px;
+    }
+    .overlay .card {
+      width: 100%;
+      max-width: 380px;
+      margin-bottom: 0;
+    }
   </style>
 </head>
 <body>
+  <div class="shell">
+    <div class="hero">
+      <h1>凯航扫码</h1>
+      <p>客户端只负责登录、设置和进入 NocoBase 业务页。扫码、日志、打印动作都在业务页内执行。</p>
+    </div>
 
-<!-- ══ 登录遮罩（未登录时覆盖全屏）══ -->
-<div id="login-overlay" style="position:fixed;inset:0;z-index:9998;background:#f2f2f7;
-     display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;">
-  <div class="card" style="width:100%;max-width:340px;">
-    <div class="card-title" style="text-align:center;font-size:18px;margin-bottom:16px;">凯航扫码 · 登录</div>
-    <div class="field">
-      <label>用户名</label>
-      <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
-             onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()" />
-    </div>
-    <div class="field">
-      <label>密码</label>
-      <input id="login-password" type="password" autocomplete="current-password" placeholder="密码"
-             onkeydown="if(event.key==='Enter')doLogin()" />
-    </div>
-    <div class="btn-row" style="margin-top:6px;">
-      <button class="btn btn-blue" id="login-btn" onclick="doLogin()">登录</button>
-      <button class="btn btn-gray" onclick="openSettingsOverlay()">设置</button>
-    </div>
-    <div style="font-size:12px;color:#8e8e93;line-height:1.6;margin:-2px 0 8px">
-      登录成功后会按当前角色读取目标页面；是否进入业务页，由启动页单独控制。
-    </div>
-    <div class="btn-row" style="margin-top:8px;">
-      <button class="btn btn-gray" onclick="openStartupDebug()">调试页</button>
-      <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
-    </div>
-    <div class="status" id="login-status" style="display:none;margin-top:8px;"></div>
-  </div>
-</div>
-
-<div id="settings-overlay" style="position:fixed;inset:0;z-index:9999;background:rgba(28,28,30,.35);
-     display:none;align-items:center;justify-content:center;padding:24px;">
-  <div class="card" style="width:100%;max-width:360px;max-height:90vh;overflow:auto;">
-    <div class="card-title" style="text-align:center;font-size:18px;margin-bottom:16px;">客户端设置</div>
-    <div class="field">
-      <label>服务地址</label>
-      <input id="settings-server-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000" />
-    </div>
-    <div class="field">
-      <label>更新地址</label>
-      <input id="settings-update-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000" />
-    </div>
-    <div class="field">
-      <label>纸张类型</label>
-      <select id="settings-paper-type">
-        <option value="thermal">普通热敏纸</option>
-        <option value="black_mark">黑标标签纸</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>排版预设</label>
-      <select id="settings-layout-preset">
-        <option value="standard">标准排版</option>
-        <option value="compact">紧凑排版</option>
-        <option value="large">大字排版</option>
-      </select>
-    </div>
-    <div class="btn-row" style="margin-top:6px;">
-      <button class="btn btn-blue" id="save-settings-btn" onclick="saveSettingsOverlay()">保存</button>
-      <button class="btn btn-gray" onclick="closeSettingsOverlay()">取消</button>
-    </div>
-    <button class="btn btn-gray" style="margin-top:8px;" onclick="triggerAppUpdate()">检查更新</button>
-    <div class="status" id="settings-status" style="display:none;margin-top:8px;"></div>
-  </div>
-</div>
-
-<button class="log-fab" id="log-fab" onclick="toggleFloatingLog(true)" title="查看日志">日志</button>
-
-<div id="floating-log-overlay" onclick="if(event.target===this)toggleFloatingLog(false)">
-  <div id="floating-log-panel">
-    <div class="card-title-row">
-      <span class="card-title">运行日志</span>
-      <div style="display:flex;gap:6px">
-        <button class="btn-sm btn-gray" onclick="clearLog()">清空</button>
-        <button class="btn-sm btn-gray" onclick="toggleFloatingLog(false)">关闭</button>
-      </div>
-    </div>
-    <div id="floating-log-body"></div>
-  </div>
-</div>
-
-<div class="header">
-  凯航扫码
-  <small id="build-info">—</small>
-  <span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;font-size:13px;">
-    <span id="current-user"></span>
-    <button class="btn-sm btn-gray" onclick="doLogout()" style="padding:2px 8px;">退出</button>
-  </span>
-</div>
-
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('scan')">扫描</button>
-  <button class="tab-btn"        onclick="switchTab('todo')">代办</button>
-  <button class="tab-btn"        onclick="switchTab('setup')">绑定 NFC</button>
-  <button class="tab-btn"        onclick="switchTab('debug')">调试</button>
-</div>
-
-<!-- ══ 扫描页 ══ -->
-<div class="page active" id="page-scan">
-  <div class="card" id="launcher-card">
-    <div class="card-title">启动页</div>
-    <div class="status" id="launcher-status">登录后可进入角色页面，也可以先做调试和更新。</div>
-    <div class="info-row"><span class="lbl">服务地址</span><span class="val" id="launcher-server">—</span></div>
-    <div class="info-row"><span class="lbl">更新地址</span><span class="val" id="launcher-update-server">—</span></div>
-    <div class="info-row"><span class="lbl">纸张类型</span><span class="val" id="launcher-paper-type">—</span></div>
-    <div class="info-row"><span class="lbl">排版预设</span><span class="val" id="launcher-layout-preset">—</span></div>
-    <div class="info-row"><span class="lbl">当前用户</span><span class="val" id="launcher-user">—</span></div>
-    <div class="info-row"><span class="lbl">目标页面</span><span class="val" id="launcher-role-page">—</span></div>
-    <div class="field" style="margin-top:12px;">
-      <label>切换纸张类型</label>
-      <select id="launcher-paper-type-input" onchange="savePrintPrefsFromLauncher()">
-        <option value="thermal">普通热敏纸</option>
-        <option value="black_mark">黑标标签纸</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>切换排版预设</label>
-      <select id="launcher-layout-preset-input" onchange="savePrintPrefsFromLauncher()">
-        <option value="standard">标准排版</option>
-        <option value="compact">紧凑排版</option>
-        <option value="large">大字排版</option>
-      </select>
-    </div>
-    <div class="btn-row" style="margin-top:12px;">
-      <button class="btn btn-blue" onclick="openRolePage()">3. 进入业务页</button>
-      <button class="btn btn-gray" onclick="switchTab('debug')">打开调试</button>
-    </div>
-    <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
-  </div>
-
-  <div class="card">
-    <div class="card-title">扫描方式</div>
-    <div id="nfc-status-bar" class="status ok">📡 NFC 监听中，贴卡即识别</div>
-    <button class="btn btn-gray" onclick="Scanner.trigger()">扫码枪</button>
-  </div>
-
-  <div class="status" id="scan-hint">靠近机器 NFC 标签 / 扫描条码</div>
-
-  <div class="card" id="machine-card" style="display:none">
-    <div class="card-title-row">
-      <span class="card-title">机器信息</span>
-      <button class="collapse-toggle" id="machine-toggle" onclick="toggleSection('machine-body','machine-toggle')">展开</button>
-    </div>
-    <div id="machine-summary" class="summary-pills"></div>
-    <div id="machine-body" class="collapsible-body is-collapsed"></div>
-  </div>
-
-  <div class="card" id="batch-card" style="display:none">
-    <div class="card-title-row">
-      <span class="card-title">批次信息</span>
-      <button class="collapse-toggle" id="batch-toggle" onclick="toggleSection('batch-info-wrap','batch-toggle')">展开</button>
-    </div>
-    <div id="batch-summary" class="summary-pills"></div>
-    <div id="batch-info-wrap" class="collapsible-body is-collapsed">
-      <div id="batch-body"></div>
-      <div class="barcode-wrap" id="barcode-wrap" style="display:none">
-        <svg id="batch-barcode"></svg>
-        <div class="barcode-no" id="batch-no-text"></div>
-      </div>
-    </div>
-    <div class="status" id="print-status" style="display:none"></div>
-
-    <!-- ── 打印前确认栏号（货架/料盘列号），默认按周期续号，可手动调整 ── -->
-    <div id="lane-confirm-wrap" style="display:none; margin-bottom:10px">
+    <div class="card">
+      <div class="card-title">登录</div>
+      <div id="login-status" class="status info">请先登录，成功后会按当前角色自动进入业务页。</div>
       <div class="field">
-        <label>栏号（周期 <span id="lane-period-label"></span>，默认续号，可手动调整）</label>
-        <input type="number" id="lane-no-input" min="1" step="1" inputmode="numeric">
+        <label>用户名</label>
+        <input id="login-username" type="text" autocomplete="username" placeholder="用户名"
+               onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()">
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="密码"
+               onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-blue" id="login-btn" onclick="doLogin()">登录</button>
+        <button class="btn btn-gray" onclick="openSettingsOverlay()">设置</button>
       </div>
       <div class="btn-row">
-        <button class="btn btn-green" onclick="_confirmPrint()">开始打印</button>
-        <button class="btn btn-gray" onclick="_cancelPrint()">取消</button>
+        <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
+        <button class="btn btn-gray" onclick="doLogout()">退出</button>
       </div>
+      <div class="mini">登录成功后会直接跳到角色对应页面，不再保留旧扫描壳页面。</div>
     </div>
 
-    <!-- ── 当前机器批次标签（扫机器码：按穴号拆分则为同组全部子批次，否则为该批次自身；各打一张）── -->
-    <div id="group-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
-      <div class="card-title">当前机器批次标签</div>
-      <div id="group-body" style="margin-bottom:8px"></div>
-      <button class="btn btn-green" onclick="doPrintGroup()">打印标签（<span id="group-count">0</span> 张）</button>
+    <div class="card">
+      <div class="card-title">当前配置</div>
+      <div class="info-row"><span class="lbl">服务地址</span><span class="val" id="summary-server">—</span></div>
+      <div class="info-row"><span class="lbl">更新地址</span><span class="val" id="summary-update">—</span></div>
+      <div class="info-row"><span class="lbl">打印默认值</span><span class="val" id="summary-print">—</span></div>
+      <div class="info-row"><span class="lbl">当前用户</span><span class="val" id="summary-user">—</span></div>
+      <div class="info-row"><span class="lbl">当前角色</span><span class="val" id="summary-role">—</span></div>
+      <div class="info-row"><span class="lbl">目标页面</span><span class="val" id="summary-page">—</span></div>
+      <div class="mini" id="build-info">build: —</div>
     </div>
-    <!-- ── 流程推进（表单按流程定义动态渲染）── -->
-    <div id="advance-wrap" style="display:none; border-top:1px solid #f2f2f7; margin-top:12px; padding-top:12px">
-      <div class="card-title">扫码后待办事项</div>
-      <div id="advance-node" style="font-size:15px; font-weight:700; color:#1c1c1e; margin-bottom:2px"></div>
-      <div id="advance-resp" style="font-size:12px; color:#8e8e93; margin-bottom:10px"></div>
-      <div id="advance-display" style="margin-bottom:10px"></div>
+  </div>
+
+  <div class="overlay" id="settings-overlay" onclick="if(event.target===this)closeSettingsOverlay()">
+    <div class="card">
+      <div class="card-title">客户端设置</div>
+      <div id="settings-status" class="status info" style="display:none;"></div>
       <div class="field">
-        <label>操作人</label>
-        <div id="actor-display" style="padding:10px 12px;border:1px solid #e5e5ea;border-radius:8px;
-             background:#f2f2f7;color:#1c1c1e;font-size:15px;">—</div>
+        <label>服务地址</label>
+        <input id="settings-server-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000">
       </div>
-      <div id="transition-btns" style="margin-bottom:10px"></div>
-      <div id="form-fields" style="margin-bottom:10px"></div>
-      <button class="btn btn-blue" id="advance-btn" onclick="doAdvance()" disabled>发送</button>
-      <div class="status" id="advance-status" style="display:none; margin-top:8px"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ 代办批次页 ══ -->
-<div class="page" id="page-todo">
-  <div class="card">
-    <div class="card-title-row">
-      <span class="card-title">代办批次</span>
-      <button class="btn-sm btn-gray" onclick="loadTodos()">刷新</button>
-    </div>
-    <div class="field">
-      <label>模拟角色</label>
-      <select id="todo-role" onchange="loadTodos()">
-        <option value="">请选择要模拟的角色</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>机器</label>
-      <select id="todo-machine" onchange="loadTodos()">
-        <option value="">全部机器</option>
-      </select>
-    </div>
-    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#8e8e93;cursor:pointer">
-      <input type="checkbox" id="todo-sim" onchange="loadTodos()" style="width:16px;height:16px;margin:0">
-      显示模拟批次
-    </label>
-  </div>
-  <div class="status info" id="todo-hint"></div>
-  <div id="todo-list"></div>
-</div>
-
-<!-- ══ 绑定 NFC 页 ══ -->
-<div class="page" id="page-setup">
-  <div class="card">
-    <div class="card-title-row">
-      <span class="card-title">选择机器</span>
-      <button class="btn-sm btn-gray" onclick="loadMachineList()">刷新</button>
-    </div>
-    <div id="s-machine-list">
-      <div style="color:#8e8e93;font-size:13px;padding:6px 0">加载中…</div>
-    </div>
-  </div>
-  <div class="status" id="setup-hint" style="display:none"></div>
-  <button class="btn btn-green" id="s-print-btn" onclick="setupPrint()" disabled>打印机器标签</button>
-  <button class="btn btn-gray"  id="s-write-btn" onclick="setupWrite()" disabled>写入 NFC 卡</button>
-  <div class="card" id="s-barcode-card" style="display:none; margin-top:4px">
-    <div class="card-title">标签预览</div>
-    <div class="barcode-wrap">
-      <canvas id="s-qrcode" style="display: block; margin: 0 auto; width: 160px; height: 160px;"></canvas>
-      <div class="barcode-no" id="s-barcode-no"></div>
-    </div>
-  </div>
-</div>
-
-<!-- ══ 调试页 ══ -->
-<div class="page" id="page-debug">
-  <div class="card">
-    <div class="card-title-row">
-      <span class="card-title">插件 & 状态</span>
-      <div style="display:flex;gap:6px">
-        <button class="btn-sm btn-gray" onclick="refreshDebug()">刷新</button>
-        <button class="btn-sm btn-blue" onclick="triggerAppUpdate()">检查更新</button>
+      <div class="field">
+        <label>更新地址</label>
+        <input id="settings-update-base" type="url" inputmode="url" autocomplete="url" placeholder="http://127.0.0.1:13000">
       </div>
-    </div>
-    <div id="debug-plugins" style="font-size:13px;line-height:2.2"></div>
-  </div>
-  <div class="card">
-    <div class="card-title">打印机</div>
-    <div class="status" id="debug-printer">未连接</div>
-    <button class="btn btn-gray" onclick="Printer.init(window.PrintPlugin)">重连打印机</button>
-  </div>
-  <div class="card">
-    <div class="card-title">NFC 工具</div>
-    <div class="status" id="debug-nfc">监听中 mode=scan</div>
-    <div class="btn-row">
-      <button class="btn btn-gray" onclick="resetScanUI()">重置扫描界面</button>
-      <button class="btn btn-gray" onclick="debugClearTag()">清空卡片数据（贴卡）</button>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-title-row">
-      <span class="card-title">日志</span>
-      <button class="btn-sm btn-gray" onclick="clearLog()">清空</button>
-    </div>
-    <div id="log-body"></div>
-  </div>
-</div>
-
-<!--
-  [FIX] plugins.js 由 Vite IIFE 构建，不要改 type="module"，详见 HTML_RULES.md
--->
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script src="plugins.js"></script>
-<script>
-'use strict';
-
-// ── 日志 ──────────────────────────────────────────────────────────────────────
-const logBody = document.getElementById('log-body');
-const floatingLogBody = document.getElementById('floating-log-body');
-const logTargets = [logBody, floatingLogBody].filter(Boolean);
-function appendLogLine(text, type = 'plain') {
-  logTargets.forEach((target) => {
-    const el = document.createElement('div');
-    el.className = 'log-line ' + type;
-    el.textContent = text;
-    target.appendChild(el);
-    target.scrollTop = target.scrollHeight;
-  });
-}
-window.toggleFloatingLog = (show) => {
-  document.getElementById('floating-log-overlay').style.display = show ? 'flex' : 'none';
-};
-window.log = (msg, type = 'plain') => {
-  const t = new Date().toTimeString().slice(0, 8);
-  const line = `[${t}] ${msg}`;
-  appendLogLine(line, type);
-  try {
-    const prev = JSON.parse(localStorage.getItem('kh_log') || '[]');
-    prev.push(line);
-    if (prev.length > 200) prev.splice(0, prev.length - 200);
-    localStorage.setItem('kh_log', JSON.stringify(prev));
-  } catch(_) {}
-};
-window.clearLog = () => {
-  logTargets.forEach(target => { target.innerHTML = ''; });
-  localStorage.removeItem('kh_log');
-};
-window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
-window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
-// 恢复上次会话日志
-(function() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('kh_log') || '[]');
-    if (!saved.length) return;
-    appendLogLine(`── 上次会话 ${saved.length} 条 ──`, 'warn');
-    saved.forEach(line => {
-      appendLogLine(line, 'plain');
-    });
-    appendLogLine('── 当前会话 ──', 'warn');
-  } catch(_) {}
-})();
-
-// ── Build 信息 ────────────────────────────────────────────────────────────────
-document.getElementById('build-info').textContent =
-  'build: ' + (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh') : '—');
-
-// ── 模块引用（由 plugins.js 挂到 window）──────────────────────────────────────
-const { Events, API, Printer, Scanner, NFC, Machine } = window;
-
-// ── Tab 切换 ──────────────────────────────────────────────────────────────────
-const TABS = ['scan', 'todo', 'setup', 'debug'];
-function switchTab(name) {
-  TABS.forEach((t, i) => {
-    document.querySelectorAll('.tab-btn')[i].classList.toggle('active', t === name);
-    document.getElementById('page-' + t).classList.toggle('active', t === name);
-  });
-  if (name === 'debug') refreshDebug();
-  if (name === 'setup') loadMachineList();
-  if (name === 'todo') loadTodoFilters();
-  // 离开扫描页：重置扫码枪状态
-  if (name !== 'scan') { Scanner.reset(); }
-  // 进入扫描页：恢复默认提示
-  if (name === 'scan') setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
-}
-
-// ── 工具 ──────────────────────────────────────────────────────────────────────
-const STATUS_MAP = { idle:'空闲', running:'生产中', stopped:'停机' };
-const STATUS_CLS = { idle:'badge-idle', running:'badge-running', stopped:'badge-stopped' };
-
-function setStatus(id, msg, type = '') {
-  const el = document.getElementById(id);
-  if (!el) return;
-  el.textContent = msg; el.className = 'status' + (type ? ' ' + type : '');
-  el.style.display = '';
-}
-function hide(id) { const el = document.getElementById(id); if(el) el.style.display='none'; }
-function show(id) { const el = document.getElementById(id); if(el) el.style.display=''; }
-function toggleSection(bodyId, btnId) {
-  const body = document.getElementById(bodyId);
-  const btn = document.getElementById(btnId);
-  if (!body || !btn) return;
-  const collapsed = body.classList.toggle('is-collapsed');
-  btn.textContent = collapsed ? '展开' : '收起';
-}
-function collapseSection(bodyId, btnId) {
-  const body = document.getElementById(bodyId);
-  const btn = document.getElementById(btnId);
-  if (body) body.classList.add('is-collapsed');
-  if (btn) btn.textContent = '展开';
-}
-function pill(text, cls = '') {
-  return `<span class="summary-pill ${cls}">${text || '—'}</span>`;
-}
-
-function resetScanUI() {
-  hide('machine-card'); hide('batch-card');
-  hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('advance-wrap'); hide('lane-confirm-wrap');
-  _pendingPrintRefs = null; _pendingPrintInfo = null;
-  _selIdx = -1; _advTransitions = []; _formValues = {}; _scanTarget = null;
-  document.getElementById('machine-summary').innerHTML = '';
-  document.getElementById('batch-summary').innerHTML = '';
-  collapseSection('machine-body', 'machine-toggle');
-  collapseSection('batch-info-wrap', 'batch-toggle');
-  setStatus('scan-hint', '靠近机器 NFC 标签 / 扫描条码', 'info');
-  log('扫描界面已重置', 'info');
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 事件订阅（UI 层只处理 DOM，不含业务逻辑）
-// ══════════════════════════════════════════════════════════════════════════════
-
-// ── NFC 事件 ──────────────────────────────────────────────────────────────────
-Events.on('nfc:ready', () => {
-  setStatus('nfc-status-bar', '📡 NFC 监听中，贴卡即识别', 'ok');
-  log('NFC 全局监听已启动', 'ok');
-});
-Events.on('nfc:blank', () => {
-  log('空白卡，跳转绑定 NFC', 'warn');
-  setStatus('scan-hint', '空白卡，请在【绑定 NFC】选择机器后写入', 'warn');
-  switchTab('setup');
-  setStatus('setup-hint', '检测到空白卡，选择机器后点击写入', 'warn');
-});
-Events.on('nfc:written', () => {
-  setStatus('setup-hint', `写入成功！机器 ${_setupCode} 已绑定到卡片。`, 'ok');
-  log('NFC 写卡成功：' + _setupCode, 'ok');
-  document.getElementById('s-write-btn').disabled = false; // 写完恢复按钮
-});
-Events.on('nfc:cleared', () => {
-  setStatus('debug-nfc', '卡片已清空，mode=scan', 'ok');
-  log('NFC 卡片已清空', 'ok');
-});
-Events.on('nfc:mode',  ({ mode }) => {
-  const labels = { scan:'监听中', write:'等待写卡…', clear:'等待清卡…' };
-  setStatus('debug-nfc', `${labels[mode]||mode} mode=${mode}`, mode==='scan'?'ok':'warn');
-});
-Events.on('nfc:error', ({ msg }) => {
-  log('NFC 错误：' + msg, 'err');
-  setStatus('debug-nfc', 'NFC 错误：' + msg, 'err');
-  document.getElementById('s-write-btn').disabled = false; // 出错也恢复按钮
-});
-
-// ── 扫码枪事件 ────────────────────────────────────────────────────────────────
-Events.on('scanner:status', ({ msg, type }) => { setStatus('scan-hint', msg, type); log('扫码枪状态：' + msg, type || 'plain'); });
-Events.on('scanner:result', ({ value }) => log('扫码枪结果：' + value, 'ok'));
-Events.on('scanner:log',    ({ msg, type }) => log(msg, type || 'plain'));
-
-// ── 机器 / 批次事件 ───────────────────────────────────────────────────────────
-Events.on('machine:loading', ({ code }) => {
-  // 重置上次结果，防止 doPrintGroup() 使用旧批次
-  _currentBatch = null; _currentMachine = null;
-  _groupBatches = [];
-  _isMachineScan = false;
-  setStatus('scan-hint', '识别到 ' + code + '，查询中…', 'info');
-  hide('machine-card'); hide('batch-card'); hide('group-wrap'); hide('lane-confirm-wrap');
-  _pendingPrintRefs = null; _pendingPrintInfo = null;
-  stopCamera(); // 任何方式识别到机器码后停相机
-  switchTab('scan');
-});
-Events.on('machine:loaded', ({ machine: m }) => {
-  document.getElementById('machine-summary').innerHTML = [
-    pill(m.name),
-    pill(m.code, 'code'),
-    `<span class="badge ${STATUS_CLS[m.status]}">${STATUS_MAP[m.status]}</span>`,
-  ].join('');
-  document.getElementById('machine-body').innerHTML = `
-    <div class="info-row"><span class="lbl">名称</span><span class="val">${m.name}</span></div>
-    <div class="info-row"><span class="lbl">编号</span><span class="val">${m.code}</span></div>
-    <div class="info-row"><span class="lbl">状态</span>
-      <span class="val"><span class="badge ${STATUS_CLS[m.status]}">${STATUS_MAP[m.status]}</span></span></div>
-    <div class="info-row"><span class="lbl">产品</span>
-      <span class="val">${m.current_product_name ? m.current_product_name+'（'+m.current_product_type+'）' : '—'}</span></div>
-  `;
-  collapseSection('machine-body', 'machine-toggle');
-  show('machine-card');
-  // 显示批次占位，等待 batch:loaded / batch:created / batch:none
-  show('batch-card');
-  document.getElementById('batch-summary').innerHTML = pill('批次查询中…');
-  document.getElementById('batch-body').innerHTML =
-    '<div style="color:#8e8e93;font-size:14px;padding:4px 0">批次查询中…</div>';
-  collapseSection('batch-info-wrap', 'batch-toggle');
-  hide('barcode-wrap'); hide('group-wrap'); hide('print-status'); hide('lane-confirm-wrap');
-  _pendingPrintRefs = null; _pendingPrintInfo = null;
-  setStatus('scan-hint', '机器 ' + m.code + '，获取批次…', 'info');
-  log('机器：' + m.code + ' status=' + m.status, 'ok');
-});
-Events.on('machine:error', ({ msg }) => {
-  setStatus('scan-hint', '查询失败：' + msg, 'err');
-  log('机器查询失败：' + msg, 'err');
-});
-
-// 批次加载完成
-Events.on('batch:loaded', ({ batch, machine }) => {
-  _currentBatch   = batch;
-  _currentMachine = machine;
-  renderBatch(batch, false);
-  const statusLabel = BATCH_STATUS[batch.status] || batch.status;
-  setStatus('scan-hint', `批次 ${batch.batch_no}（${statusLabel}）`, 'ok');
-  log('批次：' + batch.batch_no + ' status=' + batch.status, 'ok');
-  // 加载流程推进区块
-  loadProcessState(batch.batch_no);
-});
-
-// 无批次且不会自动创建（机器非运行状态）
-Events.on('batch:none', ({ machine }) => {
-  document.getElementById('batch-summary').innerHTML = pill('暂无批次记录');
-  document.getElementById('batch-body').innerHTML =
-    '<div style="color:#8e8e93;font-size:14px;padding:4px 0">暂无批次记录</div>';
-  hide('barcode-wrap'); hide('group-wrap');
-  setStatus('scan-hint', '机器 ' + machine.code + ' 暂无批次', 'warn');
-  log('机器 ' + machine.code + ' 暂无批次', 'warn');
-});
-
-Events.on('batch:error', ({ msg }) => {
-  setStatus('scan-hint', '批次操作失败：' + msg, 'err');
-  log('批次错误：' + msg, 'err');
-  document.getElementById('batch-summary').innerHTML = pill('批次操作失败');
-  document.getElementById('batch-body').innerHTML =
-    `<div style="color:#991b1b;font-size:14px;padding:4px 0">${msg}</div>`;
-});
-
-// 扫机器码：打印这一炉的全部标签（按穴号拆分过则为同组全部子批次，否则就是这一个批次）
-Events.on('batch:group', ({ batches }) => {
-  _isMachineScan = true;
-  _groupBatches = batches;
-  document.getElementById('group-body').innerHTML = batches.map(b => `
-    <div class="info-row">
-      <span class="lbl">${b.cavity_no ? '穴号 ' + b.cavity_no : '批次'}</span>
-      <span class="val" style="font-family:monospace">${b.batch_no}</span>
-    </div>`).join('');
-  document.getElementById('group-count').textContent = String(batches.length);
-  show('group-wrap');
-  log(`本炉标签：${batches.length} 个`, 'info');
-});
-
-// ── 打印机事件 ────────────────────────────────────────────────────────────────
-Events.on('printer:status', ({ connection, status, error }) => {
-  let msg, type;
-  if (connection === 'connected')  { msg = '打印机已就绪'; type = 'ok'; }
-  else if (connection === 'failed'){ msg = '打印机连接失败' + (error ? ': '+error : ''); type = 'err'; }
-  else if (connection === 'closed'){ msg = '打印机已断开'; type = 'warn'; }
-  else if (connection === 'reset') { msg = '未连接'; type = ''; }
-  else if (status === 'PRINT_OK')  { msg = '打印完成'; type = 'ok'; }
-  else if (status)                 { msg = status; type = status.includes('FAILED')||status.includes('NO_') ? 'err' : 'info'; }
-  else return;
-  // 扫描页打印状态
-  const ps = document.getElementById('print-status');
-  if (ps) { ps.textContent = msg; ps.className = 'status' + (type ? ' '+type : ''); ps.style.display = ''; }
-  // 调试页打印状态
-  setStatus('debug-printer', msg, type);
-  log('打印机：' + msg, type || 'plain');
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
-// UI 辅助 & 动作
-// ══════════════════════════════════════════════════════════════════════════════
-let _currentBatch   = null;
-let _currentMachine = null;
-let _groupBatches   = []; // 当前批次按穴号拆分出的同组子批次（扫机器码时填充）
-let _isMachineScan  = false; // 本次是否为扫机器码（true 时隐藏「批次推进」，只显示整批标签打印）
-const PRINT_GAP_MS = 1500;
-
-// 打印前栏号确认：fetch 到的周期/建议栏号 + 待打印的批次引用
-let _pendingPrintRefs = null;
-let _pendingPrintInfo = null;
-
-// 批次状态映射
-const BATCH_STATUS     = { created:'已创建', inspecting:'质检中', done:'已完成', failed:'已失败' };
-const BATCH_STATUS_CLS = { created:'badge-created', inspecting:'badge-inspecting', done:'badge-done', failed:'badge-failed' };
-
-/**
- * 渲染批次卡片（需要完整的 batch 对象，含 product_name / product_type / status）
- * @param {object} batch  服务端 BatchDetailOut
- * @param {boolean} isNew 是否刚创建（影响提示文字颜色）
- */
-function renderBatch(batch, isNew) {
-  show('batch-card');
-  const statusLabel = BATCH_STATUS[batch.status] || batch.status;
-  const statusCls   = BATCH_STATUS_CLS[batch.status] || '';
-  document.getElementById('batch-summary').innerHTML = [
-    pill(batch.batch_no, 'code'),
-    pill(batch.product_name),
-    `<span class="badge ${statusCls}">${statusLabel}</span>`,
-  ].join('');
-  collapseSection('batch-info-wrap', 'batch-toggle');
-  document.getElementById('batch-body').innerHTML = `
-    <div class="info-row">
-      <span class="lbl">${isNew ? '新批次' : '最新批次'}</span>
-      <span class="val" style="font-family:monospace;${isNew ? 'color:#007aff' : ''}">${batch.batch_no}</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl">产品</span>
-      <span class="val">${batch.product_name}（${batch.product_type}）</span>
-    </div>
-    <div class="info-row">
-      <span class="lbl">状态</span>
-      <span class="val"><span class="badge ${statusCls}">${statusLabel}</span></span>
-    </div>`;
-  JsBarcode('#batch-barcode', batch.batch_no, { format:'CODE128', width:2, height:52, displayValue:false, margin:6 });
-  document.getElementById('batch-no-text').textContent = batch.batch_no;
-  show('barcode-wrap');
-}
-
-/**
- * 按批次码列表打印前：先查当前机器的打印周期（0点起算，每2小时一段），
- * 栏号输入默认固定为 1，允许操作员手动调整后再实际打印。
- */
-async function doPrintBatches(batchRefs) {
-  if (!_currentMachine || !batchRefs || !batchRefs.length) return;
-  setStatus('print-status', '正在获取栏号信息…', 'info');
-  show('print-status');
-  hide('lane-confirm-wrap');
-  try {
-    const info = await API.getPrintInfo(_currentMachine.id);
-    _pendingPrintRefs = batchRefs;
-    _pendingPrintInfo = info;
-    document.getElementById('lane-period-label').textContent = `${info.period_date} ${info.period_label}`;
-    document.getElementById('lane-no-input').value = 1;
-    setStatus('print-status', `共 ${batchRefs.length} 张，请确认栏号后打印`, 'info');
-    show('lane-confirm-wrap');
-  } catch(e) {
-    setStatus('print-status', '获取栏号信息失败：' + e.message, 'err');
-    log('获取栏号信息失败：' + e.message, 'err');
-  }
-}
-
-/** 取消打印：放弃本次待打印列表，隐藏栏号确认面板 */
-function _cancelPrint() {
-  _pendingPrintRefs = null;
-  _pendingPrintInfo = null;
-  hide('lane-confirm-wrap');
-  hide('print-status');
-}
-
-/** 确认栏号后实际执行打印：每张标签附带周期标注与栏号；打印完成后回报栏号更新该周期最大值 */
-async function _confirmPrint() {
-  const batchRefs = _pendingPrintRefs;
-  const info      = _pendingPrintInfo;
-  if (!batchRefs || !info) return;
-
-  let laneNo = parseInt(document.getElementById('lane-no-input').value, 10);
-  if (!Number.isFinite(laneNo) || laneNo < 1) laneNo = 1;
-  hide('lane-confirm-wrap');
-
-  const list = batchRefs.map(ref => {
-    const batch = typeof ref === 'string'
-      ? (_groupBatches.find(b => b.batch_no === ref) || (_currentBatch && _currentBatch.batch_no === ref ? _currentBatch : null))
-      : ref;
-    const batchNo = typeof ref === 'string' ? ref : ref.batch_no;
-    return {
-      batchNo,
-      machineId:   _currentMachine.code,
-      productType: _currentBatch ? _currentBatch.product_name : '',
-      cavityNo:    batch && batch.cavity_no ? batch.cavity_no : '',
-      date:        batchNo.slice(3, 9), // 子批次码前缀与父批次相同，第 4~9 位仍是 YYMMDD
-      periodLabel: info.period_label,
-      laneNo,
-    };
-  });
-
-  setStatus('print-status', '就绪检测中…', 'info');
-  show('print-status');
-  try {
-    await Printer.printBatchList(list, (cur, total, p) => {
-      setStatus('print-status', `打印第 ${cur} / ${total} 张：${p.batchNo}`, 'info');
-    }, async (cur, total, p) => {
-      setStatus('print-status', `第 ${cur} / ${total} 张已完成：${p.batchNo}，${PRINT_GAP_MS / 1000} 秒后继续。`, 'ok');
-      await delay(PRINT_GAP_MS);
-    });
-    setStatus('print-status', `打印完成（共 ${list.length} 张，栏号 ${laneNo}）`, 'ok');
-    log(`打印 ${list.length} 张（栏号 ${laneNo}）：${list.map(x => x.batchNo).join(', ')}`, 'ok');
-    try { await API.postPrintInfo(_currentMachine.id, info.period_key, laneNo); } catch(_) { /* 不影响本次打印结果 */ }
-  } catch(e) {
-    setStatus('print-status', '打印失败：' + e.message, 'err');
-    log('打印失败：' + e.message, 'err');
-  } finally {
-    _pendingPrintRefs = null;
-    _pendingPrintInfo = null;
-  }
-}
-
-function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
-/** 本炉标签打印：扫机器码时，把当前这一炉（按穴号拆分则为全部子批次，否则为这一个批次）各打一张 */
-async function doPrintGroup() {
-  if (!_groupBatches.length) return;
-  await doPrintBatches(_groupBatches);
-}
-
-// ── 流程推进（表单/动作均按流程定义动态渲染，见服务端 transitions[].form/action）──
-let _advTransitions = [];   // 展平的可触发事件 [{from_node,node_name,event,label,form,action}]
-let _selIdx = -1;           // 当前选中事件下标
-let _formValues = {};       // 当前表单值 {key: value}
-let _scanTarget = null;     // 聚焦中的 scan/nfc/scan_list 字段 key（扫码结果优先填它）
-let _uploading = 0;         // 进行中的附件上传数
-let _moldCavities = [];     // 当前机台模具的全部穴号，供 dynamic_options 多选（开机穴号）动态填充
-
-function normalizeScanValue(raw) {
-  let s = String(raw ?? '');
-  if (s.startsWith('kaihang://nfc/')) s = s.slice('kaihang://nfc/'.length);
-  return s.split('|')[0].trim();
-}
-
-function currentForm() {
-  return _selIdx >= 0 ? (_advTransitions[_selIdx].form || []) : [];
-}
-
-function _esc(s) { return window.CSS && CSS.escape ? CSS.escape(s) : String(s).replace(/"/g, '\\"'); }
-function fieldInput(key) { return document.querySelector(`[data-fkey="${_esc(key)}"]`); }
-
-// 上传文件名是否为图片（按扩展名判断；存储名形如 <uuid>_<原文件名>，扩展名保留）
-function _isImageFile(name) { return /\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(name || ''); }
-// 展示信息里的字段值是否为 /api/events/upload 生成的图片文件名（<32位hex>_<原文件名>），区分普通文本
-function _isUploadedImage(val) { return typeof val === 'string' && /^[0-9a-f]{32}_.+\.(png|jpe?g|gif|webp|bmp|svg|avif|heic)$/i.test(val); }
-// 展示信息里的字段值是否为 /api/events/upload 生成的文件名（不限扩展名），用于 SEARCH() 结果里的通用文件展示
-function _isUploadedFile(val) { return typeof val === 'string' && /^[0-9a-f]{32}_.+/i.test(val); }
-// 拼出已上传文件的预览/下载地址
-function _fileUrl(filename) {
-  return _fileUrlFor(_currentBatch.batch_no, filename);
-}
-function _fileUrlFor(batchNo, filename) {
-  return API.getServerBase() + '/api/events/files/' + encodeURIComponent(batchNo) + '/' + encodeURIComponent(filename);
-}
-// SEARCH() 结果单元格：批次号对应的数据可能是图片/文件/数组/普通文本
-function _searchCellHtml(batchNo, val) {
-  const vals = Array.isArray(val) ? val : [val];
-  const images = vals.filter(_isUploadedImage);
-  if (images.length) {
-    return '<div style="display:flex;flex-wrap:wrap;gap:6px">' + images.map(v =>
-      `<a href="${_fileUrlFor(batchNo, v)}" target="_blank"><img src="${_fileUrlFor(batchNo, v)}" alt="" style="display:block;max-width:80px;max-height:80px;border-radius:6px;border:1px solid #d1d1d6;object-fit:contain"></a>`
-    ).join('') + '</div>';
-  }
-  const files = vals.filter(_isUploadedFile);
-  if (files.length) {
-    return '<div style="display:flex;flex-direction:column;gap:2px">' + files.map(v =>
-      `<a href="${_fileUrlFor(batchNo, v)}" target="_blank">${v.replace(/^[0-9a-f]{32}_/i, '')}</a>`
-    ).join('') + '</div>';
-  }
-  return vals.map(v => String(v)).join('、');
-}
-// SEARCH() 按钮：点击时按需向后端请求历史关联记录，渲染为可滚动大表格
-let _advDisplayRows = [];
-async function _onSearchBtnClick(i) {
-  const d = _advDisplayRows[i];
-  if (!d || d.node_id == null || d.index == null) return;
-  const btn = document.querySelector(`#advance-display .search-btn[data-search-idx="${i}"]`);
-  const result = document.querySelector(`#advance-display .search-result[data-search-idx="${i}"]`);
-  if (btn) { btn.disabled = true; btn.textContent = '检索中…'; }
-  try {
-    const res = await API.getDisplaySearch(_currentBatch.batch_no, d.node_id, d.index);
-    if (result) result.innerHTML = _searchTableHtml(res.value);
-    if (btn) btn.remove();
-  } catch (e) {
-    if (result) result.innerHTML = `<span style="color:#ef4444;margin-left:6px">${e.message}</span>`;
-    if (btn) { btn.disabled = false; btn.textContent = '检索历史关联记录'; }
-  }
-}
-// SEARCH() 结果：最近若干条历史记录，按 批次号/数据 渲染为可滚动大表格
-function _searchTableHtml(records) {
-  if (!records || !records.length) {
-    return '<span style="color:#9ca3af;margin-left:6px">暂无历史数据</span>';
-  }
-  const rows = records.map(r => `
-    <tr style="border-top:1px solid #e5e7eb">
-      <td style="padding:4px 8px;white-space:nowrap;vertical-align:top">${r.batch_no}</td>
-      <td style="padding:4px 8px">${_searchCellHtml(r.batch_no, r.value)}</td>
-    </tr>`).join('');
-  return `<div style="margin-top:4px;max-height:240px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:6px">
-    <table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="position:sticky;top:0;background:#f9fafb">
-        <th style="text-align:left;padding:4px 8px">批次号</th>
-        <th style="text-align:left;padding:4px 8px">数据</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-  </div>`;
-}
-// photo/file 字段已上传值的展示 HTML（多个文件均缩略图/链接展示，每个带删除按钮；val 可为字符串或字符串数组）
-function _fileFieldPreview(f, val) {
-  const list = Array.isArray(val) ? val : (val ? [val] : []);
-  if (!list.length) return '';
-  return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">' + list.map((fn, idx) => {
-    const url = _fileUrl(fn);
-    const inner = (f.type === 'photo' || _isImageFile(fn))
-      ? `<img src="${url}" alt="" style="display:block;max-width:120px;max-height:120px;border-radius:8px;border:1px solid #d1d1d6;object-fit:contain">`
-      : `<span style="display:inline-block;padding:4px 8px;border:1px solid #d1d1d6;border-radius:6px;color:#065f46;font-size:12px">${fn}（点击下载）</span>`;
-    return `<div style="position:relative;display:inline-block">
-      <a href="${url}" target="_blank">${inner}</a>
-      <span data-fremove="${f.key}" data-fidx="${idx}" style="position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;background:#ef4444;color:#fff;font-size:11px;line-height:18px;text-align:center;cursor:pointer">×</span>
-    </div>`;
-  }).join('') + '</div>';
-}
-
-// 扫码捕获：scan/nfc 字段聚焦时，扫码枪/NFC 结果填入该字段而不触发机器查询
-Machine.setCapture(raw => {
-  if (!_scanTarget) return false;
-  const f = currentForm().find(x => x.key === _scanTarget);
-  if (!f) { _scanTarget = null; return false; }
-  const v = normalizeScanValue(raw);
-  if (!v) return true;
-  if (f.type === 'scan_list') {
-    const list = Array.isArray(_formValues[f.key]) ? _formValues[f.key] : [];
-    if (!list.includes(v)) list.push(v);
-    _formValues[f.key] = list;
-    renderScanListChips(f.key);
-  } else {
-    _formValues[f.key] = v;
-    const input = fieldInput(f.key);
-    if (input) input.value = v;
-  }
-  log(`字段「${f.label || f.key}」← 扫码 ${v}`, 'ok');
-  updateAdvanceBtn();
-  return true;
-});
-
-async function loadProcessState(batchNo) {
-  hide('advance-wrap');
-  _advTransitions = []; _selIdx = -1; _formValues = {}; _scanTarget = null;
-
-  // 拉本机台模具的全部穴号，供开机表单里 cavity_no（dynamic_options 多选）动态填充
-  _moldCavities = [];
-  try {
-    const mid = _currentBatch && _currentBatch.machine_id;
-    if (mid) {
-      const detail = await API.apiFetch('/api/machines/' + mid);
-      _moldCavities = (detail.mold && detail.mold.cavity_nos) || [];
-    }
-  } catch(_) { /* 取不到穴号不阻断，多选会显示为空 */ }
-
-  try {
-    const ps = await API.getProcessState(batchNo);
-    // 已完成 / 扫机器码（只看「当前机器批次标签」整批打印，不展示单个穴号子批次的推进）时不显示推进区块
-    if (ps.is_terminal || !ps.active_nodes.length || _isMachineScan) return;
-    renderAdvance(ps.active_nodes);
-    show('advance-wrap');
-    hide('advance-status');
-  } catch(e) {
-    log('流程状态查询失败：' + e.message, 'err');
-  }
-}
-
-function renderAdvance(nodes) {
-  document.getElementById('advance-node').textContent = nodes.map(n =>
-    n.node_name + (n.track_key ? `（${n.track_key}）` : '')).join(' / ');
-  document.getElementById('advance-resp').textContent = '负责：' + nodes.map(n => n.responsible).join(' / ');
-
-  // 节点展示信息（流程定义 display 表达式，服务端已求值）
-  const displayRows = nodes.flatMap(n => n.display || [])
-    .filter(d => d.kind === 'search_button' || d.kind === 'search_table'
-      || (d.value !== null && d.value !== undefined && d.value !== ''
-          && !(Array.isArray(d.value) && !d.value.length)));
-  document.getElementById('advance-display').innerHTML = displayRows.map((d, i) => {
-    if (d.kind === 'search_button') {
-      return `<div class="info-row" style="padding:6px 0;display:block">
-        <span class="lbl">${d.label}</span>
-        <button type="button" class="search-btn" data-search-idx="${i}" style="margin-left:8px;font-size:12px;padding:2px 10px;border-radius:6px;border:1px solid #d1d1d6;background:#f9fafb;color:#1d4ed8">检索历史关联记录</button>
-        <div class="search-result" data-search-idx="${i}"></div>
-      </div>`;
-    }
-    if (d.kind === 'search_table') {
-      return `<div class="info-row" style="padding:6px 0;display:block">
-        <span class="lbl">${d.label}</span>${_searchTableHtml(d.value)}
-      </div>`;
-    }
-    const vals = Array.isArray(d.value) ? d.value : [d.value];
-    const images = vals.filter(_isUploadedImage);
-    const valHtml = images.length
-      ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">' + images.map(v =>
-          `<a href="${_fileUrl(v)}" target="_blank"><img src="${_fileUrl(v)}" alt="" style="display:block;max-width:160px;max-height:160px;border-radius:8px;border:1px solid #d1d1d6;object-fit:contain"></a>`
-        ).join('') + '</div>'
-      : (Array.isArray(d.value) ? d.value.join('、') : d.value);
-    return `<div class="info-row" style="padding:6px 0">
-      <span class="lbl">${d.label}</span><span class="val">${valHtml}</span>
-    </div>`;
-  }).join('');
-  _advDisplayRows = displayRows;
-  document.querySelectorAll('#advance-display .search-btn').forEach(btn => {
-    btn.addEventListener('click', () => _onSearchBtnClick(Number(btn.dataset.searchIdx)));
-  });
-
-  // 展平多轨道的可触发事件（waiting_join 的轨道服务端不下发事件）
-  _advTransitions = nodes.flatMap(n => n.valid_transitions.map(t => ({
-    from_node: n.node_id, node_name: n.node_name,
-    responsible: n.responsible || '未指定',
-    event: t.event, label: t.label, form: t.form || [], action: t.action || null,
-  })));
-  const multiTrack = nodes.length > 1;
-
-  const groups = [];
-  const groupMap = new Map();
-  _advTransitions.forEach((t, i) => {
-    if (!groupMap.has(t.responsible)) {
-      const g = { responsible: t.responsible, items: [] };
-      groupMap.set(t.responsible, g);
-      groups.push(g);
-    }
-    groupMap.get(t.responsible).items.push({ ...t, idx: i });
-  });
-  document.getElementById('transition-btns').innerHTML = groups.map(g => `
-    <div class="todo-group">
-      <div class="todo-group-head">
-        <span>操作人：${g.responsible}</span>
-        <span class="todo-count">${g.items.length} 项</span>
+      <div class="field">
+        <label>纸张类型</label>
+        <select id="settings-paper-type">
+          <option value="thermal">普通热敏纸</option>
+          <option value="black_mark">黑标标签纸</option>
+        </select>
       </div>
-      ${g.items.map(t => `
-        <button id="tbtn-${t.idx}" class="transition-btn" onclick="selectTransition(${t.idx})">
-          ${t.label}
-          ${t.form.length ? `<span class="transition-meta">（${t.form.length} 项填写）</span>` : ''}
-          ${multiTrack ? `<div class="transition-meta">来自：${t.node_name}</div>` : ''}
-        </button>
-      `).join('')}
+      <div class="field">
+        <label>排版预设</label>
+        <select id="settings-layout-preset">
+          <option value="standard">标准排版</option>
+          <option value="compact">紧凑排版</option>
+          <option value="large">大字排版</option>
+        </select>
+      </div>
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="btn btn-blue" id="save-settings-btn" onclick="saveSettingsOverlay()">保存</button>
+        <button class="btn btn-gray" onclick="closeSettingsOverlay()">取消</button>
+      </div>
+      <button class="btn btn-gray" onclick="triggerAppUpdate()">检查更新</button>
     </div>
-  `).join('');
+  </div>
 
-  document.getElementById('form-fields').innerHTML = '';
-  if (_advTransitions.length === 1) selectTransition(0);
-}
+  <script src="plugins.js"></script>
+  <script>
+  'use strict';
 
-function selectTransition(idx) {
-  _selIdx = idx;
-  document.querySelectorAll('.transition-btn').forEach(el => {
-    el.classList.toggle('is-active', el.id === `tbtn-${idx}`);
-  });
-  // 重建表单值：default_value（服务端解析的默认值）预填
-  _formValues = {}; _scanTarget = null;
-  for (const f of currentForm()) {
-    // dynamic_options 多选（开机穴号）：选项取本机台模具全部穴号，默认全选（整机所有穴号各打一张）
-    if (f.type === 'multiselect' && f.dynamic_options) {
-      f.options = _moldCavities;
-      _formValues[f.key] = [..._moldCavities];
-    } else if (f.default_value !== undefined && f.default_value !== null) {
-      _formValues[f.key] = f.default_value;
-    }
+  const { API } = window;
+
+  function getPaperTypeLabel(value = API.getPrintPaperType()) {
+    return value === 'black_mark' ? '黑标标签纸' : '普通热敏纸';
   }
-  renderFormFields();
-  updateAdvanceBtn();
-}
 
-// ── 字段渲染 ─────────────────────────────────────────────────────────────────
-const SCAN_TYPES = ['scan', 'nfc', 'scan_list'];
+  function getLayoutPresetLabel(value = API.getPrintLayoutPreset()) {
+    return ({ standard: '标准排版', compact: '紧凑排版', large: '大字排版' }[value] || value || '标准排版');
+  }
 
-function renderFormFields() {
-  const wrap = document.getElementById('form-fields');
-  const form = currentForm();
-  if (!form.length) { wrap.innerHTML = ''; return; }
+  function setStatus(id, msg, type = '') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    el.className = 'status' + (type ? ' ' + type : '');
+    el.style.display = '';
+  }
 
-  wrap.innerHTML = form.map(f => {
-    const label = `${f.label || f.key}${f.required && !f.formula ? ' <span style="color:#ff3b30">*</span>' : ''}`;
-    const val = _formValues[f.key];
+  function hide(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  }
 
-    if (f.formula) {
-      return `<div class="field"><label>${label}</label>
-        <div style="padding:10px 12px;background:#f2f2f7;border-radius:8px;font-size:13px;color:#8e8e93">提交时自动计算</div></div>`;
-    }
-    if (f.type === 'select' || f.type === 'radio') {
-      const opts = (f.options || []).map(o =>
-        `<option value="${o}" ${val === o ? 'selected' : ''}>${o}</option>`).join('');
-      return `<div class="field"><label>${label}</label>
-        <select data-fkey="${f.key}" style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:15px;background:#fff">
-          <option value="">— 请选择 —</option>${opts}
-        </select></div>`;
-    }
-    if (f.type === 'multiselect') {
-      const sel = Array.isArray(val) ? val : [];
-      return `<div class="field"><label>${label}</label>
-        <div data-fmulti="${f.key}" class="multi-check-grid">${(f.options || []).map(o => `
-          <label class="multi-check-item">
-            <input type="checkbox" value="${o}" ${sel.includes(o) ? 'checked' : ''}> ${o}
-          </label>`).join('')}
-        </div></div>`;
-    }
-    if (f.type === 'number' || f.type === 'integer') {
-      return `<div class="field"><label>${label}</label>
-        <input data-fkey="${f.key}" type="number" ${f.step ? `step="${f.step}"` : (f.type === 'integer' ? 'step="1"' : '')}
-          value="${val ?? ''}" placeholder="${f.placeholder || ''}" autocomplete="off"></div>`;
-    }
-    if (f.type === 'datetime') {
-      return `<div class="field"><label>${label}</label>
-        <input data-fkey="${f.key}" type="datetime-local" value="${val ?? ''}"></div>`;
-    }
-    if (f.type === 'textarea') {
-      return `<div class="field"><label>${label}</label>
-        <textarea data-fkey="${f.key}" rows="3"
-          style="width:100%;padding:10px 12px;border:1px solid #d1d1d6;border-radius:8px;font-size:15px;font-family:inherit">${val ?? ''}</textarea></div>`;
-    }
-    if (f.type === 'photo' || f.type === 'file') {
-      const list = Array.isArray(val) ? val : (typeof val === 'string' && val ? [val] : []);
-      const done = list.length > 0;
-      return `<div class="field"><label>${label}</label>
-        <input data-fupload="${f.key}" type="file" multiple ${f.type === 'photo' ? 'accept="image/*" capture="environment"' : ''}
-          style="font-size:13px">
-        <div data-fstatus="${f.key}" style="font-size:12px;margin-top:4px;color:${done ? '#065f46' : '#8e8e93'}">
-          ${done ? `✓ 已上传 ${list.length} 个文件` : '未上传'}</div>
-        <div data-fpreview="${f.key}">${done ? _fileFieldPreview(f, list) : ''}</div></div>`;
-    }
-    if (f.type === 'scan_list') {
-      return `<div class="field"><label>${label}（聚焦后连续扫码，自动去重）</label>
-        <input data-fkey="${f.key}" data-scan="1" type="text" placeholder="聚焦此框后扫码，或手动输入后点添加" autocomplete="off">
-        <button type="button" class="btn-sm btn-gray" data-fadd="${f.key}" style="margin-top:6px">手动添加</button>
-        <div data-fchips="${f.key}" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>`;
-    }
-    // text / scan / nfc：普通输入框（扫码枪键盘模拟或捕获填充）
-    const ph = f.type === 'scan' ? '聚焦后扫码 / 手动输入'
-             : f.type === 'nfc' ? '聚焦后贴卡 / 手动输入' : (f.placeholder || '');
-    return `<div class="field"><label>${label}</label>
-      <input data-fkey="${f.key}" ${SCAN_TYPES.includes(f.type) ? 'data-scan="1"' : ''}
-        type="text" value="${val ?? ''}" placeholder="${ph}" autocomplete="off"></div>`;
-  }).join('');
+  function renderSettingsInputs() {
+    const server = document.getElementById('settings-server-base');
+    const update = document.getElementById('settings-update-base');
+    const paper = document.getElementById('settings-paper-type');
+    const layout = document.getElementById('settings-layout-preset');
+    if (server) server.value = API.getServerBase();
+    if (update) update.value = API.getUpdateBase();
+    if (paper) paper.value = API.getPrintPaperType();
+    if (layout) layout.value = API.getPrintLayoutPreset();
+  }
 
-  // ── 事件绑定 ──
-  wrap.querySelectorAll('[data-fkey]').forEach(el => {
-    const key = el.getAttribute('data-fkey');
-    const f = form.find(x => x.key === key);
-    if (f && f.type === 'scan_list') {
-      // scan_list 的输入框只做扫码靶子/手动暂存，不直接进 _formValues
-      el.addEventListener('focus', () => { _scanTarget = key; });
-      el.addEventListener('blur',  () => { if (_scanTarget === key) _scanTarget = null; });
+  function renderSummary() {
+    const user = API.getCurrentUser();
+    const role = API.getCurrentRole();
+    document.getElementById('summary-server').textContent = API.getServerBase();
+    document.getElementById('summary-update').textContent = API.getUpdateBase();
+    document.getElementById('summary-print').textContent = `${getPaperTypeLabel()} / ${getLayoutPresetLabel()}`;
+    document.getElementById('summary-user').textContent = user ? (user.display_name || user.nickname || user.username || user.email || '已登录') : '未登录';
+    document.getElementById('summary-role').textContent = role || '—';
+    document.getElementById('summary-page').textContent = user ? API.getRolePageUrl(role) : '—';
+    document.getElementById('build-info').textContent =
+      'build: ' + (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh-CN') : '—');
+  }
+
+  function openSettingsOverlay() {
+    renderSettingsInputs();
+    hide('settings-status');
+    document.getElementById('settings-overlay').style.display = 'flex';
+  }
+
+  function closeSettingsOverlay() {
+    document.getElementById('settings-overlay').style.display = 'none';
+  }
+
+  function saveSettingsOverlay(showMessage = true) {
+    const serverBase = document.getElementById('settings-server-base').value.trim();
+    const updateBase = document.getElementById('settings-update-base').value.trim();
+    if (!serverBase) {
+      setStatus('settings-status', '请输入服务地址', 'err');
+      return false;
+    }
+    if (!updateBase) {
+      setStatus('settings-status', '请输入更新地址', 'err');
+      return false;
+    }
+    API.setServerBase(serverBase);
+    API.setUpdateBase(updateBase);
+    API.setPrintPaperType(document.getElementById('settings-paper-type').value);
+    API.setPrintLayoutPreset(document.getElementById('settings-layout-preset').value);
+    renderSummary();
+    if (showMessage) setStatus('settings-status', '配置已保存', 'ok');
+    return true;
+  }
+
+  function openRolePage() {
+    const user = API.getCurrentUser();
+    if (!user || !API.getToken()) {
+      setStatus('login-status', '请先登录后再进入业务页面', 'warn');
       return;
     }
-    el.addEventListener('input', () => { _formValues[key] = el.value; updateAdvanceBtn(); });
-    if (el.getAttribute('data-scan')) {
-      el.addEventListener('focus', () => { _scanTarget = key; });
-      el.addEventListener('blur',  () => { if (_scanTarget === key) _scanTarget = null; });
-    }
-  });
-  wrap.querySelectorAll('[data-fmulti]').forEach(box => {
-    const key = box.getAttribute('data-fmulti');
-    box.addEventListener('change', () => {
-      _formValues[key] = [...box.querySelectorAll('input:checked')].map(c => c.value);
-      updateAdvanceBtn();
-    });
-  });
-  wrap.querySelectorAll('[data-fadd]').forEach(btn => {
-    const key = btn.getAttribute('data-fadd');
-    btn.addEventListener('click', () => {
-      const input = fieldInput(key);
-      const v = (input?.value || '').trim();
-      if (!v) return;
-      const list = Array.isArray(_formValues[key]) ? _formValues[key] : [];
-      if (!list.includes(v)) list.push(v);
-      _formValues[key] = list;
-      input.value = '';
-      renderScanListChips(key);
-      updateAdvanceBtn();
-    });
-  });
-  wrap.querySelectorAll('[data-fupload]').forEach(el => {
-    const key = el.getAttribute('data-fupload');
-    const f = form.find(x => x.key === key);
-    el.addEventListener('change', async () => {
-      const files = el.files ? Array.from(el.files) : [];
-      if (!files.length || !_currentBatch) return;
-      const st = wrap.querySelector(`[data-fstatus="${_esc(key)}"]`);
-      const pv = wrap.querySelector(`[data-fpreview="${_esc(key)}"]`);
-      _uploading++; updateAdvanceBtn();
-      if (st) { st.textContent = '上传中…'; st.style.color = '#92400e'; }
-      try {
-        const existing = Array.isArray(_formValues[key]) ? _formValues[key]
-          : (typeof _formValues[key] === 'string' && _formValues[key] ? [_formValues[key]] : []);
-        const uploaded = [];
-        for (const file of files) {
-          const r = await API.uploadEventFile(_currentBatch.batch_no, file);
-          uploaded.push(r.filename);
-          log(`附件上传成功：${r.original_filename}`, 'ok');
-        }
-        const list = [...existing, ...uploaded];
-        _formValues[key] = list;
-        el.value = '';
-        if (st) { st.textContent = `✓ 已上传 ${list.length} 个文件`; st.style.color = '#065f46'; }
-        if (pv) pv.innerHTML = _fileFieldPreview(f, list);
-      } catch(e) {
-        if (st) { st.textContent = '上传失败：' + e.message; st.style.color = '#991b1b'; }
-        log('附件上传失败：' + e.message, 'err');
-      } finally {
-        _uploading--; updateAdvanceBtn();
-      }
-    });
-  });
-  // 点击预览图右上角的 × 移除该文件（事件委托，避免重复绑定用 onclick 覆盖式赋值）
-  wrap.onclick = (e) => {
-    const rm = e.target.closest && e.target.closest('[data-fremove]');
-    if (!rm) return;
-    const key = rm.getAttribute('data-fremove');
-    const idx = Number(rm.getAttribute('data-fidx'));
-    const f = form.find(x => x.key === key);
-    const list = Array.isArray(_formValues[key]) ? _formValues[key] : [];
-    list.splice(idx, 1);
-    _formValues[key] = list;
-    const st = wrap.querySelector(`[data-fstatus="${_esc(key)}"]`);
-    const pv = wrap.querySelector(`[data-fpreview="${_esc(key)}"]`);
-    if (st) { st.textContent = list.length ? `✓ 已上传 ${list.length} 个文件` : '未上传'; st.style.color = list.length ? '#065f46' : '#8e8e93'; }
-    if (pv) pv.innerHTML = _fileFieldPreview(f, list);
-    updateAdvanceBtn();
-  };
-  // 渲染 scan_list 既有值
-  form.filter(f => f.type === 'scan_list').forEach(f => renderScanListChips(f.key));
-}
-
-function renderScanListChips(key) {
-  const box = document.querySelector(`[data-fchips="${_esc(key)}"]`);
-  if (!box) return;
-  const list = Array.isArray(_formValues[key]) ? _formValues[key] : [];
-  box.innerHTML = list.map((v, i) => `
-    <span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;background:#e8f4fd;
-                 color:#007aff;border-radius:14px;font-size:12px;font-family:monospace">
-      ${v}<span data-fdel="${key}" data-fdelidx="${i}" style="cursor:pointer;font-weight:700">×</span>
-    </span>`).join('') || '<span style="font-size:12px;color:#8e8e93">（空）</span>';
-  box.querySelectorAll('[data-fdel]').forEach(el => {
-    el.addEventListener('click', () => {
-      list.splice(Number(el.getAttribute('data-fdelidx')), 1);
-      _formValues[key] = list;
-      renderScanListChips(key);
-      updateAdvanceBtn();
-    });
-  });
-}
-
-// ── 校验 + 提交 ──────────────────────────────────────────────────────────────
-function missingRequired() {
-  // formula 服务端强算；有 default_value 的提交时已预填，不算缺失
-  return currentForm().filter(f => {
-    if (!f.required || f.formula) return false;
-    const v = _formValues[f.key];
-    return v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length);
-  });
-}
-
-function updateAdvanceBtn() {
-  // 操作人由登录用户决定，不再要求手填；仅需选中事件且无上传中
-  document.getElementById('advance-btn').disabled = !(_selIdx >= 0 && _uploading === 0);
-}
-
-async function doAdvance() {
-  if (_selIdx < 0 || !_currentBatch) return;
-  const t = _advTransitions[_selIdx];
-  // actor 仅用于本地展示/日志；服务端按登录 token 派生为操作手，忽略此值
-  const actor = (API.getCurrentUser()?.display_name) || '';
-
-  const missing = missingRequired();
-  if (missing.length) {
-    setStatus('advance-status', '请填写：' + missing.map(f => f.label || f.key).join('、'), 'err');
-    show('advance-status');
-    return;
+    const nextUrl = API.getRoleBootstrapUrl();
+    setStatus('login-status', '登录成功，正在进入业务页…', 'info');
+    window.location.replace(nextUrl);
   }
 
-  document.getElementById('advance-btn').disabled = true;
-  setStatus('advance-status', '提交中…', 'info');
-  show('advance-status');
-
-  // formula 字段由服务端强算，不上送客户端值
-  const payload = { ..._formValues };
-  for (const f of t.form) if (f.formula) delete payload[f.key];
-
-  try {
-    const res = await API.postEvent({
-      batch_no:   _currentBatch.batch_no,
-      event_type: t.event,
-      actor,
-      from_node:  t.from_node,
-      payload,
-    });
-
-    setStatus('advance-status', '✓ 已推进：' + t.label, 'ok');
-    log('流程推进：' + t.event + ' by ' + actor, 'ok');
-
-    // 连线级动作：pda_print → 打印批次标签
-    // （旧版本流程快照无 action 字段，保留 batch_ready 事件名兜底，待在途批次清空后可删）
-    if ((t.action && t.action.type === 'pda_print') || (!t.action && t.event === 'batch_ready')) {
-      // 开机按穴号拆分：服务端返回各穴号子批次 new_batches，每个穴号打一张批次码；
-      // 非拆分场景（如 batch_ready）回落到当前批次打一张。
-      const batchNos = (res && res.new_batches && res.new_batches.length)
-        ? res.new_batches : [_currentBatch.batch_no];
-      setStatus('advance-status', '✓ 已推进，请确认栏号后打印', 'ok');
-      try { await doPrintBatches(batchNos); } catch(_) { /* doPrintBatches 内部已处理 */ }
-    }
-
-    // 刷新流程状态
-    await loadProcessState(_currentBatch.batch_no);
-  } catch(e) {
-    setStatus('advance-status', '提交失败：' + e.message, 'err');
-    log('流程推进失败：' + e.message, 'err');
-    document.getElementById('advance-btn').disabled = false;
-  }
-}
-
-// ── 绑定 NFC 页 ──────────────────────────────────────────────────────────────
-let _setupCode    = '';
-let _setupMachine = null;
-let _machineListCache = [];
-
-async function loadMachineList() {
-  const list = document.getElementById('s-machine-list');
-  if (!list) return;
-  list.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">加载中…</div>';
-  try {
-    _machineListCache = await API.apiFetch('/api/machines');
-    if (!_machineListCache.length) {
-      list.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:6px 0">暂无机器，请联系管理员添加</div>';
+  async function doLogin() {
+    if (!API.getServerBase() || !API.getUpdateBase()) {
+      setStatus('login-status', '请先点设置，保存服务地址和更新地址', 'warn');
       return;
     }
-    list.innerHTML = _machineListCache.map((m, i) => {
-      const active = _setupCode === m.code;
-      return `
-        <div onclick="selectSetupMachine(${i})"
-          style="display:flex;justify-content:space-between;align-items:center;
-                 padding:10px 12px;border-radius:8px;margin-bottom:6px;cursor:pointer;
-                 background:${active ? '#e8f4fd' : '#f9f9f9'};
-                 border:1px solid ${active ? '#007aff' : '#e5e5ea'}">
-          <div>
-            <div style="font-weight:600;font-size:14px;${active ? 'color:#007aff' : ''}">${m.name}</div>
-            <div style="font-size:12px;color:#8e8e93;margin-top:2px">
-              ${m.code}${m.current_product_name ? ' · ' + m.current_product_name : ''}
-            </div>
-          </div>
-          <span class="badge ${STATUS_CLS[m.status] || ''}">${STATUS_MAP[m.status] || m.status}</span>
-        </div>`;
-    }).join('');
-  } catch(e) {
-    list.innerHTML = `<div style="color:#991b1b;font-size:13px;padding:6px 0">加载失败：${e.message}</div>`;
-    log('机器列表加载失败：' + e.message, 'err');
-  }
-}
-
-function selectSetupMachine(idx) {
-  const m = _machineListCache[idx];
-  if (!m) return;
-  _setupCode    = m.code;
-  _setupMachine = m;
-  setStatus('setup-hint', '已选择：' + m.name + '（' + m.code + '）', 'ok');
-  const date = new Date()
-    .toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' })
-    .replace(/\//g, '');
-  const qrContent = m.code;
-  new QRious({
-    element: document.getElementById('s-qrcode'),
-    value: qrContent,
-    size: 200
-  });
-  document.getElementById('s-barcode-no').textContent = m.code + '  ' + m.name;
-  show('s-barcode-card');
-  document.getElementById('s-print-btn').disabled = false;
-  document.getElementById('s-write-btn').disabled = false;
-  log('选择机器：' + m.code, 'info');
-  // 刷新列表高亮
-  loadMachineList();
-}
-
-async function setupPrint() {
-  if (!_setupCode || !_setupMachine) return;
-  try {
-    const date = new Date()
-      .toLocaleDateString('zh', { year:'2-digit', month:'2-digit', day:'2-digit' })
-      .replace(/\//g, '');
-    await Printer.printMachineLabel({
-      machineId:   _setupCode,
-      productType: _setupMachine.current_product_name || _setupMachine.current_product_type || '—',
-      date,
-    });
-    setStatus('setup-hint', '打印任务已发送', 'ok');
-  } catch(e) { setStatus('setup-hint', '打印失败：' + e.message, 'err'); }
-}
-
-async function setupWrite() {
-  if (!_setupCode) return;
-  document.getElementById('s-write-btn').disabled = true;
-  setStatus('setup-hint', '请靠近 NFC 标签…', 'warn');
-  try {
-    await NFC.writeTag(_setupCode);
-  } catch(e) {
-    setStatus('setup-hint', '写入失败：' + e.message, 'err');
-    document.getElementById('s-write-btn').disabled = false;
-  }
-}
-
-// ── 代办批次页 ────────────────────────────────────────────────────────────────
-let _todoFiltersLoaded = false;
-let _todoMachines = [];
-
-/** 进入「代办」标签时拉一次角色 + 机器列表（仅首次），并加载代办 */
-async function loadTodoFilters() {
-  if (_todoFiltersLoaded) { loadTodos(); return; }
-  _todoFiltersLoaded = true;
-
-  const roleSel = document.getElementById('todo-role');
-  try {
-    const roles = await API.getRoles();
-    const cu = API.getCurrentUser();
-    roleSel.innerHTML = '<option value="">请选择要模拟的角色</option>' +
-      roles.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
-    if (cu && cu.role && roles.some(r => r.name === cu.role)) roleSel.value = cu.role;
-  } catch(e) {
-    log('角色列表加载失败：' + e.message, 'err');
-  }
-
-  const machineSel = document.getElementById('todo-machine');
-  try {
-    _todoMachines = await API.apiFetch('/api/machines');
-    machineSel.innerHTML = '<option value="">全部机器</option>' +
-      _todoMachines.map(m => `<option value="${m.id}">${m.code} ${m.name}</option>`).join('');
-  } catch(e) {
-    log('机器列表加载失败：' + e.message, 'err');
-  }
-
-  loadTodos();
-}
-
-async function loadTodos() {
-  const role = document.getElementById('todo-role').value;
-  const machineId = document.getElementById('todo-machine').value;
-  const includeSim = document.getElementById('todo-sim').checked;
-  const hint = document.getElementById('todo-hint');
-  const list = document.getElementById('todo-list');
-
-  hint.textContent = role ? `正在模拟「${role}」角色` : '请选择要模拟的角色';
-  hint.className = 'status info';
-  list.innerHTML = '<div style="color:#8e8e93;font-size:13px;padding:20px 0;text-align:center">加载中…</div>';
-
-  try {
-    const items = await API.getTodoBatches({
-      responsible: role || undefined,
-      machine_id: machineId ? Number(machineId) : undefined,
-      include_simulation: includeSim,
-    });
-    renderTodos(items, role);
-  } catch(e) {
-    list.innerHTML = `<div style="color:#991b1b;font-size:13px;padding:20px 0;text-align:center">加载失败：${e.message}</div>`;
-    log('代办批次加载失败：' + e.message, 'err');
-  }
-}
-
-function renderTodos(items, role) {
-  const list = document.getElementById('todo-list');
-  if (!items.length) {
-    list.innerHTML = `<div style="color:#8e8e93;font-size:13px;padding:20px 0;text-align:center">` +
-      (role ? `当前没有「${role}」的待办批次` : '请选择要模拟的角色') + `</div>`;
-    return;
-  }
-
-  const machineMap = Object.fromEntries(_todoMachines.map(m => [m.id, m]));
-
-  list.innerHTML = items.map(item => {
-    const statusLabel = BATCH_STATUS[item.status] || item.status;
-    const statusCls   = BATCH_STATUS_CLS[item.status] || '';
-    const m = machineMap[item.machine_id];
-    const machineText = item.machine_name
-      ? `${item.machine_code || ''} ${item.machine_name}`.trim()
-      : (m ? `${m.code} ${m.name}` : `机器 ${item.machine_id}`);
-
-    const nodesHtml = item.active_nodes.map(node => `
-      <div style="border:1px solid #e5e5ea;border-radius:8px;padding:8px 10px;background:#f9f9fb;margin-bottom:6px">
-        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
-          <div style="font-size:13px;font-weight:700">
-            ${node.node_name}${node.track_key ? ` <span style="color:#007aff;font-size:11px">${node.track_key}</span>` : ''}
-          </div>
-          <div style="font-size:11px;color:#8e8e93;white-space:nowrap">
-            ${new Date(node.entered_at).toLocaleString('zh-CN', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })}
-          </div>
-        </div>
-        <div style="font-size:12px;color:#8e8e93;margin-top:2px">${node.responsible} · ${node.transition_count} 个可用动作</div>
-      </div>`).join('');
-
-    return `
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div style="min-width:0">
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-              <span style="font-family:monospace;font-weight:700">${item.batch_no}</span>
-              <span class="badge" style="background:#007aff;color:#fff">${item.todo_count} 项待办</span>
-              ${item.is_simulation ? '<span class="badge" style="background:#8b5cf6;color:#fff;font-size:10px">模拟</span>' : ''}
-            </div>
-            <div style="font-size:13px;font-weight:600;margin-top:4px">${item.product_name}</div>
-            <div style="font-size:12px;color:#8e8e93;margin-top:4px">${machineText} · ${item.matched_responsible}</div>
-          </div>
-          <span class="badge ${statusCls}" style="flex-shrink:0">${statusLabel}</span>
-        </div>
-        <div style="margin-top:10px">${nodesHtml}</div>
-        <button class="btn btn-blue btn-sm" style="margin-top:4px" onclick="openTodoBatch('${item.batch_no}')">去操作</button>
-      </div>`;
-  }).join('');
-}
-
-/** 「去操作」：切到扫描页并按批次码直接加载（与扫批次标签效果一致）*/
-async function openTodoBatch(batchNo) {
-  switchTab('scan');
-  await Machine.loadBatchByNo(batchNo);
-}
-
-
-
-// ── 调试页 ────────────────────────────────────────────────────────────────────
-async function refreshDebug() {
-  let apkVer = 'N/A';
-  if (window.BRIDGE_MODE === 'capacitor' && window.UpdatePlugin) {
+    const username = document.getElementById('login-username').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!username || !password) {
+      setStatus('login-status', '请输入用户名和密码', 'err');
+      return;
+    }
+    document.getElementById('login-btn').disabled = true;
+    setStatus('login-status', '登录中…', 'info');
     try {
-      const info = await window.UpdatePlugin.getVersionInfo();
-      apkVer = `${info.versionName} (${info.versionCode})`;
-    } catch(e) {}
+      await API.login(username, password);
+      document.getElementById('login-password').value = '';
+      renderSummary();
+      openRolePage();
+    } catch (e) {
+      setStatus('login-status', '登录失败：' + e.message, 'err');
+    } finally {
+      document.getElementById('login-btn').disabled = false;
+    }
   }
 
-  document.getElementById('debug-plugins').innerHTML = [
-    ['Bridge',      window.BRIDGE_MODE ?? 'unknown'],
-    ['ScanPlugin',  !!window.ScanPlugin],
-    ['PrintPlugin', !!window.PrintPlugin],
-    ['KaihangNfc',  !!window.KaihangNfc  ? `ok (mode=${NFC.getMode()})` : false],
-    ['UpdatePlugin',!!window.UpdatePlugin],
-    ['Server',      API.getServerBase()],
-    ['UpdateBase',  API.getUpdateBase()],
-    ['APK Version', apkVer],
-    ['Platform',    window.Capacitor?.getPlatform?.() ?? (window.PDAJsBridge ? 'X8-PDA' : 'unknown')],
-  ].map(([k,v]) => typeof v === 'boolean'
-    ? `<span style="color:${v?'#30d158':'#ff453a'}">${v?'✓':'✗'} ${k}</span><br>`
-    : `<span style="color:#64d2ff">● ${k}: ${v}</span><br>`
-  ).join('');
-  setStatus('debug-nfc', `监听中 mode=${NFC.getMode()}`, NFC.getMode()==='scan'?'ok':'warn');
-}
-
-async function debugClearTag() {
-  setStatus('debug-nfc', '请贴卡以清空数据…', 'warn');
-  log('等待贴卡以清空…', 'warn');
-  try { await NFC.clearTag(); }
-  catch(e) { /* nfc:error 事件已处理 */ }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 登录
-// ══════════════════════════════════════════════════════════════════════════════
-function renderUser() {
-  const u = API.getCurrentUser();
-  const name = u ? (u.display_name || u.nickname || u.username || u.email) : '';
-  const role = API.getCurrentRole();
-  document.getElementById('current-user').textContent = name ? ('👤 ' + name + (role ? ` · ${role}` : '')) : '';
-  const ad = document.getElementById('actor-display');
-  if (ad) ad.textContent = name || '—';
-}
-function getPaperTypeLabel(value = API.getPrintPaperType()) {
-  return value === 'black_mark' ? '黑标标签纸' : '普通热敏纸';
-}
-function getLayoutPresetLabel(value = API.getPrintLayoutPreset()) {
-  return ({ standard: '标准排版', compact: '紧凑排版', large: '大字排版' }[value] || value || '标准排版');
-}
-function renderServerBase() {
-  const input = document.getElementById('settings-server-base');
-  const updateInput = document.getElementById('settings-update-base');
-  const loginPaper = document.getElementById('settings-paper-type');
-  const loginLayout = document.getElementById('settings-layout-preset');
-  const launcherPaperInput = document.getElementById('launcher-paper-type-input');
-  const launcherLayoutInput = document.getElementById('launcher-layout-preset-input');
-  if (input) input.value = API.getServerBase();
-  if (updateInput) updateInput.value = API.getUpdateBase();
-  if (loginPaper) loginPaper.value = API.getPrintPaperType();
-  if (loginLayout) loginLayout.value = API.getPrintLayoutPreset();
-  if (launcherPaperInput) launcherPaperInput.value = API.getPrintPaperType();
-  if (launcherLayoutInput) launcherLayoutInput.value = API.getPrintLayoutPreset();
-  const launcherServer = document.getElementById('launcher-server');
-  const launcherUpdateServer = document.getElementById('launcher-update-server');
-  const launcherPaper = document.getElementById('launcher-paper-type');
-  const launcherLayout = document.getElementById('launcher-layout-preset');
-  if (launcherServer) launcherServer.textContent = API.getServerBase();
-  if (launcherUpdateServer) launcherUpdateServer.textContent = API.getUpdateBase();
-  if (launcherPaper) launcherPaper.textContent = getPaperTypeLabel();
-  if (launcherLayout) launcherLayout.textContent = getLayoutPresetLabel();
-}
-function renderLauncher() {
-  const user = API.getCurrentUser();
-  const role = API.getCurrentRole();
-  const rolePage = role ? API.getRolePageUrl(role) : API.getRolePageUrl();
-  const launcherUser = document.getElementById('launcher-user');
-  const launcherRolePage = document.getElementById('launcher-role-page');
-  const launcherStatus = document.getElementById('launcher-status');
-  if (launcherUser) launcherUser.textContent = user ? (user.display_name || user.nickname || user.username || user.email || '已登录') : '未登录';
-  if (launcherRolePage) launcherRolePage.textContent = rolePage || '—';
-  if (launcherStatus) {
-    launcherStatus.textContent = user
-      ? `当前角色：${role || '未识别'}。当前默认打印：${getPaperTypeLabel()} + ${getLayoutPresetLabel()}。如无问题，继续第 3 步进入业务页。`
-      : '请先登录；也可以先进入调试页检查设备状态。';
+  function doLogout() {
+    API.logout();
+    renderSummary();
+    setStatus('login-status', '已退出登录', 'info');
   }
-}
-function savePrintPrefs(paperType, layoutPreset, writeLog = true) {
-  API.setPrintPaperType(paperType);
-  API.setPrintLayoutPreset(layoutPreset);
-  renderServerBase();
-  renderLauncher();
-  if (writeLog) log('打印配置已更新：' + getPaperTypeLabel() + ' / ' + getLayoutPresetLabel(), 'info');
-}
-function savePrintPrefsFromLauncher() {
-  savePrintPrefs(
-    document.getElementById('launcher-paper-type-input')?.value || API.getPrintPaperType(),
-    document.getElementById('launcher-layout-preset-input')?.value || API.getPrintLayoutPreset(),
-  );
-}
-function openSettingsOverlay() {
-  renderServerBase();
-  hide('settings-status');
-  document.getElementById('settings-overlay').style.display = 'flex';
-}
-function closeSettingsOverlay() {
-  document.getElementById('settings-overlay').style.display = 'none';
-}
-function saveSettingsOverlay(showMessage = true) {
-  const serverBase = document.getElementById('settings-server-base').value.trim();
-  const updateBase = document.getElementById('settings-update-base').value.trim();
-  if (!serverBase) {
-    setStatus('settings-status', '请输入服务地址', 'err');
-    show('settings-status');
-    return false;
+
+  async function bootAuth() {
+    renderSummary();
+    try {
+      await API.fetchMe();
+      renderSummary();
+      setStatus('login-status', '已恢复登录态，正在进入业务页…', 'info');
+      openRolePage();
+    } catch (_) {
+      setStatus('login-status', '请先登录，成功后会按当前角色自动进入业务页。', 'info');
+    }
   }
-  if (!updateBase) {
-    setStatus('settings-status', '请输入更新地址', 'err');
-    show('settings-status');
-    return false;
-  }
-  API.setServerBase(serverBase);
-  API.setUpdateBase(updateBase);
-  savePrintPrefs(
-    document.getElementById('settings-paper-type')?.value || API.getPrintPaperType(),
-    document.getElementById('settings-layout-preset')?.value || API.getPrintLayoutPreset(),
-    false,
-  );
-  renderServerBase();
-  renderLauncher();
-  if (showMessage) {
-    setStatus('settings-status', '配置已保存', 'ok');
-    show('settings-status');
-  }
-  log('客户端配置已保存：' + API.getServerBase(), 'info');
-  return true;
-}
-function showLogin() {
-  document.getElementById('login-overlay').style.display = 'flex';
-  renderServerBase();
-  renderUser();
-  renderLauncher();
-}
-function hideLogin() { document.getElementById('login-overlay').style.display = 'none'; }
-function openStartupDebug() {
-  hideLogin();
-  switchTab('debug');
-  renderLauncher();
-}
-function openRolePage() {
-  const user = API.getCurrentUser();
-  if (!user || !API.getToken()) {
-    showLogin();
-    setStatus('login-status', '请先登录后再进入业务页面', 'warn');
-    show('login-status');
-    return;
-  }
-  const nextUrl = API.getRoleBootstrapUrl();
-  log('准备进入角色页面…', 'info');
-  window.location.replace(nextUrl);
-}
 
-async function doLogin() {
-  if (!API.getServerBase() || !API.getUpdateBase()) {
-    setStatus('login-status', '请先点设置，保存服务地址和更新地址', 'warn');
-    show('login-status');
-    return;
-  }
-  const username = document.getElementById('login-username').value.trim();
-  const password = document.getElementById('login-password').value;
-  if (!username || !password) { setStatus('login-status', '请输入用户名和密码', 'err'); show('login-status'); return; }
-  hide('login-status');
-  document.getElementById('login-btn').disabled = true;
-  setStatus('login-status', '登录中…', 'info'); show('login-status');
-  try {
-    await API.login(username, password);
-    document.getElementById('login-password').value = '';
-    hide('login-status');
-    renderUser();
-    renderLauncher();
-    log('登录成功：' + (API.getCurrentUser()?.display_name || API.getCurrentUser()?.nickname || username), 'ok');
-    log('当前服务地址：' + API.getServerBase(), 'info');
-    log('当前更新地址：' + API.getUpdateBase(), 'info');
-    if (API.getCurrentRole()) log('当前角色：' + API.getCurrentRole(), 'info');
-    log('角色目标页：' + API.getRolePageUrl(), 'info');
-    hideLogin();
-    openRolePage();
-  } catch (e) {
-    setStatus('login-status', '登录失败：' + e.message, 'err'); show('login-status');
-  } finally {
-    document.getElementById('login-btn').disabled = false;
-  }
-}
+  window.addEventListener('kh:auth-expired', () => {
+    renderSummary();
+    setStatus('login-status', '登录已失效，请重新登录', 'warn');
+  });
 
-function doLogout() { API.logout(); renderUser(); renderLauncher(); showLogin(); log('已退出登录', 'info'); }
+  let _updateStarted = false;
 
-async function bootAuth() {
-  try {
-    await API.fetchMe();
-    renderUser();
-    renderLauncher();
-    hideLogin();
-    log('已恢复登录态，停留在启动页，可直接进入角色页面或先调试。', 'info');
-  }
-  catch (e) { renderLauncher(); showLogin(); }
-}
-
-// 任意请求遇 401 → 弹回登录页
-window.addEventListener('kh:auth-expired', () => { renderUser(); renderLauncher(); showLogin(); });
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 启动
-// ══════════════════════════════════════════════════════════════════════════════
-log('build: ' + (window.BUILD_TIME ?? '—'), 'plain');
-log('platform: ' + (window.Capacitor?.getPlatform?.() ?? 'unknown'), 'info');
-log('server: ' + API.getServerBase(), 'info');
-log('update-server: ' + API.getUpdateBase(), 'info');
-
-// 各模块初始化
-// 当前 Android 客户端以页面代理模式为主：扫码/日志通过原生注入桥在业务页处理，
-// 这里不再启动旧的机器/NFC/批次工作流，避免老逻辑继续拦截扫码事件。
-Printer.init(window.PrintPlugin);
-log('旧机器流程已停用，业务扫码改走页面动作桥接', 'info');
-
-bootAuth();   // 校验已存 token；未登录则弹出登录遮罩
-refreshDebug();
-
-// ── 自动更新相关逻辑 ─────────────────────────────────────────────────────────
-// 内存标志：防同一次 JS 会话内重复触发（不持久化，靠 versionCode 比较来彻底终止循环）
-let _updateStarted = false;
-
-async function triggerAppUpdate() {
-  if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) {
-    log('非原生模式，刷新页面', 'info');
-    location.reload();
-    return;
-  }
-  log('正在检查 APK 更新...', 'info');
-  try {
-    const localInfo = await window.UpdatePlugin.getVersionInfo();
-    log(`当前版本: Code=${localInfo.versionCode}, Name=${localInfo.versionName}`, 'info');
-
-    const res = await fetch(API.getUpdateBase() + '/api/app/version');
-    if (!res.ok) {
-      log('获取服务器版本失败', 'err');
-      alert('无法获取最新版本信息');
+  async function triggerAppUpdate() {
+    if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) {
+      setStatus('login-status', '当前环境不支持原生更新检测', 'warn');
       return;
     }
-    const serverInfo = await res.json();
-    log(`最新版本: Code=${serverInfo.versionCode}, Name=${serverInfo.versionName}`, 'info');
-
-    if (serverInfo.versionCode > localInfo.versionCode) {
-      const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
-      if (ok) {
-        _updateStarted = true;
-        startApkDownload(serverInfo.apkUrl, serverInfo.versionCode);
-      }
-    } else {
-      log('已是最新版本', 'ok');
-      alert(`当前已是最新版本 (v${localInfo.versionName})`);
-    }
-  } catch (e) {
-    log('检查更新失败: ' + e.message, 'err');
-    alert('检查更新失败: ' + e.message);
-  }
-}
-
-async function autoCheckUpdate() {
-  if (window.BRIDGE_MODE !== 'capacitor' || !window.UpdatePlugin) return;
-  if (_updateStarted) return; // 本次会话已触发，不重复
-  try {
-    const localInfo = await window.UpdatePlugin.getVersionInfo();
-    const res = await fetch(API.getUpdateBase() + '/api/app/version');
-    if (!res.ok) return;
-    const serverInfo = await res.json();
-    if (serverInfo.versionCode > localInfo.versionCode) {
-      setTimeout(() => {
-        if (_updateStarted) return;
-        const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载并升级？`);
+    setStatus('login-status', '正在检查更新…', 'info');
+    try {
+      const localInfo = await window.UpdatePlugin.getVersionInfo();
+      const res = await fetch(API.getUpdateBase() + '/api/app/version');
+      if (!res.ok) throw new Error('无法获取最新版本信息');
+      const serverInfo = await res.json();
+      if (serverInfo.versionCode > localInfo.versionCode) {
+        const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
         if (ok) {
           _updateStarted = true;
-          startApkDownload(serverInfo.apkUrl, serverInfo.versionCode);
+          startApkDownload(serverInfo.apkUrl);
+        } else {
+          setStatus('login-status', '已取消更新', 'warn');
         }
-      }, 1500);
+      } else {
+        setStatus('login-status', `当前已是最新版本 (v${localInfo.versionName})`, 'ok');
+      }
+    } catch (e) {
+      setStatus('login-status', '检查更新失败：' + e.message, 'err');
     }
-  } catch (e) {
-    console.error('Auto check update failed', e);
-  }
-}
-
-function startApkDownload(url, expectedVersionCode) {
-  const absoluteUrl = new URL(url, API.getUpdateBase()).href;
-  let overlay = document.getElementById('update-progress-overlay');
-  if (!overlay) {
-    overlay = document.createElement('div');
-    overlay.id = 'update-progress-overlay';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);color:#fff;z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;';
-    overlay.innerHTML = '<div style="background:#1c1c1e;padding:24px;border-radius:16px;width:85%;max-width:320px;text-align:center;box-shadow:0 4px 12px rgba(0,0,0,0.5);"><div style="font-size:18px;font-weight:bold;margin-bottom:12px;">正在下载更新...</div><div style="font-size:13px;color:#8e8e93;margin-bottom:20px;">请勿关闭应用</div><div style="background:#2c2c2e;height:8px;border-radius:4px;overflow:hidden;margin-bottom:10px;position:relative;"><div id="update-progress-bar" style="background:#30d158;width:0%;height:100%;transition:width 0.1s ease;"></div></div><div id="update-progress-text" style="font-size:14px;font-weight:500;">0%</div></div>';
-    document.body.appendChild(overlay);
-  } else {
-    overlay.style.display = 'flex';
   }
 
-  const bar = document.getElementById('update-progress-bar');
-  const text = document.getElementById('update-progress-text');
-  bar.style.width = '0%';
-  text.textContent = '0%';
+  function startApkDownload(url) {
+    const absoluteUrl = new URL(url, API.getUpdateBase()).href;
+    let overlay = document.getElementById('update-progress-overlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'update-progress-overlay';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.78);color:#fff;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;';
+      overlay.innerHTML = '<div style="width:100%;max-width:320px;background:#111827;border-radius:18px;padding:22px;text-align:center;"><div style="font-size:18px;font-weight:700;margin-bottom:10px;">正在下载更新</div><div style="font-size:13px;color:#cbd5e1;margin-bottom:18px;">请勿关闭应用</div><div style="height:8px;background:#374151;border-radius:999px;overflow:hidden;margin-bottom:10px;"><div id="update-progress-bar" style="width:0%;height:100%;background:#34d399;"></div></div><div id="update-progress-text" style="font-size:14px;">0%</div></div>';
+      document.body.appendChild(overlay);
+    } else {
+      overlay.style.display = 'flex';
+    }
 
-  log('开始下载更新 APK: ' + absoluteUrl, 'info');
+    const bar = document.getElementById('update-progress-bar');
+    const text = document.getElementById('update-progress-text');
+    bar.style.width = '0%';
+    text.textContent = '0%';
 
-  // 监听"需要开启安装未知来源"事件（Android 8+ 首次安装时触发）
-  window.UpdatePlugin.addListener('installPermissionRequired', (data) => {
-    overlay.style.display = 'none';
-    _updateStarted = false;
-    log('需要安装权限: ' + data.reason, 'warn');
-    alert(data.reason);
-  });
+    window.UpdatePlugin.addListener('installPermissionRequired', (data) => {
+      overlay.style.display = 'none';
+      _updateStarted = false;
+      setStatus('login-status', data.reason, 'warn');
+    });
 
-  // 先注册进度监听再发起下载，避免竞态导致 listener 为 null
-  window.UpdatePlugin.addListener('downloadProgress', (data) => {
-    const progress = data.progress;
-    bar.style.width = progress + '%';
-    text.textContent = progress + '%';
-  }).then(listener => {
-    window.UpdatePlugin.downloadAndInstallApk({ url: absoluteUrl })
-      .then(() => {
-        log('APK 下载完成，即将退出', 'ok');
-        listener.remove();
-        bar.style.width = '100%';
-        text.textContent = '下载完成，请在通知栏点击安装…';
-        // 稍等让用户看到提示，主动退出 App
-        // DownloadManager 已完成下载，安装通知在通知栏，退出后用户点通知即可安装
-        setTimeout(() => {
-          window.UpdatePlugin?.exitApp?.();
-        }, 1500);
+    window.UpdatePlugin.addListener('downloadProgress', (data) => {
+      const progress = data.progress;
+      bar.style.width = progress + '%';
+      text.textContent = progress + '%';
+    }).then(listener => {
+      window.UpdatePlugin.downloadAndInstallApk({ url: absoluteUrl })
+        .then(() => {
+          listener.remove();
+          bar.style.width = '100%';
+          text.textContent = '下载完成，请在通知栏点击安装…';
+          setTimeout(() => { window.UpdatePlugin?.exitApp?.(); }, 1500);
+        })
+        .catch(err => {
+          listener.remove();
+          overlay.style.display = 'none';
+          _updateStarted = false;
+          setStatus('login-status', '下载 APK 失败：' + err.message, 'err');
+        });
+    });
+  }
 
-        // 如果覆盖安装失败（签名不一致），在 overlay 里追加卸载按钮
-        const uninstallHint = document.createElement('div');
-        uninstallHint.style.cssText = 'margin-top:16px;font-size:13px;color:#8e8e93;';
-        uninstallHint.innerHTML = `
-          安装失败？签名不一致需先卸载旧版本：<br>
-          <button onclick="window.UpdatePlugin?.uninstallApp?.()"
-            style="margin-top:10px;padding:10px 20px;border:none;border-radius:8px;
-                   background:#ff3b30;color:#fff;font-size:14px;font-weight:600;cursor:pointer">
-            卸载旧版本
-          </button>`;
-        overlay.querySelector('div').appendChild(uninstallHint);
-      })
-      .catch(err => {
-        log('下载 APK 失败: ' + err.message, 'err');
-        alert('下载 APK 失败: ' + err.message);
-        listener.remove();
-        overlay.style.display = 'none';
-        _updateStarted = false;
-      });
-  });
-}
-
-// 启动时自动检查更新
-autoCheckUpdate();
-</script>
+  renderSettingsInputs();
+  renderSummary();
+  bootAuth();
+  </script>
 </body>
 </html>
