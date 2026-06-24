@@ -108,7 +108,7 @@ export function getRolePageUrl(roleName = '') {
 
 export function getRoleBootstrapUrl(roleName = '') {
   const targetUrl = getRolePageUrl(roleName);
-  const url = new URL('/signin', `${getServerBase()}/`);
+  const url = new URL(targetUrl);
   url.searchParams.set('redirect', targetUrl);
   url.searchParams.set('kh_token', getToken());
   url.searchParams.set('kh_auth', getAuthenticator());

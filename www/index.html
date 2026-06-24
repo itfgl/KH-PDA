@@ -95,7 +95,7 @@
     .barcode-wrap svg { max-width: 100%; }
     .barcode-no { font-family: monospace; font-size: 12px; color: #8e8e93; margin-top: 4px; }
 
-    #log-body { background: #1c1c1e; border-radius: 10px; padding: 10px;
+    #log-body, #floating-log-body { background: #1c1c1e; border-radius: 10px; padding: 10px;
                 max-height: 280px; overflow-y: auto; }
     .log-line { font-family: monospace; font-size: 12px; line-height: 1.6; white-space: pre-wrap;
                 word-break: break-all; border-bottom: 1px solid #2c2c2e; }
@@ -104,6 +104,15 @@
     .log-line.err   { color: #ff453a; }
     .log-line.warn  { color: #ffd60a; }
     .log-line.plain { color: #ebebf5; }
+    #floating-log-body { max-height: min(55vh, 420px); }
+    .log-fab { position: fixed; right: 18px; bottom: 22px; z-index: 9996; width: 54px; height: 54px;
+               border: none; border-radius: 999px; background: #007aff; color: #fff; font-size: 20px;
+               font-weight: 700; box-shadow: 0 8px 24px rgba(0,0,0,.22); }
+    .log-fab:active { opacity: .8; }
+    #floating-log-overlay { position: fixed; inset: 0; z-index: 9997; background: rgba(28,28,30,.32);
+                            display: none; align-items: flex-end; justify-content: stretch; padding: 16px; }
+    #floating-log-panel { width: 100%; max-width: 520px; margin: 0 auto; background: #fff; border-radius: 16px;
+                          padding: 14px; box-shadow: 0 12px 32px rgba(0,0,0,.2); }
 
     #cam-wrap { position: relative; border-radius: 10px; overflow: hidden;
                 margin-bottom: 10px; background: #000; display: none; }
@@ -186,6 +195,21 @@
     </div>
     <button class="btn btn-gray" style="margin-top:8px;" onclick="triggerAppUpdate()">检查更新</button>
     <div class="status" id="settings-status" style="display:none;margin-top:8px;"></div>
+  </div>
+</div>
+
+<button class="log-fab" id="log-fab" onclick="toggleFloatingLog(true)" title="查看日志">日志</button>
+
+<div id="floating-log-overlay" onclick="if(event.target===this)toggleFloatingLog(false)">
+  <div id="floating-log-panel">
+    <div class="card-title-row">
+      <span class="card-title">运行日志</span>
+      <div style="display:flex;gap:6px">
+        <button class="btn-sm btn-gray" onclick="clearLog()">清空</button>
+        <button class="btn-sm btn-gray" onclick="toggleFloatingLog(false)">关闭</button>
+      </div>
+    </div>
+    <div id="floating-log-body"></div>
   </div>
 </div>
 
@@ -403,21 +427,35 @@
 
 // ── 日志 ──────────────────────────────────────────────────────────────────────
 const logBody = document.getElementById('log-body');
+const floatingLogBody = document.getElementById('floating-log-body');
+const logTargets = [logBody, floatingLogBody].filter(Boolean);
+function appendLogLine(text, type = 'plain') {
+  logTargets.forEach((target) => {
+    const el = document.createElement('div');
+    el.className = 'log-line ' + type;
+    el.textContent = text;
+    target.appendChild(el);
+    target.scrollTop = target.scrollHeight;
+  });
+}
+window.toggleFloatingLog = (show) => {
+  document.getElementById('floating-log-overlay').style.display = show ? 'flex' : 'none';
+};
 window.log = (msg, type = 'plain') => {
   const t = new Date().toTimeString().slice(0, 8);
-  const el = document.createElement('div');
-  el.className = 'log-line ' + type;
-  el.textContent = `[${t}] ${msg}`;
-  logBody.appendChild(el);
-  logBody.scrollTop = logBody.scrollHeight;
+  const line = `[${t}] ${msg}`;
+  appendLogLine(line, type);
   try {
     const prev = JSON.parse(localStorage.getItem('kh_log') || '[]');
-    prev.push(el.textContent);
+    prev.push(line);
     if (prev.length > 200) prev.splice(0, prev.length - 200);
     localStorage.setItem('kh_log', JSON.stringify(prev));
   } catch(_) {}
 };
-window.clearLog = () => { logBody.innerHTML = ''; localStorage.removeItem('kh_log'); };
+window.clearLog = () => {
+  logTargets.forEach(target => { target.innerHTML = ''; });
+  localStorage.removeItem('kh_log');
+};
 window.addEventListener('error', e => log('JS ERROR: ' + e.message, 'err'));
 window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason?.message ?? e.reason), 'err'));
 // 恢复上次会话日志
@@ -425,15 +463,11 @@ window.addEventListener('unhandledrejection', e => log('UNHANDLED: ' + (e.reason
   try {
     const saved = JSON.parse(localStorage.getItem('kh_log') || '[]');
     if (!saved.length) return;
-    const sep = document.createElement('div');
-    sep.className = 'log-line warn';
-    sep.textContent = `── 上次会话 ${saved.length} 条 ──`;
-    logBody.appendChild(sep);
+    appendLogLine(`── 上次会话 ${saved.length} 条 ──`, 'warn');
     saved.forEach(line => {
-      const el = document.createElement('div'); el.className = 'log-line plain'; el.textContent = line;
-      logBody.appendChild(el);
+      appendLogLine(line, 'plain');
     });
-    logBody.appendChild(Object.assign(document.createElement('div'), { className:'log-line warn', textContent:'── 当前会话 ──' }));
+    appendLogLine('── 当前会话 ──', 'warn');
   } catch(_) {}
 })();
 
