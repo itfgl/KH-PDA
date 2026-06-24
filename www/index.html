@@ -1737,10 +1737,10 @@ log('server: ' + API.getServerBase(), 'info');
 log('update-server: ' + API.getUpdateBase(), 'info');
 
 // 各模块初始化
-Scanner.init(window.ScanPlugin);
-NFC.init(window.KaihangNfc);
-Machine.init();
+// 当前 Android 客户端以页面代理模式为主：扫码/日志通过原生注入桥在业务页处理，
+// 这里不再启动旧的机器/NFC/批次工作流，避免老逻辑继续拦截扫码事件。
 Printer.init(window.PrintPlugin);
+log('旧机器流程已停用，业务扫码改走页面动作桥接', 'info');
 
 bootAuth();   // 校验已存 token；未登录则弹出登录遮罩
 refreshDebug();
