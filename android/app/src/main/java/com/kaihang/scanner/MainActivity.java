@@ -138,7 +138,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onPause() {
+    public void onPause() {
         try {
             PrintPlugin.closeNative(this);
             appendNativeLog("页面暂停，关闭原生打印连接");
@@ -149,7 +149,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         mainHandler.postDelayed(() -> {
             appendNativeLog("页面恢复，检查打印连接");
@@ -158,7 +158,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     @Override
-    protected void onDestroy() {
+    public void onDestroy() {
         try {
             stopNativeScan();
         } catch (Exception ignored) {}
