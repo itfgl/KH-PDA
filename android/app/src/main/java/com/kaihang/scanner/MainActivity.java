@@ -98,12 +98,12 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
-                injectClientTypeHeader(view);
+                handleRuntimeInjection(view, url, false);
             }
             @Override
             public void onPageLoaded(WebView view) {
                 super.onPageLoaded(view);
-                injectClientTypeHeader(view);
+                handleRuntimeInjection(view, view != null ? view.getUrl() : null, true);
             }
         });
     }
@@ -220,11 +220,29 @@ public class MainActivity extends BridgeActivity {
         bridge.onNewIntent(intent);
     }
 
-    private void injectClientTypeHeader(WebView view) {
+    private void handleRuntimeInjection(WebView view, String targetUrl, boolean force) {
+        String url = safe(targetUrl);
+        if (url.isEmpty() && view != null) {
+            url = safe(view.getUrl());
+        }
+        if (!force) {
+            setNativePageReadyState("loading", url);
+            if (view != null) {
+                view.postDelayed(() -> injectClientTypeHeader(view, false), 120);
+            }
+            return;
+        }
+        injectClientTypeHeader(view, true);
+    }
+
+    private void injectClientTypeHeader(WebView view, boolean force) {
+        if (view == null) {
+            return;
+        }
         String url = safe(view.getUrl());
         long now = System.currentTimeMillis();
         boolean sameUrlRecently = url.equals(lastInjectedUrl) && (now - lastInjectAtMs) < 1200L;
-        if (sameUrlRecently) {
+        if (sameUrlRecently && !force) {
             return;
         }
         setNativePageReadyState("loading", url);
@@ -419,7 +437,7 @@ public class MainActivity extends BridgeActivity {
                     webView.evaluateJavascript(command, null);
                     return;
                 }
-                injectClientTypeHeader(webView);
+                injectClientTypeHeader(webView, true);
                 webView.postDelayed(() -> webView.evaluateJavascript(command, null), 180);
             }
         ));
