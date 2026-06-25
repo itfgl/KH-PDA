@@ -411,8 +411,7 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         WebView webView = bridge.getWebView();
-        injectClientTypeHeader(webView);
-        webView.postDelayed(() -> webView.evaluateJavascript(command, null), 150);
+        webView.post(() -> webView.evaluateJavascript(command, null));
     }
 
     private void emitPrintStatusToPage(String value, String flag, boolean isConnection) {
@@ -942,7 +941,9 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.startGlobalScan=function(){var plugin=kh.getScanPlugin();if(!plugin||!plugin.startScan){kh.signalActionTriggered('扫码桥不可用','warn');return Promise.resolve({mock:true,reason:'Scan bridge unavailable'});}return kh.ensureScanBridge().catch(function(){return true;}).then(function(){kh.pushLog('手动触发扫码','info');return Promise.resolve(plugin.startScan()).then(function(){kh.showToast('已触发扫码','info');return true;}).catch(function(err){kh.pushLog('触发扫码失败: '+String(err&&err.message||err||'unknown'),'err');kh.showToast('扫码触发失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});});};");
         script.append("kh.ensureGlobalScanButton=function(){};");
         script.append("kh.ensureControlMenu=function(){};");
-        script.append("kh.patchWindowOpen();kh.ensureDeviceClient();kh.pushLog('网页日志桥已启动 version='+String(window.APP_VERSION_NAME||'')+' ('+String(window.APP_VERSION_CODE||'')+'), buildTime='+String(window.BUILD_TIME||''),'info');kh.ensureScanBridge().catch(function(){return null;});");
+        script.append("kh.markUiReady=function(detail){kh.reportPageReadyState('ready',detail||'ui ready');};");
+        script.append("kh.installUiReadySignals=function(){if(kh._uiReadySignalsInstalled)return;kh._uiReadySignalsInstalled=true;var emit=function(detail){requestAnimationFrame(function(){requestAnimationFrame(function(){kh.markUiReady(detail);});});};if(document.readyState==='complete'||document.readyState==='interactive'){emit('document '+document.readyState);}else{window.addEventListener('DOMContentLoaded',function(){emit('DOMContentLoaded');},{once:true});}window.addEventListener('load',function(){emit('window load');},{once:true});window.addEventListener('pageshow',function(){emit('pageshow');});};");
+        script.append("kh.patchWindowOpen();kh.ensureDeviceClient();kh.installUiReadySignals();kh.pushLog('网页日志桥已启动 version='+String(window.APP_VERSION_NAME||'')+' ('+String(window.APP_VERSION_CODE||'')+'), buildTime='+String(window.BUILD_TIME||''),'info');kh.ensureScanBridge().catch(function(){return null;});");
         script.append("var patchFetch=function(){var of=window.fetch;if(!of||of.__khWrapped)return;var wf=function(r,i){i=i||{};var hs=new Headers(i.headers||(r&&r.headers)||{});if(!hs.has(h))hs.set(h,v);i.headers=hs;return of.call(this,r,i);};wf.__khWrapped=true;window.fetch=wf;};");
         script.append("var patchXhr=function(){if(XMLHttpRequest.prototype.__khWrapped)return;var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send,osr=XMLHttpRequest.prototype.setRequestHeader;");
         script.append("XMLHttpRequest.prototype.open=function(){this.__khSet=false;return oo.apply(this,arguments);};");
