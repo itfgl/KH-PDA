@@ -3,6 +3,9 @@ apply plugin: 'com.android.application'
 android {
     namespace = "com.kaihang.scanner"
     compileSdk = rootProject.ext.compileSdkVersion
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId "com.kaihang.scanner"
         minSdkVersion rootProject.ext.minSdkVersion
