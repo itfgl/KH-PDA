@@ -17,6 +17,7 @@ public class ClientConfigPlugin extends Plugin {
     private static final String KEY_PAPER_TYPE = "paper_type";
     private static final String KEY_LAYOUT_PRESET = "layout_preset";
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
+    private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
 
     public static String getSavedServerBase(Context context, String fallback) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -29,7 +30,7 @@ public class ClientConfigPlugin extends Plugin {
 
     public static JSObject saveConfig(Context context, String serverBase, String updateBase, String paperType, String layoutPreset) {
         String normalizedServerBase = normalizeBaseUrl(serverBase, DEFAULT_SERVER_BASE);
-        String normalizedUpdateBase = normalizeBaseUrl(updateBase, normalizedServerBase);
+        String normalizedUpdateBase = normalizeBaseUrl(updateBase, DEFAULT_UPDATE_BASE);
         String normalizedPaperType = normalizePaperType(paperType);
         String normalizedLayoutPreset = normalizeLayoutPreset(layoutPreset);
 
@@ -79,7 +80,7 @@ public class ClientConfigPlugin extends Plugin {
     private static JSObject readConfig(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String serverBase = normalizeBaseUrl(prefs.getString(KEY_SERVER_BASE, ""), DEFAULT_SERVER_BASE);
-        String updateBase = normalizeBaseUrl(prefs.getString(KEY_UPDATE_BASE, ""), serverBase);
+        String updateBase = normalizeBaseUrl(prefs.getString(KEY_UPDATE_BASE, ""), DEFAULT_UPDATE_BASE);
         String paperType = normalizePaperType(prefs.getString(KEY_PAPER_TYPE, "thermal"));
         String layoutPreset = normalizeLayoutPreset(prefs.getString(KEY_LAYOUT_PRESET, "standard"));
 

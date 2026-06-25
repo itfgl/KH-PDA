@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     private static final String DEFAULT_STORAGE_APP_NAME = "main";
     private static final String DEFAULT_PAGE_ACTIONS_API_PATH = "/api/scanner_page_binding_actions:list?pageSize=200";
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
+    private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
     private static final String DEFAULT_LOGIN_PATH = "/signin";
     private static final long SCAN_RELEASE_TIMEOUT_MS = 8000L;
     private android.widget.ImageButton nativeControlButton;
@@ -539,7 +540,7 @@ public class MainActivity extends BridgeActivity {
         root.setPadding(dp(20), dp(12), dp(20), dp(4));
 
         android.widget.EditText serverInput = createUrlInput(config.optString("serverBase", DEFAULT_SERVER_BASE));
-        android.widget.EditText updateInput = createUrlInput(config.optString("updateBase", DEFAULT_SERVER_BASE));
+        android.widget.EditText updateInput = createUrlInput(config.optString("updateBase", DEFAULT_UPDATE_BASE));
         android.widget.Spinner paperSpinner = createSpinner(new String[]{"普通热敏纸", "黑标标签纸"});
         android.widget.Spinner layoutSpinner = createSpinner(new String[]{"标准排版", "紧凑排版", "大字排版"});
         paperSpinner.setSelection("black_mark".equals(config.optString("paperType", "thermal")) ? 1 : 0);
@@ -570,7 +571,7 @@ public class MainActivity extends BridgeActivity {
             .create();
         dialog.setOnShowListener(d -> dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String serverBase = normalizeBaseUrl(serverInput.getText().toString(), DEFAULT_SERVER_BASE);
-            String updateBase = normalizeBaseUrl(updateInput.getText().toString(), serverBase);
+            String updateBase = normalizeBaseUrl(updateInput.getText().toString(), DEFAULT_UPDATE_BASE);
             if (serverBase.isEmpty()) {
                 toast("请输入服务地址");
                 return;
@@ -626,7 +627,7 @@ public class MainActivity extends BridgeActivity {
         new Thread(() -> {
             try {
                 com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
-                String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_SERVER_BASE), DEFAULT_SERVER_BASE);
+                String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
                 java.net.URL requestUrl = new java.net.URL(updateBase + "/api/app/version");
                 java.net.HttpURLConnection connection = (java.net.HttpURLConnection) requestUrl.openConnection();
                 connection.setRequestMethod("GET");
@@ -845,6 +846,7 @@ public class MainActivity extends BridgeActivity {
         script.append("window.APP_VERSION_CODE=").append(BuildConfig.VERSION_CODE).append(";");
         script.append("kh.pageActionsApi=").append(js(DEFAULT_PAGE_ACTIONS_API_PATH)).append(";");
         script.append("kh.defaultServerBase=").append(js(DEFAULT_SERVER_BASE)).append(";");
+        script.append("kh.defaultUpdateBase=").append(js(DEFAULT_UPDATE_BASE)).append(";");
         script.append("kh.paperTypeStorageKey='NOCOBASE_PAPER_TYPE';");
         script.append("kh.layoutPresetStorageKey='NOCOBASE_LAYOUT_PRESET';");
         script.append("kh.logStorageKey='KH_FLOATING_LOGS';");
@@ -856,8 +858,8 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.getCurrentHttpOrigin=function(){try{var url=new URL(window.location.href);if(/^https?:$/i.test(url.protocol))return url.origin;}catch(e){}return '';};");
         script.append("kh.normalizePaperTypeValue=function(value){return String(value||'').trim().toLowerCase()==='black_mark'?'black_mark':'thermal';};");
         script.append("kh.normalizeLayoutPresetValue=function(value){var raw=String(value||'').trim().toLowerCase();return ['compact','large'].indexOf(raw)>=0?raw:'standard';};");
-        script.append("kh.applyClientConfig=function(config){config=config||{};var serverBase=kh.normalizeBaseUrl(config.serverBase,kh.getCurrentHttpOrigin()||kh.defaultServerBase);var updateBase=kh.normalizeBaseUrl(config.updateBase,serverBase);var paperType=kh.normalizePaperTypeValue(config.paperType);var layoutPreset=kh.normalizeLayoutPresetValue(config.layoutPreset);kh.clientConfig={serverBase:serverBase,updateBase:updateBase,paperType:paperType,layoutPreset:layoutPreset};return kh.clientConfig;};");
-        script.append("kh.clientConfig=kh.applyClientConfig({serverBase:kh.getCurrentHttpOrigin()||kh.defaultServerBase,updateBase:kh.getCurrentHttpOrigin()||kh.defaultServerBase,paperType:'thermal',layoutPreset:'standard'});");
+        script.append("kh.applyClientConfig=function(config){config=config||{};var serverBase=kh.normalizeBaseUrl(config.serverBase,kh.getCurrentHttpOrigin()||kh.defaultServerBase);var updateBase=kh.normalizeBaseUrl(config.updateBase,kh.defaultUpdateBase);var paperType=kh.normalizePaperTypeValue(config.paperType);var layoutPreset=kh.normalizeLayoutPresetValue(config.layoutPreset);kh.clientConfig={serverBase:serverBase,updateBase:updateBase,paperType:paperType,layoutPreset:layoutPreset};return kh.clientConfig;};");
+        script.append("kh.clientConfig=kh.applyClientConfig({serverBase:kh.getCurrentHttpOrigin()||kh.defaultServerBase,updateBase:kh.defaultUpdateBase,paperType:'thermal',layoutPreset:'standard'});");
         script.append("kh.readClientConfig=function(){var plugin=kh.getClientConfigPlugin();if(!plugin||!plugin.getConfig)return Promise.resolve(kh.clientConfig);return Promise.resolve(plugin.getConfig()).then(function(config){return kh.applyClientConfig(config);}).catch(function(err){kh.pushLog('读取客户端配置失败: '+String(err&&err.message||err||'unknown'),'warn');return kh.clientConfig;});};");
         script.append("kh.getServerBase=function(){return (kh.clientConfig&&kh.clientConfig.serverBase)||kh.defaultServerBase;};");
         script.append("kh.getUpdateBase=function(){return (kh.clientConfig&&kh.clientConfig.updateBase)||kh.getServerBase();};");
