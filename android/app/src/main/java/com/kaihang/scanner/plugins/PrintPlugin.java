@@ -38,6 +38,8 @@ public class PrintPlugin extends Plugin {
     private static final String PAPER_THERMAL = "thermal";
     private static final String PAPER_BLACK_MARK = "black_mark";
     private static final String LAYOUT_STANDARD = "standard";
+    private static final long NATIVE_CONNECT_TIMEOUT_MS = 8000L;
+    private static final Object nativeConnectionLock = new Object();
     private static boolean nativeConnected = false;
     private static boolean nativeConnecting = false;
     private static final ExecutorService nativePrintExecutor = Executors.newSingleThreadExecutor();
@@ -91,16 +93,25 @@ public class PrintPlugin extends Plugin {
                         case 101:
                             nativeConnecting = false;
                             nativeConnected = true;
+                            synchronized (nativeConnectionLock) {
+                                nativeConnectionLock.notifyAll();
+                            }
                             emitNativeConnection("connected");
                             break;
                         case 102:
                             nativeConnecting = false;
                             nativeConnected = false;
+                            synchronized (nativeConnectionLock) {
+                                nativeConnectionLock.notifyAll();
+                            }
                             emitNativeConnection("failed");
                             break;
                         case 103:
                             nativeConnecting = false;
                             nativeConnected = false;
+                            synchronized (nativeConnectionLock) {
+                                nativeConnectionLock.notifyAll();
+                            }
                             emitNativeConnection("closed");
                             break;
                         default:
@@ -112,6 +123,35 @@ public class PrintPlugin extends Plugin {
         );
     }
 
+    private static boolean waitForNativeConnection(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + Math.max(1000L, timeoutMs);
+        synchronized (nativeConnectionLock) {
+            while (nativeConnecting && !nativeConnected && System.currentTimeMillis() < deadline) {
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) break;
+                try {
+                    nativeConnectionLock.wait(remaining);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            return nativeConnected;
+        }
+    }
+
+    public static synchronized void closeNative(Activity activity) {
+        nativeConnecting = false;
+        nativeConnected = false;
+        synchronized (nativeConnectionLock) {
+            nativeConnectionLock.notifyAll();
+        }
+        if (activity != null) {
+            Printer.close(activity);
+        }
+        emitNativeConnection("closed");
+    }
+
     public static void prepareToPrintLabelNative() {
         Printer.prepareToPrintLabel();
     }
@@ -121,6 +161,10 @@ public class PrintPlugin extends Plugin {
         connectNative(activity);
         nativePrintExecutor.execute(() -> {
             try {
+                if (!nativeConnected && !waitForNativeConnection(NATIVE_CONNECT_TIMEOUT_MS)) {
+                    emitNativeStatus("PRINT_BRIDGE_ERROR", "printer connect timeout");
+                    return;
+                }
                 String normalizedPaperType = normalizePaperType(paperType);
                 GenericLabelLayout layout = getGenericLabelLayout(layoutPreset);
 

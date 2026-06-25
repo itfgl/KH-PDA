@@ -52,6 +52,10 @@ public class MainActivity extends BridgeActivity {
                 emitPrintStatusToPage(status, flag, false);
             }
         });
+        mainHandler.postDelayed(() -> {
+            appendNativeLog("预热原生打印连接");
+            PrintPlugin.connectNative(MainActivity.this);
+        }, 300L);
 
         // 全局崩溃拦截：将异常信息转发到 JS 日志
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
@@ -131,6 +135,40 @@ public class MainActivity extends BridgeActivity {
                 return true;
             }
         });
+    }
+
+    @Override
+    protected void onPause() {
+        try {
+            PrintPlugin.closeNative(this);
+            appendNativeLog("页面暂停，关闭原生打印连接");
+        } catch (Exception e) {
+            appendNativeLog("页面暂停关闭打印连接失败: " + e.getMessage());
+        }
+        super.onPause();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        mainHandler.postDelayed(() -> {
+            appendNativeLog("页面恢复，检查打印连接");
+            PrintPlugin.connectNative(MainActivity.this);
+        }, 200L);
+    }
+
+    @Override
+    protected void onDestroy() {
+        try {
+            stopNativeScan();
+        } catch (Exception ignored) {}
+        try {
+            PrintPlugin.closeNative(this);
+        } catch (Exception e) {
+            appendNativeLog("关闭原生打印机失败: " + e.getMessage());
+        }
+        PrintPlugin.setNativeEventSink(null);
+        super.onDestroy();
     }
 
     private boolean handleNavigation(WebView view, String url) {
