@@ -38,6 +38,19 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(UpdatePlugin.class);
         registerPlugin(ClientConfigPlugin.class);
         super.onCreate(savedInstanceState);
+        PrintPlugin.setNativeEventSink(new PrintPlugin.PrintEventSink() {
+            @Override
+            public void onConnection(String connection) {
+                appendNativeLog("打印连接状态: " + connection);
+                emitPrintStatusToPage(connection, null, true);
+            }
+
+            @Override
+            public void onStatus(String status, String flag) {
+                appendNativeLog("打印状态: " + status + (flag == null || flag.isEmpty() ? "" : (" flag=" + flag)));
+                emitPrintStatusToPage(status, flag, false);
+            }
+        });
 
         // 全局崩溃拦截：将异常信息转发到 JS 日志
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
@@ -300,6 +313,19 @@ public class MainActivity extends BridgeActivity {
         webView.postDelayed(() -> webView.evaluateJavascript(command, null), 150);
     }
 
+    private void emitPrintStatusToPage(String value, String flag, boolean isConnection) {
+        if (bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+        String script;
+        if (isConnection) {
+            script = "(function(){window.dispatchEvent(new CustomEvent('kh:printStatus',{detail:{connection:" + js(value) + "}}));})();";
+        } else {
+            script = "(function(){window.dispatchEvent(new CustomEvent('kh:printStatus',{detail:{status:" + js(value) + ",flag:" + js(flag == null ? "" : flag) + "}}));})();";
+        }
+        bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(script, null));
+    }
+
     private void attachNativeWebBridge(WebView webView) {
         webView.addJavascriptInterface(new NativeWebBridge(), "KaihangNativeBridge");
     }
@@ -405,6 +431,43 @@ public class MainActivity extends BridgeActivity {
                 setNativeScanActive(false);
                 appendNativeLog("扫码结果已返回，自动释放扫码状态");
             });
+        }
+
+        @JavascriptInterface
+        public boolean connectPrinter() {
+            runOnUiThread(() -> PrintPlugin.connectNative(MainActivity.this));
+            return true;
+        }
+
+        @JavascriptInterface
+        public boolean prepareToPrintLabel() {
+            runOnUiThread(PrintPlugin::prepareToPrintLabelNative);
+            return true;
+        }
+
+        @JavascriptInterface
+        public boolean printLabel(String payloadJson) {
+            try {
+                org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
+                String barcodeValue = payload.optString("barcodeValue", "");
+                String qrCodeValue = payload.optString("qrCodeValue", "");
+                String textValue = payload.optString("textValue", "");
+                String paperType = payload.optString("paperType", "thermal");
+                String layoutPreset = payload.optString("layoutPreset", "standard");
+                runOnUiThread(() -> PrintPlugin.printLabelNative(
+                    MainActivity.this,
+                    MainActivity.this,
+                    barcodeValue,
+                    qrCodeValue,
+                    textValue,
+                    paperType,
+                    layoutPreset
+                ));
+                return true;
+            } catch (Exception e) {
+                appendNativeLog("原生打印桥参数解析失败: " + e.getMessage());
+                return false;
+            }
         }
     }
 
@@ -795,7 +858,7 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.readNodeText=function(node){if(!node)return '';if('value' in node&&node.value!==undefined&&node.value!==null&&String(node.value).trim()!=='')return String(node.value).trim();return String(node.innerText||node.textContent||'').trim();};");
         script.append("kh.readIndexedCell=function(row,index){var parsed=parseInt(index,10);if(Number.isNaN(parsed)||parsed<0)return '';var cells=kh.resolveTableCells(row);if(parsed>=cells.length)return '';return kh.readNodeText(cells[parsed]);};");
         script.append("kh.resolveTablePrintItems=function(action){var options=action&&action.options||{};var raw=action&&action.raw||{};var selector=String(options.table_selector||options.tableSelector||raw.table_selector||raw.tableSelector||'').trim();if(!selector){kh.pushLog('table 打印缺少 table_selector: '+kh.describeAction(action),'err');return [];}var rows=Array.from(document.querySelectorAll(selector));kh.pushLog('table 打印读取行数: selector='+selector+', count='+rows.length,'info');var barcodeIndex=options.barcode_index!==undefined?options.barcode_index:(options.barcodeIndex!==undefined?options.barcodeIndex:raw.barcode_index);var qrcodeIndex=options.qrcode_index!==undefined?options.qrcode_index:(options.qrcodeIndex!==undefined?options.qrcodeIndex:raw.qrcode_index);var textIndex=options.text_index!==undefined?options.text_index:(options.textIndex!==undefined?options.textIndex:raw.text_index);var copiesIndex=options.copies_index!==undefined?options.copies_index:(options.copiesIndex!==undefined?options.copiesIndex:raw.copies_index);var paperTypeIndex=options.paper_type_index!==undefined?options.paper_type_index:(options.paperTypeIndex!==undefined?options.paperTypeIndex:raw.paper_type_index);var layoutPresetIndex=options.layout_preset_index!==undefined?options.layout_preset_index:(options.layoutPresetIndex!==undefined?options.layoutPresetIndex:raw.layout_preset_index);return rows.map(function(row,rowIndex){var item={barcodeValue:kh.readIndexedCell(row,barcodeIndex),qrCodeValue:kh.readIndexedCell(row,qrcodeIndex),textValue:kh.readIndexedCell(row,textIndex),copies:kh.readIndexedCell(row,copiesIndex),paperType:kh.readIndexedCell(row,paperTypeIndex),layoutPreset:kh.readIndexedCell(row,layoutPresetIndex)};kh.pushLog('table 行['+(rowIndex+1)+'/'+rows.length+']: barcode='+String(item.barcodeValue||'')+', qrcode='+String(item.qrCodeValue||'')+', text='+String(item.textValue||'')+', copies='+String(item.copies||''),'plain');return item;}).filter(function(item){return !!(String(item.barcodeValue||'').trim()||String(item.qrCodeValue||'').trim()||String(item.textValue||'').trim());});};");
-        script.append("kh.getPrintPlugin=function(){return window.PrintPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PrintPlugin)||null;};");
+        script.append("kh.getPrintPlugin=function(){var nativeBridge=kh.getNativeBridge();if(nativeBridge&&nativeBridge.printLabel){return {addListener:function(event,handler){if(event!=='printStatus')return Promise.resolve({remove:function(){}});var listener=function(e){handler&&handler(e&&e.detail?e.detail:{});};window.addEventListener('kh:printStatus',listener);return Promise.resolve({remove:function(){window.removeEventListener('kh:printStatus',listener);}});},connect:function(){return Promise.resolve(nativeBridge.connectPrinter&&nativeBridge.connectPrinter());},prepareToPrintLabel:function(){return Promise.resolve(nativeBridge.prepareToPrintLabel&&nativeBridge.prepareToPrintLabel());},printLabel:function(payload){return Promise.resolve(nativeBridge.printLabel&&nativeBridge.printLabel(JSON.stringify(payload||{})));}};}return window.PrintPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PrintPlugin)||null;};");
         script.append("kh.waitPrintStatus=function(plugin,wanted,timeoutMs){var ERRORS=['NO_PAPER','PRINTER_CLOSED','SEND_DATA_FAILED','PRINT_FAILED','BLACK_FLAG_NOT_FOUND','PREPARE_LABEL_NO_PAPER','PREPARE_LABEL_BLACK_FLAG_NOT_FOUND','PREPARE_LABEL_FAILED','PREPARE_LABEL_PRINTER_CLOSED','PREPARE_LABEL_SEND_DATA_FAILED'];return new Promise(function(resolve,reject){var done=false;var sub=null;var timer=setTimeout(function(){finish(new Error('print status timeout: '+wanted));},timeoutMs||15000);var finish=function(err){if(done)return;done=true;clearTimeout(timer);try{sub&&sub.remove&&sub.remove();}catch(e){}if(err)reject(err);else resolve();};Promise.resolve(plugin.addListener('printStatus',function(evt){var status=evt&&evt.status;if(!status)return;if(status===wanted){finish();}else if(ERRORS.indexOf(status)>=0){finish(new Error(status));}})).then(function(handle){sub=handle;}).catch(finish);});};");
         script.append("kh.ensurePrintConnected=function(plugin){kh._printConnectPromise=kh._printConnectPromise||Promise.resolve(plugin.connect&&plugin.connect()).catch(function(){return null;});return kh._printConnectPromise;};");
         script.append("kh.runSinglePrintPayload=function(plugin,action,payload){var printConfig=kh.resolvePrintConfig(action,payload);var finalPayload={barcodeValue:String(payload.barcodeValue||'').trim(),qrCodeValue:String(payload.qrCodeValue||'').trim(),textValue:String(payload.textValue||'').trim(),paperType:printConfig.paperType,layoutPreset:printConfig.layoutPreset};if(!finalPayload.barcodeValue&&!finalPayload.qrCodeValue&&!finalPayload.textValue)return Promise.reject(new Error('print action missing barcode/qrcode/text'));kh.pushLog('开始打印动作: '+(action.id||action.actionType)+' ['+finalPayload.paperType+'/'+finalPayload.layoutPreset+'] barcode='+finalPayload.barcodeValue+', qrcode='+finalPayload.qrCodeValue+', text='+finalPayload.textValue,'info');return kh.ensurePrintConnected(plugin).then(function(){if(finalPayload.paperType==='black_mark'&&plugin.prepareToPrintLabel){return Promise.resolve(plugin.prepareToPrintLabel()).catch(function(){return null;});}return null;}).then(function(){var waitDone=kh.waitPrintStatus(plugin,'PRINT_OK',15000);return Promise.resolve(plugin.printLabel(finalPayload)).then(function(){return waitDone;});});};");
@@ -804,6 +867,7 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.execTriggeredActions=function(triggerType,scanValue){var grouped=window.__khPageActions||{};var actions=Array.isArray(grouped[triggerType])?grouped[triggerType]:[];kh.pushLog('触发动作检查: trigger='+triggerType+', count='+actions.length+(scanValue?(', scanValue='+scanValue):''),'info');if(!actions.length)return false;actions.slice().sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);}).forEach(function(action,index){kh.pushLog('命中动作['+(index+1)+'/'+actions.length+']: '+kh.describeAction(action),'info');kh.execAction(action,scanValue||'');});return true;};");
         script.append("kh.attachButtonActions=function(){if(window.__khButtonActionsBound)return;document.addEventListener('click',function(event){var actions=(window.__khPageActions&&window.__khPageActions.button)||[];var rawTarget=event.target;var clickable=rawTarget&&rawTarget.closest?rawTarget.closest('button,[role=\"button\"],a,[data-kh-action],input[type=\"button\"],input[type=\"submit\"]'):null;if(actions.length){kh.pushLog('检测到点击事件: buttonActions='+actions.length+'，target={'+kh.describeElement(rawTarget)+'}'+(clickable?('，closestClickable={'+kh.describeElement(clickable)+'}'):'') ,'plain');}for(var i=0;i<actions.length;i++){var action=actions[i];if(!action.triggerSelector){kh.pushLog('按钮动作缺少 triggerSelector: '+kh.describeAction(action),'warn');continue;}var target=event.target&&event.target.closest?event.target.closest(action.triggerSelector):null;if(!target){kh.pushLog('按钮动作未命中 selector: '+action.triggerSelector+'，action='+(action.id||action.actionType)+'，target={'+kh.describeElement(rawTarget)+'}'+(clickable?('，closestClickable={'+kh.describeElement(clickable)+'}'):'') ,'plain');continue;}kh.pushLog('按钮动作命中 selector: '+action.triggerSelector+'，matched={'+kh.describeElement(target)+'}，'+kh.describeAction(action),'ok');event.preventDefault();event.stopPropagation();kh.execAction(action,'');return;}},true);window.__khButtonActionsBound=true;};");
         script.append("kh.loadPageActions=function(){var storages=[window.localStorage,window.sessionStorage].filter(Boolean);var getStored=function(key){for(var i=0;i<storages.length;i++){var value=storages[i].getItem(key);if(value)return value;}return '';};var token=getStored('NOCOBASE_TOKEN')||getStored('NOCOBASE_MAIN_TOKEN');var auth=getStored('NOCOBASE_AUTH')||getStored('NOCOBASE_MAIN_AUTH')||'basic';var role=getStored('NOCOBASE_ROLE')||getStored('NOCOBASE_MAIN_ROLE')||'';if(!token||!window.fetch){window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge0=kh.getNativeBridge();if(bridge0&&bridge0.setScanActionEnabled)bridge0.setScanActionEnabled(false);kh.pushLog('未检测到页面 token，跳过页面动作加载','warn');return Promise.resolve();}var requestUrl=new URL(kh.pageActionsApi,window.location.origin).toString();return window.fetch(requestUrl,{headers:{'Authorization':'Bearer '+token,'X-Authenticator':auth,'X-Requested-With':'XMLHttpRequest'}}).then(function(res){if(!res.ok)throw new Error('page actions '+res.status);return res.json();}).then(function(payload){var data=(payload&&payload.data!==undefined)?payload.data:payload;var items=Array.isArray(data)?data:(Array.isArray(data&&data.items)?data.items:(Array.isArray(data&&data.rows)?data.rows:[]));var scan=[];var button=[];for(var i=0;i<items.length;i++){var action=kh.normalizeAction(items[i],i+1);if(!action){kh.pushLog('忽略非法动作声明 index='+(i+1),'warn');continue;}kh.pushLog('读取动作声明: '+kh.describeAction(action),'plain');if(!action.enabled){kh.pushLog('忽略未启用动作: '+kh.describeAction(action),'warn');continue;}if(!kh.roleMatch(action.roleName,role)){kh.pushLog('忽略角色不匹配动作: currentRole='+(role||'<empty>')+'，'+kh.describeAction(action),'plain');continue;}if(!kh.pageMatch(action.pagePath,window.location.href)){kh.pushLog('忽略页面不匹配动作: currentPage='+window.location.pathname+'，'+kh.describeAction(action),'plain');continue;}if(action.triggerType==='button')button.push(action);else if(action.triggerType==='scan')scan.push(action);else kh.pushLog('忽略未知触发类型动作: '+kh.describeAction(action),'warn');}scan.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});button.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});window.__khPageActions={scan:scan,button:button};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(scan.length>0);kh.pushLog('页面动作已加载: scan='+scan.length+', button='+button.length+', role='+(role||'<empty>'),'info');scan.forEach(function(action,index){kh.pushLog('已注册扫码动作['+(index+1)+'/'+scan.length+']: '+kh.describeAction(action),'info');});button.forEach(function(action,index){kh.pushLog('已注册按钮动作['+(index+1)+'/'+button.length+']: '+kh.describeAction(action),'info');});}).catch(function(err){kh.pushLog('页面动作加载失败: '+String(err&&err.message||err||'unknown'),'err');window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge1=kh.getNativeBridge();if(bridge1&&bridge1.setScanActionEnabled)bridge1.setScanActionEnabled(false);});};");
+        script.append("kh.schedulePageActionRefresh=function(){if(kh._pageActionRefreshScheduled)return;kh._pageActionRefreshScheduled=true;setTimeout(function(){kh._pageActionRefreshScheduled=false;kh.loadPageActions().catch(function(){return null;});},180);};");
         script.append("patchFetch();patchXhr();");
         if (shouldBootstrap) {
             script.append("try{");
@@ -825,7 +889,7 @@ public class MainActivity extends BridgeActivity {
             script.append("return;");
             script.append("}catch(e){console.error('kh bootstrap failed',e);}");
         }
-        script.append("Promise.resolve().then(function(){return kh.loadPageActions();});");
+        script.append("Promise.resolve().then(function(){return kh.loadPageActions();});setTimeout(function(){kh.loadPageActions().catch(function(){return null;});},600);setTimeout(function(){kh.loadPageActions().catch(function(){return null;});},1800);window.addEventListener('pageshow',function(){kh.schedulePageActionRefresh();});window.addEventListener('hashchange',function(){kh.schedulePageActionRefresh();});window.addEventListener('popstate',function(){kh.schedulePageActionRefresh();});if(!window.__khActionObserver&&window.MutationObserver){window.__khActionObserver=new MutationObserver(function(){kh.schedulePageActionRefresh();});window.__khActionObserver.observe(document.documentElement||document.body,{childList:true,subtree:true});}");
         script.append("})();");
         return script.toString();
     }

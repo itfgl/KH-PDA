@@ -107,10 +107,6 @@ public class ScanPlugin extends Plugin {
             "var raw=" + js(value) + ";" +
             "var val=String(raw||'').trim();" +
             "if(!val)return;" +
-            "if(typeof window.__khExecTriggeredActions==='function'&&window.__khExecTriggeredActions('scan',val)){" +
-            "window.dispatchEvent(new CustomEvent('kh:scan',{detail:{value:val,targetFound:true,handledByActions:true}}));" +
-            "return;" +
-            "}" +
             "var active=document.activeElement;" +
             "var target=null;" +
             "var isWritable=function(el){if(!el)return false;var tag=(el.tagName||'').toLowerCase();return tag==='input'||tag==='textarea'||el.isContentEditable;};" +

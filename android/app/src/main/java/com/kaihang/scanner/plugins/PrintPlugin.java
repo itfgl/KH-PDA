@@ -1,5 +1,7 @@
 package com.kaihang.scanner.plugins;
 
+import android.app.Activity;
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.os.Handler;
 import android.os.Looper;
@@ -36,6 +38,10 @@ public class PrintPlugin extends Plugin {
     private static final String PAPER_THERMAL = "thermal";
     private static final String PAPER_BLACK_MARK = "black_mark";
     private static final String LAYOUT_STANDARD = "standard";
+    private static boolean nativeConnected = false;
+    private static boolean nativeConnecting = false;
+    private static final ExecutorService nativePrintExecutor = Executors.newSingleThreadExecutor();
+    private static PrintEventSink nativeEventSink;
     private boolean isConnected           = false;
     private boolean isConnecting          = false;
     private volatile boolean destroyed    = false;
@@ -46,6 +52,123 @@ public class PrintPlugin extends Plugin {
     private boolean wasConnectedBeforePause = false;
     // 串行执行打印位图生成任务，destroy 时统一 shutdownNow 中断
     private final ExecutorService printExecutor = Executors.newSingleThreadExecutor();
+
+    public interface PrintEventSink {
+        void onConnection(String connection);
+        void onStatus(String status, String flag);
+    }
+
+    public static synchronized void setNativeEventSink(PrintEventSink sink) {
+        nativeEventSink = sink;
+    }
+
+    private static void emitNativeConnection(String connection) {
+        PrintEventSink sink = nativeEventSink;
+        if (sink != null) sink.onConnection(connection);
+    }
+
+    private static void emitNativeStatus(String status, String flag) {
+        PrintEventSink sink = nativeEventSink;
+        if (sink != null) sink.onStatus(status, flag);
+    }
+
+    public static synchronized void connectNative(Activity activity) {
+        if (activity == null) return;
+        if (nativeConnected) {
+            emitNativeConnection("connected");
+            return;
+        }
+        if (nativeConnecting) {
+            return;
+        }
+        nativeConnecting = true;
+        Printer.connect(
+            activity,
+            new Handler(Looper.getMainLooper()) {
+                @Override
+                public void handleMessage(@NonNull Message msg) {
+                    switch (msg.what) {
+                        case 101:
+                            nativeConnecting = false;
+                            nativeConnected = true;
+                            emitNativeConnection("connected");
+                            break;
+                        case 102:
+                            nativeConnecting = false;
+                            nativeConnected = false;
+                            emitNativeConnection("failed");
+                            break;
+                        case 103:
+                            nativeConnecting = false;
+                            nativeConnected = false;
+                            emitNativeConnection("closed");
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            },
+            (result, feedbackBytes, flag) -> emitNativeStatus(result.name(), flag)
+        );
+    }
+
+    public static void prepareToPrintLabelNative() {
+        Printer.prepareToPrintLabel();
+    }
+
+    public static void printLabelNative(Context context, Activity activity, String barcodeValue, String qrCodeValue, String textValue, String paperType, String layoutPreset) {
+        if (context == null || activity == null) return;
+        connectNative(activity);
+        nativePrintExecutor.execute(() -> {
+            try {
+                String normalizedPaperType = normalizePaperType(paperType);
+                GenericLabelLayout layout = getGenericLabelLayout(layoutPreset);
+
+                if ((barcodeValue == null || barcodeValue.trim().isEmpty())
+                    && (qrCodeValue == null || qrCodeValue.trim().isEmpty())
+                    && (textValue == null || textValue.trim().isEmpty())) {
+                    throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
+                }
+
+                Bitmap barcode = null;
+                Bitmap qr = null;
+                if (barcodeValue != null && !barcodeValue.trim().isEmpty()) {
+                    barcode = BarcodeCreater.createBarcode(context, barcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
+                    if (barcode == null) throw new IllegalStateException("barcode bitmap null");
+                }
+                if (qrCodeValue != null && !qrCodeValue.trim().isEmpty()) {
+                    qr = BarcodeCreater.createBarcode(context, qrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
+                    if (qr == null) throw new IllegalStateException("qr bitmap null");
+                }
+
+                List<String> textLines = wrapPlainText(textValue, layout.wrapUnits);
+                int bodyTop = (barcode != null || qr != null) ? layout.bodyTop : 16;
+                int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
+                int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
+
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, labelHeight);
+                if (barcode != null) builder.addBmp(barcode, 8, 8);
+                if (qr != null) builder.addBmp(qr, layout.qrLeft, 8);
+
+                int y = bodyTop;
+                for (String line : textLines) {
+                    builder.addText(line, layout.textSize, layout.textLeft, y);
+                    y += layout.lineHeight;
+                }
+
+                Bitmap label = builder.getBitmap();
+                if (label == null) throw new IllegalStateException("label bitmap null");
+
+                if (PAPER_BLACK_MARK.equals(normalizedPaperType)) {
+                    Printer.print(new BitmapData(label, 15, 0), 8, "native_generic_label", false);
+                } else {
+                    Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "native_generic_label", false);
+                }
+            } catch (Exception e) {
+                emitNativeStatus("PRINT_BRIDGE_ERROR", e.getMessage());
+            }
+        });
+    }
 
     // ── 连接 ──────────────────────────────────────────────────────────────────
 
