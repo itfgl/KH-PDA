@@ -25,10 +25,12 @@ public class MainActivity extends BridgeActivity {
     private static final long SCAN_RELEASE_TIMEOUT_MS = 8000L;
     private android.widget.ImageButton nativeControlButton;
     private android.widget.Button nativeScanButton;
+    private android.view.View nativeStatusDot;
     private final java.util.List<String> nativeLogLines = new java.util.ArrayList<>();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable pendingScanRelease;
     private boolean nativeScanActive = false;
+    private String nativePageReadyState = "loading";
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
 
@@ -225,6 +227,7 @@ public class MainActivity extends BridgeActivity {
         if (sameUrlRecently) {
             return;
         }
+        setNativePageReadyState("loading", url);
         lastInjectedUrl = url;
         lastInjectAtMs = now;
         String script = buildClientRuntimeScript(url);
@@ -268,6 +271,14 @@ public class MainActivity extends BridgeActivity {
         nativeControlButton.setElevation(dp(10));
         nativeControlButton.setOnClickListener(v -> showNativeControlMenu(v));
 
+        nativeStatusDot = new android.view.View(this);
+        android.widget.FrameLayout.LayoutParams dotParams = new android.widget.FrameLayout.LayoutParams(dp(12), dp(12));
+        dotParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
+        dotParams.setMargins(dp(16), dp(16), dp(20), dp(70));
+        nativeStatusDot.setLayoutParams(dotParams);
+        nativeStatusDot.setElevation(dp(12));
+        nativeStatusDot.setBackground(buildStatusDotBackground("#98A2B3"));
+
         nativeScanButton = new android.widget.Button(this);
         nativeScanButton.setText("扫码");
         nativeScanButton.setTextSize(14);
@@ -294,12 +305,15 @@ public class MainActivity extends BridgeActivity {
             }
         });
 
+        container.addView(nativeStatusDot);
         container.addView(nativeScanButton);
         container.addView(nativeControlButton);
         root.addView(container);
         container.bringToFront();
+        nativeStatusDot.bringToFront();
         nativeScanButton.bringToFront();
         nativeControlButton.bringToFront();
+        updateNativeStatusDot();
     }
 
     private android.graphics.drawable.Drawable buildNativeFabBackground() {
@@ -309,12 +323,50 @@ public class MainActivity extends BridgeActivity {
         return background;
     }
 
+    private android.graphics.drawable.Drawable buildStatusDotBackground(String color) {
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        background.setColor(android.graphics.Color.parseColor(color));
+        background.setStroke(dp(2), android.graphics.Color.WHITE);
+        return background;
+    }
+
     private android.graphics.drawable.Drawable buildNativeCapsuleBackground(boolean active) {
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
         background.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
         background.setCornerRadius(dp(22));
         background.setColor(android.graphics.Color.parseColor(active ? "#B42318" : "#1570EF"));
         return background;
+    }
+
+    private void updateNativeStatusDot() {
+        if (nativeStatusDot == null) {
+            return;
+        }
+        String color = "#98A2B3";
+        String description = "页面初始化中";
+        if ("ready".equals(nativePageReadyState)) {
+            color = "#12B76A";
+            description = "页面已就绪";
+        } else if ("error".equals(nativePageReadyState)) {
+            color = "#F04438";
+            description = "页面初始化异常";
+        }
+        nativeStatusDot.setBackground(buildStatusDotBackground(color));
+        nativeStatusDot.setContentDescription(description);
+    }
+
+    private void setNativePageReadyState(String state, String detail) {
+        String normalized = safe(state).trim().toLowerCase(java.util.Locale.ROOT);
+        if (!"ready".equals(normalized) && !"error".equals(normalized)) {
+            normalized = "loading";
+        }
+        boolean changed = !normalized.equals(nativePageReadyState);
+        nativePageReadyState = normalized;
+        updateNativeStatusDot();
+        if (changed) {
+            appendNativeLog("页面状态: " + normalized + (safe(detail).isEmpty() ? "" : (" - " + detail)));
+        }
     }
 
     private int dp(int value) {
@@ -469,6 +521,11 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void setScanActionEnabled(boolean enabled) {
             runOnUiThread(() -> setNativeScanActionVisible(enabled));
+        }
+
+        @JavascriptInterface
+        public void reportPageReadyState(String state, String detail) {
+            runOnUiThread(() -> setNativePageReadyState(state, detail));
         }
 
         @JavascriptInterface
@@ -847,6 +904,7 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.layoutPresetStorageKey='NOCOBASE_LAYOUT_PRESET';");
         script.append("kh.logStorageKey='KH_FLOATING_LOGS';");
         script.append("kh.getNativeBridge=function(){return window.KaihangNativeBridge||null;};");
+        script.append("kh.reportPageReadyState=function(state,detail){var bridge=kh.getNativeBridge();if(bridge&&bridge.reportPageReadyState){try{bridge.reportPageReadyState(String(state||'loading'),String(detail||''));}catch(e){}}};");
         script.append("kh.ensureDeviceClient=function(){if(window.DeviceClient)return window.DeviceClient;var bridge=kh.getNativeBridge();window.DeviceClient={scan:function(){return bridge&&bridge.startScan?Promise.resolve(bridge.startScan()):kh.startGlobalScan();},stopScan:function(){return bridge&&bridge.stopScan?Promise.resolve(bridge.stopScan()):Promise.resolve(false);},openSettings:function(){if(bridge&&bridge.openSettings){bridge.openSettings();return Promise.resolve(true);}return Promise.resolve(false);},checkUpdate:function(){if(bridge&&bridge.checkUpdate){bridge.checkUpdate();return Promise.resolve(true);}return Promise.resolve(false);},showLogs:function(){if(bridge&&bridge.showLogs){bridge.showLogs();return Promise.resolve(true);}return Promise.resolve(false);}};return window.DeviceClient;};");
         script.append("kh.getClientConfigPlugin=function(){return window.ClientConfigPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.ClientConfigPlugin)||null;};");
         script.append("kh.getUpdatePlugin=function(){return window.UpdatePlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.UpdatePlugin)||null;};");
@@ -924,12 +982,12 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.getActionAuth=function(){var storages=[window.localStorage,window.sessionStorage].filter(Boolean);var getStored=function(key){for(var i=0;i<storages.length;i++){var value=storages[i].getItem(key);if(value)return value;}return '';};return {role:getStored('NOCOBASE_ROLE')||getStored('NOCOBASE_MAIN_ROLE')||'',token:getStored('NOCOBASE_TOKEN')||getStored('NOCOBASE_MAIN_TOKEN')||'',auth:getStored('NOCOBASE_AUTH')||getStored('NOCOBASE_MAIN_AUTH')||'basic'};};");
         script.append("kh.getActionCacheKey=function(authInfo){authInfo=authInfo||kh.getActionAuth();return [authInfo.token||'',authInfo.auth||'',window.location.origin||''].join('|');};");
         script.append("kh.getActionCatalogStore=function(){var store=window.__khActionCatalogStore||(window.__khActionCatalogStore={cacheKey:'',items:[],fetchedAt:0,loading:null,lastAppliedKey:''});return store;};");
-        script.append("kh.applyPageActionsFromCatalog=function(items,role){var scan=[];var button=[];for(var i=0;i<items.length;i++){var action=kh.normalizeAction(items[i],i+1);if(!action||!action.enabled)continue;if(!kh.roleMatch(action.roleName,role))continue;if(!kh.pageMatch(action.pagePath,window.location.href))continue;if(action.triggerType==='button')button.push(action);else if(action.triggerType==='scan')scan.push(action);}scan.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});button.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});window.__khPageActions={scan:scan,button:button};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(scan.length>0);var signature=kh.getActionSignature(scan,button,role);var urlKey=window.location.pathname+window.location.search+window.location.hash;var appliedKey=signature+'@@'+urlKey;if(appliedKey!==kh.getActionCatalogStore().lastAppliedKey){kh.getActionCatalogStore().lastAppliedKey=appliedKey;kh.pushLog('页面动作已应用: scan='+scan.length+', button='+button.length+', role='+(role||'<empty>'),'info');}return window.__khPageActions;};");
+        script.append("kh.applyPageActionsFromCatalog=function(items,role){var scan=[];var button=[];for(var i=0;i<items.length;i++){var action=kh.normalizeAction(items[i],i+1);if(!action||!action.enabled)continue;if(!kh.roleMatch(action.roleName,role))continue;if(!kh.pageMatch(action.pagePath,window.location.href))continue;if(action.triggerType==='button')button.push(action);else if(action.triggerType==='scan')scan.push(action);}scan.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});button.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});window.__khPageActions={scan:scan,button:button};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(scan.length>0);var signature=kh.getActionSignature(scan,button,role);var urlKey=window.location.pathname+window.location.search+window.location.hash;var appliedKey=signature+'@@'+urlKey;if(appliedKey!==kh.getActionCatalogStore().lastAppliedKey){kh.getActionCatalogStore().lastAppliedKey=appliedKey;kh.pushLog('页面动作已应用: scan='+scan.length+', button='+button.length+', role='+(role||'<empty>'),'info');}kh.reportPageReadyState('ready','scan='+scan.length+',button='+button.length+',role='+(role||''));return window.__khPageActions;};");
         script.append("kh.fetchActionCatalog=function(force){var authInfo=kh.getActionAuth();var token=authInfo.token;var auth=authInfo.auth;var store=kh.getActionCatalogStore();var cacheKey=kh.getActionCacheKey(authInfo);if(!token||!window.fetch){store.items=[];store.cacheKey=cacheKey;store.fetchedAt=0;return Promise.resolve([]);}var freshEnough=!force&&store.cacheKey===cacheKey&&Array.isArray(store.items)&&store.items.length&&Date.now()-store.fetchedAt<300000;if(freshEnough)return Promise.resolve(store.items);if(store.loading&&store.cacheKey===cacheKey&&!force)return store.loading;var requestUrl=new URL(kh.pageActionsApi,window.location.origin).toString();store.cacheKey=cacheKey;store.loading=window.fetch(requestUrl,{headers:{'Authorization':'Bearer '+token,'X-Authenticator':auth,'X-Requested-With':'XMLHttpRequest'}}).then(function(res){if(!res.ok)throw new Error('page actions '+res.status);return res.json();}).then(function(payload){var data=(payload&&payload.data!==undefined)?payload.data:payload;var items=Array.isArray(data)?data:(Array.isArray(data&&data.items)?data.items:(Array.isArray(data&&data.rows)?data.rows:[]));store.items=items;store.fetchedAt=Date.now();kh.pushLog('动作总表已缓存: count='+items.length,'info');return items;}).catch(function(err){kh.pushLog('动作总表加载失败: '+String(err&&err.message||err||'unknown'),'err');if(Array.isArray(store.items)&&store.items.length)return store.items;throw err;}).finally(function(){store.loading=null;});return store.loading;};");
-        script.append("kh.loadPageActions=function(force){var authInfo=kh.getActionAuth();var role=authInfo.role||'';var store=kh.getActionCatalogStore();if(!force&&Array.isArray(store.items)&&store.items.length){kh.applyPageActionsFromCatalog(store.items,role);}return kh.fetchActionCatalog(!!force).then(function(items){return kh.applyPageActionsFromCatalog(items||[],role);}).catch(function(){window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(false);return window.__khPageActions;});};");
+        script.append("kh.loadPageActions=function(force){var authInfo=kh.getActionAuth();var role=authInfo.role||'';var store=kh.getActionCatalogStore();kh.reportPageReadyState('loading','force='+(!!force)+',path='+window.location.pathname);if(!force&&Array.isArray(store.items)&&store.items.length){kh.applyPageActionsFromCatalog(store.items,role);}return kh.fetchActionCatalog(!!force).then(function(items){return kh.applyPageActionsFromCatalog(items||[],role);}).catch(function(err){window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(false);kh.reportPageReadyState('error',String(err&&err.message||err||'load actions failed'));return window.__khPageActions;});};");
         script.append("kh.schedulePageActionRefresh=function(force){if(kh._pageActionRefreshScheduled)return;kh._pageActionRefreshScheduled=true;setTimeout(function(){kh._pageActionRefreshScheduled=false;kh.loadPageActions(!!force).catch(function(){return null;});},50);};");
         script.append("kh.patchHistory=function(){if(kh._historyPatched)return;kh._historyPatched=true;['pushState','replaceState'].forEach(function(name){var original=history[name];if(typeof original!=='function')return;history[name]=function(){var result=original.apply(this,arguments);window.dispatchEvent(new CustomEvent('kh:routeChanged',{detail:{type:name}}));kh.schedulePageActionRefresh(false);return result;};});};");
-        script.append("kh.patchStorage=function(){if(kh._storagePatched)return;kh._storagePatched=true;var wrap=function(storageName){var storage=window[storageName];if(!storage||storage.__khPatched)return;var originalSet=storage.setItem;var originalRemove=storage.removeItem;storage.setItem=function(key,value){var prev=storage.getItem(key);originalSet.apply(this,arguments);if(prev!==String(value)){window.dispatchEvent(new CustomEvent('kh:storageChanged',{detail:{storage:storageName,key:String(key||''),value:String(value||'')}}));}};storage.removeItem=function(key){var prev=storage.getItem(key);originalRemove.apply(this,arguments);if(prev!==null){window.dispatchEvent(new CustomEvent('kh:storageChanged',{detail:{storage:storageName,key:String(key||''),value:null}}));}};storage.__khPatched=true;};wrap('localStorage');wrap('sessionStorage');};");
+        script.append("kh.patchStorage=function(){if(kh._storagePatched)return;kh._storagePatched=true;var proto=window.Storage&&window.Storage.prototype;if(!proto||proto.__khPatched)return;var originalSet=proto.setItem;var originalRemove=proto.removeItem;proto.setItem=function(key,value){var storageType='unknown';try{storageType=this===window.localStorage?'localStorage':(this===window.sessionStorage?'sessionStorage':'unknown');}catch(e){}var prev=null;try{prev=this.getItem(key);}catch(e){}var result=originalSet.apply(this,arguments);var next=String(value||'');if(prev!==next){window.dispatchEvent(new CustomEvent('kh:storageChanged',{detail:{storage:storageType,key:String(key||''),value:next}}));}return result;};proto.removeItem=function(key){var storageType='unknown';try{storageType=this===window.localStorage?'localStorage':(this===window.sessionStorage?'sessionStorage':'unknown');}catch(e){}var prev=null;try{prev=this.getItem(key);}catch(e){}var result=originalRemove.apply(this,arguments);if(prev!==null){window.dispatchEvent(new CustomEvent('kh:storageChanged',{detail:{storage:storageType,key:String(key||''),value:null}}));}return result;};proto.__khPatched=true;};");
         script.append("kh.installActionObserver=function(){if(kh._actionObserverInstalled)return;kh._actionObserverInstalled=true;var observer=null;var resubscribe=function(){if(observer||!window.MutationObserver||!document.documentElement)return;observer=new MutationObserver(function(mutations){var hasMeaningfulChange=false;for(var i=0;i<mutations.length;i++){var mutation=mutations[i];if(mutation.type==='childList'&&((mutation.addedNodes&&mutation.addedNodes.length)||(mutation.removedNodes&&mutation.removedNodes.length))){hasMeaningfulChange=true;break;}if(mutation.type==='attributes'){hasMeaningfulChange=true;break;}}if(hasMeaningfulChange)kh.schedulePageActionRefresh(false);});observer.observe(document.documentElement,{childList:true,subtree:true,attributes:false});};if(document.documentElement)resubscribe();else window.addEventListener('DOMContentLoaded',resubscribe,{once:true});window.addEventListener('kh:routeChanged',function(){kh.schedulePageActionRefresh(false);});window.addEventListener('kh:storageChanged',function(evt){var key=String(evt&&evt.detail&&evt.detail.key||'');if(/NOCOBASE_(MAIN_)?(TOKEN|AUTH|ROLE)$/i.test(key)){kh.schedulePageActionRefresh(true);}});};");
         script.append("patchFetch();patchXhr();");
         if (shouldBootstrap) {
