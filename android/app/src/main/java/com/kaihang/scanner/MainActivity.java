@@ -21,6 +21,7 @@ public class MainActivity extends BridgeActivity {
     private static final String DEFAULT_PAGE_ACTIONS_API_PATH = "/api/scanner_page_binding_actions:list?pageSize=200";
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
     private static final String DEFAULT_LOGIN_PATH = "/signin";
+    private android.widget.ImageButton nativeControlButton;
 
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
@@ -52,6 +53,7 @@ public class MainActivity extends BridgeActivity {
 
         WebView webView = bridge.getWebView();
         configureInAppNavigation(webView);
+        ensureNativeControlButton();
 
         String launchUrl = buildLoginUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
         webView.post(() -> {
@@ -162,6 +164,92 @@ public class MainActivity extends BridgeActivity {
         view.evaluateJavascript(script, null);
         view.postDelayed(() -> view.evaluateJavascript(buildClientRuntimeScript(view.getUrl()), null), 600);
         view.postDelayed(() -> view.evaluateJavascript(buildClientRuntimeScript(view.getUrl()), null), 1800);
+    }
+
+    private void ensureNativeControlButton() {
+        if (nativeControlButton != null) {
+            return;
+        }
+        android.view.ViewGroup root = findViewById(android.R.id.content);
+        if (root == null) {
+            return;
+        }
+        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
+        android.widget.FrameLayout.LayoutParams containerParams = new android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+        );
+        container.setLayoutParams(containerParams);
+        container.setClickable(false);
+        container.setFocusable(false);
+
+        nativeControlButton = new android.widget.ImageButton(this);
+        nativeControlButton.setImageResource(android.R.drawable.ic_menu_manage);
+        nativeControlButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        nativeControlButton.setBackground(buildNativeFabBackground());
+        nativeControlButton.setColorFilter(android.graphics.Color.WHITE);
+        nativeControlButton.setContentDescription("客户端工具");
+        int size = dp(56);
+        android.widget.FrameLayout.LayoutParams fabParams = new android.widget.FrameLayout.LayoutParams(size, size);
+        fabParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
+        fabParams.setMargins(dp(16), dp(16), dp(18), dp(24));
+        nativeControlButton.setLayoutParams(fabParams);
+        nativeControlButton.setElevation(dp(10));
+        nativeControlButton.setOnClickListener(v -> showNativeControlMenu(v));
+
+        container.addView(nativeControlButton);
+        root.addView(container);
+        container.bringToFront();
+        nativeControlButton.bringToFront();
+    }
+
+    private android.graphics.drawable.Drawable buildNativeFabBackground() {
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        background.setColor(android.graphics.Color.parseColor("#111827"));
+        return background;
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    private void showNativeControlMenu(android.view.View anchor) {
+        android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
+        menu.getMenu().add(0, 1, 0, "扫码");
+        menu.getMenu().add(0, 2, 1, "设置");
+        menu.getMenu().add(0, 3, 2, "检查更新");
+        menu.getMenu().add(0, 4, 3, "日志");
+        menu.setOnMenuItemClickListener(item -> {
+            int id = item.getItemId();
+            if (id == 1) {
+                runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.startGlobalScan&&window.__khClientRuntime.startGlobalScan();");
+                return true;
+            }
+            if (id == 2) {
+                runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.openSettingsPanel&&window.__khClientRuntime.openSettingsPanel();");
+                return true;
+            }
+            if (id == 3) {
+                runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.triggerAppUpdate&&window.__khClientRuntime.triggerAppUpdate(window.__khClientRuntime.setSettingsStatus);");
+                return true;
+            }
+            if (id == 4) {
+                runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.toggleFloatingLog&&window.__khClientRuntime.toggleFloatingLog(true);");
+                return true;
+            }
+            return false;
+        });
+        menu.show();
+    }
+
+    private void runClientRuntimeCommand(String command) {
+        if (bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+        WebView webView = bridge.getWebView();
+        injectClientTypeHeader(webView);
+        webView.postDelayed(() -> webView.evaluateJavascript(command, null), 150);
     }
 
     private String buildClientRuntimeScript(String currentUrl) {
