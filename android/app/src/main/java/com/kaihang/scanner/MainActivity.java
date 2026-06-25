@@ -282,8 +282,8 @@ public class MainActivity extends BridgeActivity {
                 return true;
             }
             if (id == 4) {
-                appendNativeLog("打开原生日志");
-                showNativeLogDialog();
+                appendNativeLog("打开网页日志");
+                runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.toggleFloatingLog&&window.__khClientRuntime.toggleFloatingLog(true);");
                 return true;
             }
             return false;
