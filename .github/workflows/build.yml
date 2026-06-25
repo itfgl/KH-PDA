@@ -41,3 +41,15 @@ jobs:
       with:
         name: kaihang-scanner-debug
         path: android/app/build/outputs/apk/debug/app-debug.apk
+
+    - name: 7. 配置 SSH
+      run: |
+        chmod 600 ./github_actions_apk
+        mkdir -p ~/.ssh
+        ssh-keyscan 115.29.178.34 >> ~/.ssh/known_hosts
+
+    - name: 8. 上传 APK 到测试机
+      run: |
+        scp -i ./github_actions_apk \
+          android/app/build/outputs/apk/debug/app-debug.apk \
+          root@115.29.178.34:/root/server6/static/app-debug.apk
