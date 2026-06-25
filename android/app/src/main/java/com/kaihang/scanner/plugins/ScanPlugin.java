@@ -35,6 +35,19 @@ public class ScanPlugin extends Plugin {
     private BroadcastReceiver scanReceiver;
     private boolean receiverRegistered = false;
 
+    public static void triggerStartScan(Context context) {
+        if (context == null) return;
+        try {
+            context.sendBroadcast(new Intent(ACTION_STOP));
+        } catch (Exception ignored) {}
+        context.sendBroadcast(new Intent(ACTION_START));
+    }
+
+    public static void triggerStopScan(Context context) {
+        if (context == null) return;
+        context.sendBroadcast(new Intent(ACTION_STOP));
+    }
+
     @Override
     public void load() {
         scanReceiver = new BroadcastReceiver() {
@@ -65,17 +78,13 @@ public class ScanPlugin extends Plugin {
 
     @PluginMethod
     public void startScan(PluginCall call) {
-        // 启动前先发送一次 STOP 进行状态复位，确保下一次 START 能够成功被扫码助手响应
-        try {
-            getContext().sendBroadcast(new Intent(ACTION_STOP));
-        } catch (Exception ignored) {}
-        getContext().sendBroadcast(new Intent(ACTION_START));
+        triggerStartScan(getContext());
         call.resolve();
     }
 
     @PluginMethod
     public void stopScan(PluginCall call) {
-        getContext().sendBroadcast(new Intent(ACTION_STOP));
+        triggerStopScan(getContext());
         call.resolve();
     }
 
@@ -84,7 +93,7 @@ public class ScanPlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         // 先停止扫描，防止 App 退出后扫码枪仍处于触发状态（激光亮着）
-        try { getContext().sendBroadcast(new Intent(ACTION_STOP)); } catch (Exception ignored) {}
+        try { triggerStopScan(getContext()); } catch (Exception ignored) {}
         if (receiverRegistered && scanReceiver != null) {
             getContext().unregisterReceiver(scanReceiver);
             receiverRegistered = false;

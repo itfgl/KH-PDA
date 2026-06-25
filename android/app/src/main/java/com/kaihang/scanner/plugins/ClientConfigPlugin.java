@@ -23,6 +23,37 @@ public class ClientConfigPlugin extends Plugin {
         return normalizeBaseUrl(prefs.getString(KEY_SERVER_BASE, ""), fallback);
     }
 
+    public static JSObject getSavedConfig(Context context) {
+        return readConfig(context);
+    }
+
+    public static JSObject saveConfig(Context context, String serverBase, String updateBase, String paperType, String layoutPreset) {
+        String normalizedServerBase = normalizeBaseUrl(serverBase, DEFAULT_SERVER_BASE);
+        String normalizedUpdateBase = normalizeBaseUrl(updateBase, normalizedServerBase);
+        String normalizedPaperType = normalizePaperType(paperType);
+        String normalizedLayoutPreset = normalizeLayoutPreset(layoutPreset);
+
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        prefs.edit()
+            .putString(KEY_SERVER_BASE, normalizedServerBase)
+            .putString(KEY_UPDATE_BASE, normalizedUpdateBase)
+            .putString(KEY_PAPER_TYPE, normalizedPaperType)
+            .putString(KEY_LAYOUT_PRESET, normalizedLayoutPreset)
+            .apply();
+
+        return readConfig(context);
+    }
+
+    public static void restartApp(Context context) {
+        Intent intent = context.getPackageManager()
+            .getLaunchIntentForPackage(context.getPackageName());
+        if (intent != null) {
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+        }
+        android.os.Process.killProcess(android.os.Process.myPid());
+    }
+
     @PluginMethod
     public void getConfig(PluginCall call) {
         call.resolve(readConfig(getContext()));
@@ -30,32 +61,19 @@ public class ClientConfigPlugin extends Plugin {
 
     @PluginMethod
     public void saveConfig(PluginCall call) {
-        String serverBase = normalizeBaseUrl(call.getString("serverBase"), DEFAULT_SERVER_BASE);
-        String updateBase = normalizeBaseUrl(call.getString("updateBase"), serverBase);
-        String paperType = normalizePaperType(call.getString("paperType"));
-        String layoutPreset = normalizeLayoutPreset(call.getString("layoutPreset"));
-
-        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-        prefs.edit()
-            .putString(KEY_SERVER_BASE, serverBase)
-            .putString(KEY_UPDATE_BASE, updateBase)
-            .putString(KEY_PAPER_TYPE, paperType)
-            .putString(KEY_LAYOUT_PRESET, layoutPreset)
-            .apply();
-
-        call.resolve(readConfig(getContext()));
+        call.resolve(saveConfig(
+            getContext(),
+            call.getString("serverBase"),
+            call.getString("updateBase"),
+            call.getString("paperType"),
+            call.getString("layoutPreset")
+        ));
     }
 
     @PluginMethod
     public void restartApp(PluginCall call) {
-        Intent intent = getContext().getPackageManager()
-            .getLaunchIntentForPackage(getContext().getPackageName());
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(intent);
-        }
+        restartApp(getContext());
         call.resolve();
-        android.os.Process.killProcess(android.os.Process.myPid());
     }
 
     private static JSObject readConfig(Context context) {
