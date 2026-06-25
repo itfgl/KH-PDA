@@ -24,9 +24,11 @@ public class MainActivity extends BridgeActivity {
     private static final String DEFAULT_LOGIN_PATH = "/signin";
     private static final long SCAN_RELEASE_TIMEOUT_MS = 8000L;
     private android.widget.ImageButton nativeControlButton;
+    private android.widget.Button nativeScanButton;
     private final java.util.List<String> nativeLogLines = new java.util.ArrayList<>();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable pendingScanRelease;
+    private boolean nativeScanActive = false;
 
     @Override
     protected void onCreate(android.os.Bundle savedInstanceState) {
@@ -203,9 +205,37 @@ public class MainActivity extends BridgeActivity {
         nativeControlButton.setElevation(dp(10));
         nativeControlButton.setOnClickListener(v -> showNativeControlMenu(v));
 
+        nativeScanButton = new android.widget.Button(this);
+        nativeScanButton.setText("扫码");
+        nativeScanButton.setTextSize(14);
+        nativeScanButton.setTextColor(android.graphics.Color.WHITE);
+        nativeScanButton.setAllCaps(false);
+        nativeScanButton.setBackground(buildNativeCapsuleBackground(false));
+        nativeScanButton.setVisibility(android.view.View.GONE);
+        nativeScanButton.setElevation(dp(8));
+        android.widget.FrameLayout.LayoutParams scanParams = new android.widget.FrameLayout.LayoutParams(
+            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+            dp(44)
+        );
+        scanParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
+        scanParams.setMargins(dp(16), dp(16), dp(18), dp(92));
+        nativeScanButton.setLayoutParams(scanParams);
+        nativeScanButton.setPadding(dp(18), 0, dp(18), 0);
+        nativeScanButton.setOnClickListener(v -> {
+            if (nativeScanActive) {
+                appendNativeLog("点击原生扫码按钮: 停扫");
+                stopNativeScan();
+            } else {
+                appendNativeLog("点击原生扫码按钮: 扫码");
+                triggerNativeScan();
+            }
+        });
+
+        container.addView(nativeScanButton);
         container.addView(nativeControlButton);
         root.addView(container);
         container.bringToFront();
+        nativeScanButton.bringToFront();
         nativeControlButton.bringToFront();
     }
 
@@ -213,6 +243,14 @@ public class MainActivity extends BridgeActivity {
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
         background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
         background.setColor(android.graphics.Color.parseColor("#111827"));
+        return background;
+    }
+
+    private android.graphics.drawable.Drawable buildNativeCapsuleBackground(boolean active) {
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        background.setCornerRadius(dp(22));
+        background.setColor(android.graphics.Color.parseColor(active ? "#B42318" : "#1570EF"));
         return background;
     }
 
@@ -272,10 +310,12 @@ public class MainActivity extends BridgeActivity {
                 mainHandler.removeCallbacks(pendingScanRelease);
             }
             ScanPlugin.triggerStartScan(this);
+            setNativeScanActive(true);
             appendNativeLog("已发送原生扫码广播");
             pendingScanRelease = () -> {
                 try {
                     ScanPlugin.triggerStopScan(this);
+                    setNativeScanActive(false);
                     appendNativeLog("扫码超时自动释放");
                 } catch (Exception e) {
                     appendNativeLog("扫码超时释放失败: " + e.getMessage());
@@ -296,10 +336,30 @@ public class MainActivity extends BridgeActivity {
                 pendingScanRelease = null;
             }
             ScanPlugin.triggerStopScan(this);
+            setNativeScanActive(false);
             appendNativeLog("已发送停止扫码广播");
         } catch (Exception e) {
             appendNativeLog("停止扫码失败: " + e.getMessage());
         }
+    }
+
+    private void setNativeScanActionVisible(boolean visible) {
+        if (nativeScanButton == null) {
+            return;
+        }
+        nativeScanButton.setVisibility(visible ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (!visible) {
+            setNativeScanActive(false);
+        }
+    }
+
+    private void setNativeScanActive(boolean active) {
+        nativeScanActive = active;
+        if (nativeScanButton == null) {
+            return;
+        }
+        nativeScanButton.setText(active ? "停扫" : "扫码");
+        nativeScanButton.setBackground(buildNativeCapsuleBackground(active));
     }
 
     private final class NativeWebBridge {
@@ -328,6 +388,23 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public void showLogs() {
             runOnUiThread(() -> showNativeLogDialog());
+        }
+
+        @JavascriptInterface
+        public void setScanActionEnabled(boolean enabled) {
+            runOnUiThread(() -> setNativeScanActionVisible(enabled));
+        }
+
+        @JavascriptInterface
+        public void onScanCompleted() {
+            runOnUiThread(() -> {
+                if (pendingScanRelease != null) {
+                    mainHandler.removeCallbacks(pendingScanRelease);
+                    pendingScanRelease = null;
+                }
+                setNativeScanActive(false);
+                appendNativeLog("扫码结果已返回，自动释放扫码状态");
+            });
         }
     }
 
@@ -549,13 +626,12 @@ public class MainActivity extends BridgeActivity {
             targetView.setText(nativeLogs);
             return;
         }
-        String script = "(function(){try{var saved=JSON.parse((window.localStorage&&window.localStorage.getItem('KH_FLOATING_LOGS'))||'[]');return JSON.stringify(saved);}catch(e){return JSON.stringify([{text:'读取网页日志失败: '+String(e&&e.message||e||'unknown'),type:'err'}]);}})();";
+        String script = "(function(){try{var raw=(window.localStorage&&window.localStorage.getItem('KH_FLOATING_LOGS'))||'[]';window.__khLastLogRaw=raw;return raw;}catch(e){return JSON.stringify([{text:'读取网页日志失败: '+String(e&&e.message||e||'unknown'),type:'err'}]);}})();";
         bridge.getWebView().evaluateJavascript(script, value -> {
             StringBuilder text = new StringBuilder();
             text.append("== 原生日志 ==\n").append(nativeLogs).append("\n\n== 网页日志 ==\n");
             try {
-                Object decoded = new org.json.JSONTokener(value == null ? "\"[]\"" : value).nextValue();
-                String json = decoded instanceof String ? (String) decoded : "[]";
+                String json = decodeJsString(value);
                 org.json.JSONArray array = new org.json.JSONArray(json);
                 if (array.length() == 0) {
                     text.append("(暂无网页日志)");
@@ -571,6 +647,29 @@ public class MainActivity extends BridgeActivity {
             }
             runOnUiThread(() -> targetView.setText(text.toString()));
         });
+    }
+
+    private String decodeJsString(String value) {
+        if (value == null || "null".equals(value)) {
+            return "[]";
+        }
+        try {
+            Object decoded = new org.json.JSONTokener(value).nextValue();
+            if (decoded instanceof String) {
+                return (String) decoded;
+            }
+        } catch (Exception ignored) {}
+        String raw = value;
+        if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() >= 2) {
+            raw = raw.substring(1, raw.length() - 1);
+        }
+        raw = raw
+            .replace("\\\\", "\\")
+            .replace("\\\"", "\"")
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t");
+        return raw;
     }
 
     private String normalizeBaseUrl(String value, String fallback) {
@@ -649,7 +748,7 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.clearFloatingLogs=function(){try{window.localStorage&&window.localStorage.removeItem(kh.logStorageKey);}catch(e){}if(kh._logBody)kh._logBody.innerHTML='';};");
         script.append("kh.ensureFloatingLogger=function(){if(document.getElementById('kh-log-overlay'))return;var mount=function(){if(document.getElementById('kh-log-overlay')||!document.body)return;if(!document.getElementById('kh-log-style')&&document.head){var style=document.createElement('style');style.id='kh-log-style';style.textContent='.kh-log-overlay{position:fixed;inset:0;z-index:2147483001;background:rgba(28,28,30,.32);display:none;align-items:flex-end;justify-content:stretch;padding:16px}.kh-log-panel{width:100%;max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:14px;box-shadow:0 12px 32px rgba(0,0,0,.2)}.kh-log-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}.kh-log-title{font-size:12px;font-weight:700;color:#8e8e93;letter-spacing:.4px;text-transform:uppercase}.kh-log-actions{display:flex;gap:6px}.kh-log-btn{border:none;background:#e5e5ea;color:#1c1c1e;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700}.kh-log-body{background:#1c1c1e;border-radius:10px;padding:10px;max-height:min(55vh,420px);overflow-y:auto}.kh-log-line{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;border-bottom:1px solid #2c2c2e}.kh-log-line.kh-info{color:#64d2ff}.kh-log-line.kh-ok{color:#30d158}.kh-log-line.kh-err{color:#ff453a}.kh-log-line.kh-warn{color:#ffd60a}.kh-log-line.kh-plain{color:#ebebf5}';document.head.appendChild(style);}var overlay=document.createElement('div');overlay.id='kh-log-overlay';overlay.className='kh-log-overlay';overlay.innerHTML='<div class=\"kh-log-panel\"><div class=\"kh-log-head\"><span class=\"kh-log-title\">运行日志</span><div class=\"kh-log-actions\"><button type=\"button\" class=\"kh-log-btn\" id=\"kh-log-clear\">清空</button><button type=\"button\" class=\"kh-log-btn\" id=\"kh-log-close\">关闭</button></div></div><div class=\"kh-log-body\" id=\"kh-log-body\"></div></div>';document.body.appendChild(overlay);kh._logOverlay=overlay;kh._logBody=overlay.querySelector('#kh-log-body');overlay.addEventListener('click',function(evt){if(evt.target===overlay)overlay.style.display='none';});overlay.querySelector('#kh-log-close').addEventListener('click',function(){overlay.style.display='none';});overlay.querySelector('#kh-log-clear').addEventListener('click',function(){kh.clearFloatingLogs();});var saved=[];try{saved=JSON.parse((window.localStorage&&window.localStorage.getItem(kh.logStorageKey))||'[]');}catch(e){saved=[];}if(Array.isArray(saved)){saved.forEach(function(item){if(item&&typeof item==='object')kh.appendFloatingLog(item.text||'',item.type||'plain');else if(item)kh.appendFloatingLog(String(item),'plain');});}};if(document.body)mount();else window.addEventListener('DOMContentLoaded',mount,{once:true});};");
         script.append("kh.toggleFloatingLog=function(show){kh.ensureFloatingLogger();if(kh._logOverlay)kh._logOverlay.style.display=show?'flex':'none';};");
-        script.append("kh.pushLog=function(msg,type){var text='['+new Date().toTimeString().slice(0,8)+'] '+String(msg||'');try{var saved=JSON.parse((window.localStorage&&window.localStorage.getItem(kh.logStorageKey))||'[]');if(!Array.isArray(saved))saved=[];saved.push({text:text,type:type||'plain'});if(saved.length>200)saved=saved.slice(saved.length-200);window.localStorage&&window.localStorage.setItem(kh.logStorageKey,JSON.stringify(saved));}catch(e){}kh.ensureFloatingLogger();kh.appendFloatingLog(text,type||'plain');};");
+        script.append("kh.pushLog=function(msg,type){var text='['+new Date().toTimeString().slice(0,8)+'] '+String(msg||'');try{var saved=JSON.parse((window.localStorage&&window.localStorage.getItem(kh.logStorageKey))||'[]');if(!Array.isArray(saved))saved=[];saved.push({text:text,type:type||'plain'});if(saved.length>200)saved=saved.slice(saved.length-200);window.localStorage&&window.localStorage.setItem(kh.logStorageKey,JSON.stringify(saved));window.__khLastLogSnapshot=saved;}catch(e){}kh.ensureFloatingLogger();kh.appendFloatingLog(text,type||'plain');};");
         script.append("kh.showToast=function(message,type){if(!message)return;var mount=function(){if(!document.body)return;var host=document.getElementById('kh-toast-host');if(!host){if(!document.getElementById('kh-toast-style')&&document.head){var style=document.createElement('style');style.id='kh-toast-style';style.textContent='.kh-toast-host{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483003;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}.kh-toast{max-width:min(92vw,420px);padding:11px 14px;border-radius:12px;background:rgba(17,24,39,.92);color:#fff;font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(0,0,0,.22);opacity:0;transform:translateY(8px);transition:opacity .18s ease,transform .18s ease}.kh-toast.show{opacity:1;transform:translateY(0)}.kh-toast.info{background:rgba(29,78,216,.94)}.kh-toast.ok{background:rgba(22,101,52,.94)}.kh-toast.warn{background:rgba(146,64,14,.94)}.kh-toast.err{background:rgba(180,35,24,.94)}';document.head.appendChild(style);}host=document.createElement('div');host.id='kh-toast-host';host.className='kh-toast-host';document.body.appendChild(host);}var toast=document.createElement('div');toast.className='kh-toast '+(type||'info');toast.textContent=String(message);host.appendChild(toast);requestAnimationFrame(function(){toast.classList.add('show');});setTimeout(function(){toast.classList.remove('show');setTimeout(function(){toast.remove();},220);},2200);};if(document.body)mount();else window.addEventListener('DOMContentLoaded',mount,{once:true});};");
         script.append("kh.signalActionTriggered=function(message,type){kh.pushLog(message,type||'info');kh.showToast(message,type||'info');};");
         script.append("kh.getPaperTypeLabel=function(value){return kh.normalizePaperTypeValue(value)==='black_mark'?'黑标标签纸':'普通热敏纸';};");
@@ -664,11 +763,11 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.navigateInApp=function(url){if(!url)return false;try{var resolved=new URL(url,window.location.href).toString();if(!/^https?:\\/\\//i.test(resolved))return false;kh.pushLog('应用内跳转: '+resolved,'info');window.location.assign(resolved);return true;}catch(e){kh.pushLog('应用内跳转失败: '+String(e&&e.message||e||'unknown'),'warn');return false;}};");
         script.append("kh.patchWindowOpen=function(){if(window.__khWindowOpenPatched)return;var originalOpen=window.open;window.open=function(url,target){var normalizedTarget=String(target||'').toLowerCase();if(url&&(!normalizedTarget||normalizedTarget==='_self'||normalizedTarget==='_blank')){if(kh.navigateInApp(url))return window;}return typeof originalOpen==='function'?originalOpen.apply(window,arguments):null;};document.addEventListener('click',function(event){var link=event.target&&event.target.closest?event.target.closest('a[href]'):null;if(!link)return;var href=link.getAttribute('href')||'';var target=String(link.getAttribute('target')||'').toLowerCase();var resolved=link.href||href;if(!/^https?:\\/\\//i.test(resolved))return;if(target&&target!=='_self'&&target!=='_blank')return;event.preventDefault();event.stopPropagation();kh.navigateInApp(resolved);},true);window.__khWindowOpenPatched=true;};");
         script.append("kh.getScanPlugin=function(){var nativeBridge=kh.getNativeBridge();if(nativeBridge&&nativeBridge.startScan){return {addListener:function(event,handler){if(event!=='scanResult')return Promise.resolve({remove:function(){}});var listener=function(e){handler&&handler({value:e&&e.detail&&e.detail.value?String(e.detail.value):''});};window.addEventListener('kh:scan',listener);return Promise.resolve({remove:function(){window.removeEventListener('kh:scan',listener);}});},startScan:function(){return Promise.resolve(nativeBridge.startScan());},stopScan:function(){return Promise.resolve(nativeBridge.stopScan&&nativeBridge.stopScan());}};}return window.ScanPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.ScanPlugin)||null;};");
-        script.append("kh.ensureScanBridge=function(){if(kh._scanBridgeReady)return kh._scanBridgeReady;var plugin=kh.getScanPlugin();if(!plugin||!plugin.addListener){kh._scanBridgeReady=Promise.reject(new Error('Scan bridge unavailable'));return kh._scanBridgeReady;}kh._scanBridgeReady=Promise.resolve(plugin.addListener('scanResult',function(evt){var value=evt&&evt.value?String(evt.value):'';if(!value)return;kh.pushLog('收到扫码: '+value,'ok');var handled=kh.execTriggeredActions&&kh.execTriggeredActions('scan',value);if(!handled){kh.injectValue('',value,false);}})).then(function(){kh.pushLog('扫码桥已就绪','info');return true;}).catch(function(err){kh.pushLog('扫码桥初始化失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});return kh._scanBridgeReady;};");
+        script.append("kh.ensureScanBridge=function(){if(kh._scanBridgeReady)return kh._scanBridgeReady;var plugin=kh.getScanPlugin();if(!plugin||!plugin.addListener){kh._scanBridgeReady=Promise.reject(new Error('Scan bridge unavailable'));return kh._scanBridgeReady;}kh._scanBridgeReady=Promise.resolve(plugin.addListener('scanResult',function(evt){var value=evt&&evt.value?String(evt.value):'';if(!value)return;kh.pushLog('收到扫码: '+value,'ok');var bridge=kh.getNativeBridge();if(bridge&&bridge.onScanCompleted)bridge.onScanCompleted();var handled=kh.execTriggeredActions&&kh.execTriggeredActions('scan',value);if(!handled){kh.injectValue('',value,false);}})).then(function(){kh.pushLog('扫码桥已就绪','info');return true;}).catch(function(err){kh.pushLog('扫码桥初始化失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});return kh._scanBridgeReady;};");
         script.append("kh.startGlobalScan=function(){var plugin=kh.getScanPlugin();if(!plugin||!plugin.startScan){kh.signalActionTriggered('扫码桥不可用','warn');return Promise.resolve({mock:true,reason:'Scan bridge unavailable'});}return kh.ensureScanBridge().catch(function(){return true;}).then(function(){kh.pushLog('手动触发扫码','info');return Promise.resolve(plugin.startScan()).then(function(){kh.showToast('已触发扫码','info');return true;}).catch(function(err){kh.pushLog('触发扫码失败: '+String(err&&err.message||err||'unknown'),'err');kh.showToast('扫码触发失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});});};");
         script.append("kh.ensureGlobalScanButton=function(){};");
         script.append("kh.ensureControlMenu=function(){};");
-        script.append("kh.patchWindowOpen();kh.ensureDeviceClient();kh.ensureScanBridge().catch(function(){return null;});kh.pushLog('页面注入完成: '+window.location.href,'plain');");
+        script.append("kh.patchWindowOpen();kh.ensureDeviceClient();kh.pushLog('网页日志桥已启动','info');kh.ensureScanBridge().catch(function(){return null;});kh.pushLog('页面注入完成: '+window.location.href,'plain');");
         script.append("var patchFetch=function(){var of=window.fetch;if(!of||of.__khWrapped)return;var wf=function(r,i){i=i||{};var hs=new Headers(i.headers||(r&&r.headers)||{});if(!hs.has(h))hs.set(h,v);i.headers=hs;return of.call(this,r,i);};wf.__khWrapped=true;window.fetch=wf;};");
         script.append("var patchXhr=function(){if(XMLHttpRequest.prototype.__khWrapped)return;var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send,osr=XMLHttpRequest.prototype.setRequestHeader;");
         script.append("XMLHttpRequest.prototype.open=function(){this.__khSet=false;return oo.apply(this,arguments);};");
@@ -704,7 +803,7 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.execAction=function(action,scanValue){if(!action||!action.enabled)return false;kh.pushLog('准备执行动作: '+kh.describeAction(action)+(scanValue?(', scanValue='+scanValue):''),'info');var runner=function(){if(action.actionType==='fill_input'||action.actionType==='fill'||action.actionType==='scan_fill'||action.actionType==='input'){return kh.injectValue(action.targetSelector,scanValue||action.value||'',!!action.autoPressEnter);}if(action.actionType==='click'||action.actionType==='tap'){return kh.clickSelector(action.targetSelector);}if(action.actionType==='scan'||action.actionType==='start_scan'||action.actionType==='device_scan'){kh.startGlobalScan().catch(function(err){kh.pushLog('动作触发扫码失败: '+String(err&&err.message||err||'unknown'),'err');});return true;}if(action.actionType==='stop_scan'){var bridge=kh.getNativeBridge();if(bridge&&bridge.stopScan){bridge.stopScan();kh.pushLog('已执行停止扫码动作: '+(action.id||action.actionType),'info');return true;}kh.pushLog('停止扫码桥不可用: '+(action.id||action.actionType),'warn');return false;}if(action.actionType==='print_label'||action.actionType==='print_batch_label'){kh.runPrintAction(action,scanValue||'').then(function(result){if(result&&result.mock){kh.signalActionTriggered('打印动作已命中，当前使用无设备确认模式','warn');return;}kh.pushLog('打印动作成功: '+(action.id||action.actionType),'ok');}).catch(function(err){kh.pushLog('打印动作失败: '+String(err&&err.message||err||'print failed'),'err');window.__khLastActionError=String(err&&err.message||err||'print failed');});return true;}if(action.actionType==='debug_notice'||action.actionType==='toast'||action.actionType==='alert'){kh.signalActionTriggered(action.value||('动作已触发: '+(action.id||action.actionType)),'info');return true;}if(action.actionType==='noop'||action.actionType==='none'){kh.pushLog('动作为 noop，跳过执行: '+(action.id||action.actionType),'warn');return true;}kh.pushLog('未支持的动作类型: '+(action.actionType||'<empty>')+'，'+kh.describeAction(action),'warn');return false;};if(action.delayMs>0){kh.pushLog('动作延迟执行 '+action.delayMs+'ms: '+(action.id||action.actionType),'info');setTimeout(runner,action.delayMs);return true;}return runner();};");
         script.append("kh.execTriggeredActions=function(triggerType,scanValue){var grouped=window.__khPageActions||{};var actions=Array.isArray(grouped[triggerType])?grouped[triggerType]:[];kh.pushLog('触发动作检查: trigger='+triggerType+', count='+actions.length+(scanValue?(', scanValue='+scanValue):''),'info');if(!actions.length)return false;actions.slice().sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);}).forEach(function(action,index){kh.pushLog('命中动作['+(index+1)+'/'+actions.length+']: '+kh.describeAction(action),'info');kh.execAction(action,scanValue||'');});return true;};");
         script.append("kh.attachButtonActions=function(){if(window.__khButtonActionsBound)return;document.addEventListener('click',function(event){var actions=(window.__khPageActions&&window.__khPageActions.button)||[];var rawTarget=event.target;var clickable=rawTarget&&rawTarget.closest?rawTarget.closest('button,[role=\"button\"],a,[data-kh-action],input[type=\"button\"],input[type=\"submit\"]'):null;if(actions.length){kh.pushLog('检测到点击事件: buttonActions='+actions.length+'，target={'+kh.describeElement(rawTarget)+'}'+(clickable?('，closestClickable={'+kh.describeElement(clickable)+'}'):'') ,'plain');}for(var i=0;i<actions.length;i++){var action=actions[i];if(!action.triggerSelector){kh.pushLog('按钮动作缺少 triggerSelector: '+kh.describeAction(action),'warn');continue;}var target=event.target&&event.target.closest?event.target.closest(action.triggerSelector):null;if(!target){kh.pushLog('按钮动作未命中 selector: '+action.triggerSelector+'，action='+(action.id||action.actionType)+'，target={'+kh.describeElement(rawTarget)+'}'+(clickable?('，closestClickable={'+kh.describeElement(clickable)+'}'):'') ,'plain');continue;}kh.pushLog('按钮动作命中 selector: '+action.triggerSelector+'，matched={'+kh.describeElement(target)+'}，'+kh.describeAction(action),'ok');event.preventDefault();event.stopPropagation();kh.execAction(action,'');return;}},true);window.__khButtonActionsBound=true;};");
-        script.append("kh.loadPageActions=function(){var storages=[window.localStorage,window.sessionStorage].filter(Boolean);var getStored=function(key){for(var i=0;i<storages.length;i++){var value=storages[i].getItem(key);if(value)return value;}return '';};var token=getStored('NOCOBASE_TOKEN')||getStored('NOCOBASE_MAIN_TOKEN');var auth=getStored('NOCOBASE_AUTH')||getStored('NOCOBASE_MAIN_AUTH')||'basic';var role=getStored('NOCOBASE_ROLE')||getStored('NOCOBASE_MAIN_ROLE')||'';if(!token||!window.fetch){window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();kh.pushLog('未检测到页面 token，跳过页面动作加载','warn');return Promise.resolve();}var requestUrl=new URL(kh.pageActionsApi,window.location.origin).toString();return window.fetch(requestUrl,{headers:{'Authorization':'Bearer '+token,'X-Authenticator':auth,'X-Requested-With':'XMLHttpRequest'}}).then(function(res){if(!res.ok)throw new Error('page actions '+res.status);return res.json();}).then(function(payload){var data=(payload&&payload.data!==undefined)?payload.data:payload;var items=Array.isArray(data)?data:(Array.isArray(data&&data.items)?data.items:(Array.isArray(data&&data.rows)?data.rows:[]));var scan=[];var button=[];for(var i=0;i<items.length;i++){var action=kh.normalizeAction(items[i],i+1);if(!action){kh.pushLog('忽略非法动作声明 index='+(i+1),'warn');continue;}kh.pushLog('读取动作声明: '+kh.describeAction(action),'plain');if(!action.enabled){kh.pushLog('忽略未启用动作: '+kh.describeAction(action),'warn');continue;}if(!kh.roleMatch(action.roleName,role)){kh.pushLog('忽略角色不匹配动作: currentRole='+(role||'<empty>')+'，'+kh.describeAction(action),'plain');continue;}if(!kh.pageMatch(action.pagePath,window.location.href)){kh.pushLog('忽略页面不匹配动作: currentPage='+window.location.pathname+'，'+kh.describeAction(action),'plain');continue;}if(action.triggerType==='button')button.push(action);else if(action.triggerType==='scan')scan.push(action);else kh.pushLog('忽略未知触发类型动作: '+kh.describeAction(action),'warn');}scan.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});button.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});window.__khPageActions={scan:scan,button:button};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();kh.pushLog('页面动作已加载: scan='+scan.length+', button='+button.length+', role='+(role||'<empty>'),'info');scan.forEach(function(action,index){kh.pushLog('已注册扫码动作['+(index+1)+'/'+scan.length+']: '+kh.describeAction(action),'info');});button.forEach(function(action,index){kh.pushLog('已注册按钮动作['+(index+1)+'/'+button.length+']: '+kh.describeAction(action),'info');});}).catch(function(err){kh.pushLog('页面动作加载失败: '+String(err&&err.message||err||'unknown'),'err');window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();});};");
+        script.append("kh.loadPageActions=function(){var storages=[window.localStorage,window.sessionStorage].filter(Boolean);var getStored=function(key){for(var i=0;i<storages.length;i++){var value=storages[i].getItem(key);if(value)return value;}return '';};var token=getStored('NOCOBASE_TOKEN')||getStored('NOCOBASE_MAIN_TOKEN');var auth=getStored('NOCOBASE_AUTH')||getStored('NOCOBASE_MAIN_AUTH')||'basic';var role=getStored('NOCOBASE_ROLE')||getStored('NOCOBASE_MAIN_ROLE')||'';if(!token||!window.fetch){window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge0=kh.getNativeBridge();if(bridge0&&bridge0.setScanActionEnabled)bridge0.setScanActionEnabled(false);kh.pushLog('未检测到页面 token，跳过页面动作加载','warn');return Promise.resolve();}var requestUrl=new URL(kh.pageActionsApi,window.location.origin).toString();return window.fetch(requestUrl,{headers:{'Authorization':'Bearer '+token,'X-Authenticator':auth,'X-Requested-With':'XMLHttpRequest'}}).then(function(res){if(!res.ok)throw new Error('page actions '+res.status);return res.json();}).then(function(payload){var data=(payload&&payload.data!==undefined)?payload.data:payload;var items=Array.isArray(data)?data:(Array.isArray(data&&data.items)?data.items:(Array.isArray(data&&data.rows)?data.rows:[]));var scan=[];var button=[];for(var i=0;i<items.length;i++){var action=kh.normalizeAction(items[i],i+1);if(!action){kh.pushLog('忽略非法动作声明 index='+(i+1),'warn');continue;}kh.pushLog('读取动作声明: '+kh.describeAction(action),'plain');if(!action.enabled){kh.pushLog('忽略未启用动作: '+kh.describeAction(action),'warn');continue;}if(!kh.roleMatch(action.roleName,role)){kh.pushLog('忽略角色不匹配动作: currentRole='+(role||'<empty>')+'，'+kh.describeAction(action),'plain');continue;}if(!kh.pageMatch(action.pagePath,window.location.href)){kh.pushLog('忽略页面不匹配动作: currentPage='+window.location.pathname+'，'+kh.describeAction(action),'plain');continue;}if(action.triggerType==='button')button.push(action);else if(action.triggerType==='scan')scan.push(action);else kh.pushLog('忽略未知触发类型动作: '+kh.describeAction(action),'warn');}scan.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});button.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});window.__khPageActions={scan:scan,button:button};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(scan.length>0);kh.pushLog('页面动作已加载: scan='+scan.length+', button='+button.length+', role='+(role||'<empty>'),'info');scan.forEach(function(action,index){kh.pushLog('已注册扫码动作['+(index+1)+'/'+scan.length+']: '+kh.describeAction(action),'info');});button.forEach(function(action,index){kh.pushLog('已注册按钮动作['+(index+1)+'/'+button.length+']: '+kh.describeAction(action),'info');});}).catch(function(err){kh.pushLog('页面动作加载失败: '+String(err&&err.message||err||'unknown'),'err');window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge1=kh.getNativeBridge();if(bridge1&&bridge1.setScanActionEnabled)bridge1.setScanActionEnabled(false);});};");
         script.append("patchFetch();patchXhr();");
         if (shouldBootstrap) {
             script.append("try{");
