@@ -190,13 +190,14 @@ public class PrintPlugin extends Plugin {
                 int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
                 int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
 
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, labelHeight);
-                if (barcode != null) builder.addBmp(barcode, 8, 8);
-                if (qr != null) builder.addBmp(qr, layout.qrLeft, 8);
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
+                int[] mediaLefts = resolveMediaLefts(layout, barcode != null, qr != null);
+                if (barcode != null) builder.addBmp(barcode, mediaLefts[0], 8);
+                if (qr != null) builder.addBmp(qr, mediaLefts[1], 8);
 
                 int y = bodyTop;
                 for (String line : textLines) {
-                    builder.addText(line, layout.textSize, layout.textLeft, y);
+                    builder.addText(line, layout.textSize, resolveCenteredTextLeft(line, layout), y);
                     y += layout.lineHeight;
                 }
 
@@ -367,30 +368,29 @@ public class PrintPlugin extends Plugin {
     }
 
     private static final class GenericLabelLayout {
+        static final int LABEL_WIDTH = 384;
         final int barcodeWidth;
         final int barcodeHeight;
         final int qrWidth;
         final int qrHeight;
-        final int qrLeft;
+        final int mediaGap;
         final int bodyTop;
         final int textSize;
         final int lineHeight;
         final int minHeight;
-        final int textLeft;
         final int wrapUnits;
 
-        GenericLabelLayout(int barcodeWidth, int barcodeHeight, int qrWidth, int qrHeight, int qrLeft,
-                           int bodyTop, int textSize, int lineHeight, int minHeight, int textLeft, int wrapUnits) {
+        GenericLabelLayout(int barcodeWidth, int barcodeHeight, int qrWidth, int qrHeight, int mediaGap,
+                           int bodyTop, int textSize, int lineHeight, int minHeight, int wrapUnits) {
             this.barcodeWidth = barcodeWidth;
             this.barcodeHeight = barcodeHeight;
             this.qrWidth = qrWidth;
             this.qrHeight = qrHeight;
-            this.qrLeft = qrLeft;
+            this.mediaGap = mediaGap;
             this.bodyTop = bodyTop;
             this.textSize = textSize;
             this.lineHeight = lineHeight;
             this.minHeight = minHeight;
-            this.textLeft = textLeft;
             this.wrapUnits = wrapUnits;
         }
     }
@@ -398,12 +398,41 @@ public class PrintPlugin extends Plugin {
     private static GenericLabelLayout getGenericLabelLayout(String preset) {
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new GenericLabelLayout(208, 84, 104, 104, 264, 124, 22, 28, 168, 8, 28);
+                return new GenericLabelLayout(228, 96, 118, 118, 14, 134, 26, 32, 182, 24);
             case "large":
-                return new GenericLabelLayout(240, 104, 128, 128, 248, 152, 26, 34, 196, 8, 24);
+                return new GenericLabelLayout(264, 116, 144, 144, 16, 166, 30, 38, 216, 22);
             default:
-                return new GenericLabelLayout(228, 96, 120, 120, 256, 140, 24, 32, 180, 8, 26);
+                return new GenericLabelLayout(248, 108, 132, 132, 16, 150, 28, 36, 198, 24);
         }
+    }
+
+    private static int[] resolveMediaLefts(GenericLabelLayout layout, boolean hasBarcode, boolean hasQr) {
+        if (hasBarcode && hasQr) {
+            int totalWidth = layout.barcodeWidth + layout.mediaGap + layout.qrWidth;
+            int left = Math.max(0, (GenericLabelLayout.LABEL_WIDTH - totalWidth) / 2);
+            return new int[]{left, left + layout.barcodeWidth + layout.mediaGap};
+        }
+        if (hasBarcode) {
+            return new int[]{Math.max(0, (GenericLabelLayout.LABEL_WIDTH - layout.barcodeWidth) / 2), 0};
+        }
+        if (hasQr) {
+            return new int[]{0, Math.max(0, (GenericLabelLayout.LABEL_WIDTH - layout.qrWidth) / 2)};
+        }
+        return new int[]{0, 0};
+    }
+
+    private static int estimateTextWidth(String text, int textSize) {
+        if (text == null || text.isEmpty()) return 0;
+        int units = 0;
+        for (int i = 0; i < text.length(); i++) {
+            units += charUnits(text.charAt(i));
+        }
+        return Math.max(textSize * 2, (units * textSize) / 2);
+    }
+
+    private static int resolveCenteredTextLeft(String text, GenericLabelLayout layout) {
+        int width = estimateTextWidth(text, layout.textSize);
+        return Math.max(8, (GenericLabelLayout.LABEL_WIDTH - width) / 2);
     }
 
     private static List<String> wrapPlainText(String text, int maxUnits) {
@@ -577,17 +606,18 @@ public class PrintPlugin extends Plugin {
                 int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
                 int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
 
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, labelHeight);
+                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
+                int[] mediaLefts = resolveMediaLefts(layout, barcode != null, qr != null);
                 if (barcode != null) {
-                    builder.addBmp(barcode, 8, 8);
+                    builder.addBmp(barcode, mediaLefts[0], 8);
                 }
                 if (qr != null) {
-                    builder.addBmp(qr, layout.qrLeft, 8);
+                    builder.addBmp(qr, mediaLefts[1], 8);
                 }
 
                 int y = bodyTop;
                 for (String line : textLines) {
-                    builder.addText(line, layout.textSize, layout.textLeft, y);
+                    builder.addText(line, layout.textSize, resolveCenteredTextLeft(line, layout), y);
                     y += layout.lineHeight;
                 }
 
