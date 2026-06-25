@@ -287,7 +287,15 @@ public class MainActivity extends BridgeActivity {
         fabParams.setMargins(dp(16), dp(16), dp(18), dp(24));
         nativeControlButton.setLayoutParams(fabParams);
         nativeControlButton.setElevation(dp(10));
-        nativeControlButton.setOnClickListener(v -> showNativeControlMenu(v));
+        nativeControlButton.setOnClickListener(v -> {
+            if (!"ready".equals(nativePageReadyState)) {
+                appendNativeLog("点击悬浮球: 手动触发页面初始化");
+                triggerRuntimeInitialization(true);
+                android.widget.Toast.makeText(this, "正在初始化页面动作…", android.widget.Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showNativeControlMenu(v);
+        });
 
         nativeStatusDot = new android.view.View(this);
         android.widget.FrameLayout.LayoutParams dotParams = new android.widget.FrameLayout.LayoutParams(dp(12), dp(12));
@@ -393,28 +401,35 @@ public class MainActivity extends BridgeActivity {
 
     private void showNativeControlMenu(android.view.View anchor) {
         android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
-        menu.getMenu().add(0, 1, 0, "扫码");
-        menu.getMenu().add(0, 2, 1, "设置");
-        menu.getMenu().add(0, 3, 2, "检查更新");
-        menu.getMenu().add(0, 4, 3, "日志");
+        menu.getMenu().add(0, 1, 0, "重新初始化");
+        menu.getMenu().add(0, 2, 1, "扫码");
+        menu.getMenu().add(0, 3, 2, "设置");
+        menu.getMenu().add(0, 4, 3, "检查更新");
+        menu.getMenu().add(0, 5, 4, "日志");
         menu.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
             if (id == 1) {
+                appendNativeLog("触发原生菜单: 重新初始化");
+                triggerRuntimeInitialization(true);
+                android.widget.Toast.makeText(this, "正在重新初始化页面动作…", android.widget.Toast.LENGTH_SHORT).show();
+                return true;
+            }
+            if (id == 2) {
                 appendNativeLog("触发原生菜单: 扫码");
                 triggerNativeScan();
                 return true;
             }
-            if (id == 2) {
+            if (id == 3) {
                 appendNativeLog("打开原生设置");
                 showNativeSettingsDialog();
                 return true;
             }
-            if (id == 3) {
+            if (id == 4) {
                 appendNativeLog("触发原生更新检查");
                 showNativeUpdateDialog();
                 return true;
             }
-            if (id == 4) {
+            if (id == 5) {
                 appendNativeLog("打开网页日志");
                 runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.toggleFloatingLog&&window.__khClientRuntime.toggleFloatingLog(true);");
                 return true;
@@ -422,6 +437,20 @@ public class MainActivity extends BridgeActivity {
             return false;
         });
         menu.show();
+    }
+
+    private void triggerRuntimeInitialization(boolean forceRefresh) {
+        if (bridge == null || bridge.getWebView() == null) {
+            appendNativeLog("页面初始化失败: WebView 不可用");
+            return;
+        }
+        WebView webView = bridge.getWebView();
+        setNativePageReadyState("loading", "manual init");
+        injectClientTypeHeader(webView, true);
+        String command = forceRefresh
+            ? "window.__khClientRuntime&&window.__khClientRuntime.bootOnce&&window.__khClientRuntime.bootOnce().then(function(){return window.__khClientRuntime.refreshCurrentPage&&window.__khClientRuntime.refreshCurrentPage(true);}).catch(function(err){window.log&&window.log('手动初始化失败: '+String(err&&err.message||err||'unknown'),'err');});"
+            : "window.__khClientRuntime&&window.__khClientRuntime.bootOnce&&window.__khClientRuntime.bootOnce();";
+        webView.postDelayed(() -> webView.evaluateJavascript(command, null), 220);
     }
 
     private void runClientRuntimeCommand(String command) {
