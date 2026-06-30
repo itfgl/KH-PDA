@@ -62,3 +62,4 @@ echo   Local : %LOCAL_STATIC%\index.html + plugins.js
 if not "%REMOTE_HOST%"=="" echo   Remote: %REMOTE_USER%@%REMOTE_HOST%:%REMOTE_PATH%
 echo ============================================================
 pause
+
