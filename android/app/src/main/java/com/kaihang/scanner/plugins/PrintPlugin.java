@@ -208,7 +208,7 @@ public class PrintPlugin extends Plugin {
 
                 int y = bodyTop;
                 for (String line : textLines) {
-                    builder.addText(line, layout.textSize, resolveCenteredTextLeft(line, layout), y);
+                    builder.addText(line, layout.textSize, resolveLeftAlignedTextLeft(), y);
                     y += layout.lineHeight;
                 }
 
@@ -433,6 +433,10 @@ public class PrintPlugin extends Plugin {
         return Math.max(8, (GenericLabelLayout.LABEL_WIDTH - width) / 2);
     }
 
+    private static int resolveLeftAlignedTextLeft() {
+        return 12;
+    }
+
     private static List<String> wrapPlainText(String text, int maxUnits) {
         List<String> lines = new ArrayList<>();
         if (text == null || text.trim().isEmpty()) return lines;
@@ -622,7 +626,7 @@ public class PrintPlugin extends Plugin {
 
                 int y = bodyTop;
                 for (String line : textLines) {
-                    builder.addText(line, layout.textSize, resolveCenteredTextLeft(line, layout), y);
+                    builder.addText(line, layout.textSize, resolveLeftAlignedTextLeft(), y);
                     y += layout.lineHeight;
                 }
 

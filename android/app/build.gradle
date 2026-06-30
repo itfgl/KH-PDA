@@ -1,5 +1,32 @@
 apply plugin: 'com.android.application'
 
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("../keystore.properties")
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { stream ->
+        keystoreProperties.load(stream)
+    }
+}
+
+def signingValue = { envName, propertyName ->
+    def envValue = System.getenv(envName)
+    if (envValue != null && !envValue.trim().isEmpty()) {
+        return envValue
+    }
+    return keystoreProperties.getProperty(propertyName)
+}
+
+def releaseStoreFilePath = signingValue("RELEASE_STORE_FILE", "storeFile")
+def releaseStorePassword = signingValue("RELEASE_STORE_PASSWORD", "storePassword")
+def releaseKeyAlias = signingValue("RELEASE_KEY_ALIAS", "keyAlias")
+def releaseKeyPassword = signingValue("RELEASE_KEY_PASSWORD", "keyPassword")
+def hasReleaseSigning = [
+    releaseStoreFilePath,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword
+].every { it != null && !it.trim().isEmpty() }
+
 android {
     namespace = "com.kaihang.scanner"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -18,11 +45,35 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile rootProject.file(releaseStoreFilePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def wantsReleaseBuild = graph.allTasks.any { task ->
+        task.name.toLowerCase().contains("release")
+    }
+    if (wantsReleaseBuild && !hasReleaseSigning) {
+        throw new GradleException(
+            "Release signing is not configured. Provide RELEASE_* env vars or ../keystore.properties before building release."
+        )
     }
 }
 

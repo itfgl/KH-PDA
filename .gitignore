@@ -7,6 +7,7 @@ www/assets/
 # 签名 keystore（私钥，绝对不入库，通过 GitHub Secrets 注入）
 *.jks
 *.keystore
+keystore.properties
 # Android build artifacts
 android/app/build/
 android/.gradle/

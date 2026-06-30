@@ -24,32 +24,42 @@ jobs:
         distribution: 'zulu'
         java-version: '21'
 
-    - name: 4. 安装依赖、构建 JS、同步 Capacitor
+    - name: 4. 准备 Release 签名
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+        cat > keystore.properties <<EOF
+        storeFile=app/release.keystore
+        storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+        keyAlias=${{ secrets.KEY_ALIAS }}
+        keyPassword=${{ secrets.KEY_PASSWORD }}
+        EOF
+
+    - name: 5. 安装依赖、构建 JS、同步 Capacitor
       run: |
         npm install
         npm run build
         npx cap sync android
 
-    - name: 5. 编译 Debug APK（可直接装机测试，无需签名配置）
+    - name: 6. 编译 Release APK
       run: |
         cd android
         chmod +x ./gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleRelease
 
-    - name: 6. 上传 Debug APK
+    - name: 7. 上传 Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: kaihang-scanner-debug
-        path: android/app/build/outputs/apk/debug/app-debug.apk
+        name: kaihang-scanner-release
+        path: android/app/build/outputs/apk/release/app-release.apk
 
-    - name: 7. 配置 SSH
+    - name: 8. 配置 SSH
       run: |
         chmod 600 ./github_actions_apk
         mkdir -p ~/.ssh
         ssh-keyscan 115.29.178.34 >> ~/.ssh/known_hosts
 
-    - name: 8. 上传 APK 到测试机
+    - name: 9. 上传 APK 到测试机
       run: |
         scp -i ./github_actions_apk \
-          android/app/build/outputs/apk/debug/app-debug.apk \
-          root@115.29.178.34:/root/server6/static/app-debug.apk
+          android/app/build/outputs/apk/release/app-release.apk \
+          root@115.29.178.34:/root/server6/static/app-release.apk
