@@ -1,0 +1,13 @@
+{
+  "versionCode": 10,
+  "versionName": "1.2.1",
+  "apkFileName": "kaihang-scanner-v1.2.1-10.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.1-10.apk",
+  "changelog": "网页异常时保留原生设置入口，并补充页面加载失败日志与离线排查能力",
+  "releasedAt": "2026-07-01",
+  "notes": [
+    "网页打不开时，悬浮菜单仍可直接进入原生设置和检查更新",
+    "补充 WebView 主页面加载失败和 HTTP 异常原生日志，便于定位 ECONNREFUSED 一类问题",
+    "运行日志改为优先显示原生日志，不再依赖网页先成功初始化"
+  ]
+}
