@@ -119,6 +119,32 @@ public class MainActivity extends BridgeActivity {
             }
 
             @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, android.webkit.WebResourceError error) {
+                super.onReceivedError(view, request, error);
+                if (request != null && request.isForMainFrame()) {
+                    String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
+                    String description = error != null && error.getDescription() != null
+                        ? error.getDescription().toString()
+                        : "unknown";
+                    appendNativeLog("页面加载失败: " + description + " @ " + failingUrl);
+                    setNativePageReadyState("error", description);
+                }
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, android.webkit.WebResourceResponse errorResponse) {
+                super.onReceivedHttpError(view, request, errorResponse);
+                if (request != null && request.isForMainFrame()) {
+                    int statusCode = errorResponse != null ? errorResponse.getStatusCode() : 0;
+                    String reason = errorResponse != null ? safe(errorResponse.getReasonPhrase()) : "";
+                    String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
+                    String detail = "HTTP " + statusCode + (reason.isEmpty() ? "" : (" " + reason));
+                    appendNativeLog("页面 HTTP 异常: " + detail + " @ " + failingUrl);
+                    setNativePageReadyState("error", detail);
+                }
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 return handleNavigation(view, request != null && request.getUrl() != null ? request.getUrl().toString() : null);
             }
@@ -295,10 +321,9 @@ public class MainActivity extends BridgeActivity {
         nativeControlButton.setElevation(dp(10));
         nativeControlButton.setOnClickListener(v -> {
             if (!"ready".equals(nativePageReadyState)) {
-                appendNativeLog("点击悬浮球: 手动触发页面初始化");
+                appendNativeLog("点击悬浮球: 页面未就绪，先尝试重新初始化，同时保持原生菜单可用");
                 triggerRuntimeInitialization(true);
-                android.widget.Toast.makeText(this, "正在初始化页面动作…", android.widget.Toast.LENGTH_SHORT).show();
-                return;
+                android.widget.Toast.makeText(this, "网页未就绪，可直接打开设置或检查更新", android.widget.Toast.LENGTH_SHORT).show();
             }
             showNativeControlMenu(v);
         });
@@ -436,8 +461,8 @@ public class MainActivity extends BridgeActivity {
                 return true;
             }
             if (id == 5) {
-                appendNativeLog("打开网页日志");
-                runClientRuntimeCommand("window.__khClientRuntime&&window.__khClientRuntime.toggleFloatingLog&&window.__khClientRuntime.toggleFloatingLog(true);");
+                appendNativeLog("打开运行日志");
+                showNativeLogDialog();
                 return true;
             }
             return false;
