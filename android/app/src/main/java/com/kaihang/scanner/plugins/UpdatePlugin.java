@@ -1,10 +1,8 @@
 package com.kaihang.scanner.plugins;
 
 import android.app.DownloadManager;
-import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
@@ -45,7 +43,6 @@ public class UpdatePlugin extends Plugin {
 
     /**
      * 用系统 DownloadManager 下载 APK，下载完自动触发系统安装器。
-     * 绕开 FileProvider，系统进程直接操作文件，不依赖本 App 进程存活。
      */
     @PluginMethod
     public void downloadAndInstallApk(PluginCall call) {
@@ -56,6 +53,13 @@ public class UpdatePlugin extends Plugin {
         }
 
         try {
+            if (!canInstallPackages()) {
+                notifyInstallPermissionRequired();
+                openUnknownAppSourcesSettings();
+                call.reject("当前设备未授予安装未知应用权限");
+                return;
+            }
+
             // 清理旧文件
             File dest = new File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
@@ -96,6 +100,7 @@ public class UpdatePlugin extends Plugin {
                     }
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
                         c.close();
+                        installApk(dest);
                         break;
                     }
                     long downloaded = c.getLong(
@@ -114,7 +119,7 @@ public class UpdatePlugin extends Plugin {
                     }
                     try { Thread.sleep(300); } catch (InterruptedException e) { break; }
                 }
-                // 下载完成，通知 JS（安装靠用户点通知栏，不再用 FileProvider）
+                // 下载完成后已拉起系统安装器
                 call.resolve();
             }).start();
 
@@ -168,5 +173,30 @@ public class UpdatePlugin extends Plugin {
         }
 
         getContext().startActivity(intent);
+    }
+
+    private boolean canInstallPackages() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return true;
+        }
+        return getContext().getPackageManager().canRequestPackageInstalls();
+    }
+
+    private void notifyInstallPermissionRequired() {
+        JSObject data = new JSObject();
+        data.put("reason", "请先允许此应用安装未知来源应用，然后再次点击检查更新");
+        notifyListeners("installPermissionRequired", data);
+    }
+
+    private void openUnknownAppSourcesSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+        intent.setData(Uri.parse("package:" + getContext().getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (intent.resolveActivity(getContext().getPackageManager()) != null) {
+            getContext().startActivity(intent);
+        }
     }
 }

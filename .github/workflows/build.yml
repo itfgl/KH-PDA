@@ -46,20 +46,30 @@ jobs:
         chmod +x ./gradlew
         ./gradlew assembleRelease
 
-    - name: 7. 上传 Release APK
+    - name: 7. 生成版本元数据和版本化 APK
+      run: |
+        rm -rf release-dist
+        node scripts/generate-version-json.mjs release-manifest.json release-version.json android/app/build/outputs/apk/release/app-release.apk release-dist
+
+    - name: 8. 上传 Release APK 和版本元数据
       uses: actions/upload-artifact@v4
       with:
         name: kaihang-scanner-release
-        path: android/app/build/outputs/apk/release/app-release.apk
+        path: |
+          release-dist/*.apk
+          release-version.json
 
-    - name: 8. 配置 SSH
+    - name: 9. 配置 SSH
       run: |
         chmod 600 ./github_actions_apk
         mkdir -p ~/.ssh
         ssh-keyscan 115.29.178.34 >> ~/.ssh/known_hosts
 
-    - name: 9. 上传 APK 到测试机
+    - name: 10. 上传 APK 和版本元数据到测试机
       run: |
         scp -i ./github_actions_apk \
-          android/app/build/outputs/apk/release/app-release.apk \
-          root@115.29.178.34:/root/server6/static/app-release.apk
+          release-dist/*.apk \
+          root@115.29.178.34:/root/server6/static/
+        scp -i ./github_actions_apk \
+          release-version.json \
+          root@115.29.178.34:/root/server6/static/version.json

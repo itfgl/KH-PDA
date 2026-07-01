@@ -1,4 +1,5 @@
 apply plugin: 'com.android.application'
+import groovy.json.JsonSlurper
 
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("../keystore.properties")
@@ -7,6 +8,23 @@ if (keystorePropertiesFile.exists()) {
         keystoreProperties.load(stream)
     }
 }
+
+def releaseManifestFile = rootProject.file("../release-manifest.json")
+if (!releaseManifestFile.exists()) {
+    throw new GradleException("release-manifest.json not found")
+}
+def releaseManifest = new JsonSlurper().parse(releaseManifestFile)
+def currentVersionCodeFromManifest = (releaseManifest.currentVersionCode ?: 1) as Integer
+def releaseEntries = (releaseManifest.releases ?: []) as List
+def currentRelease = releaseEntries.find { entry ->
+    ((entry.versionCode ?: 0) as Integer) == currentVersionCodeFromManifest
+}
+if (currentRelease == null) {
+    throw new GradleException("Current release versionCode ${currentVersionCodeFromManifest} not found in release-manifest.json")
+}
+
+def appVersionCode = currentVersionCodeFromManifest
+def appVersionName = (currentRelease.versionName ?: "1.0.0").toString()
 
 def signingValue = { envName, propertyName ->
     def envValue = System.getenv(envName)
@@ -37,8 +55,8 @@ android {
         applicationId "com.kaihang.scanner"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "1.1"
+        versionCode appVersionCode
+        versionName appVersionName
         buildConfigField "String", "BUILD_TIME", "\"${new Date().format("yyyy-MM-dd HH:mm:ss Z")}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

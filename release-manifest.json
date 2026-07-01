@@ -1,0 +1,12 @@
+{
+  "currentVersionCode": 8,
+  "releases": [
+    {
+      "versionCode": 8,
+      "versionName": "1.1",
+      "apkFileName": "kaihang-scanner-v1.1-8.apk",
+      "changelog": "优化应用更新流程，修复下载完成后未自动拉起安装界面的问题",
+      "releasedAt": "2026-07-01"
+    }
+  ]
+}
