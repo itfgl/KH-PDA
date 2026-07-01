@@ -1,15 +1,16 @@
 {
-  "currentVersionCode": 8,
+  "currentVersionCode": 9,
   "releases": [
     {
-      "versionCode": 8,
-      "versionName": "1.1",
-      "apkFileName": "kaihang-scanner-v1.1-8.apk",
-      "changelog": "优化应用更新流程，修复下载完成后未自动拉起安装界面的问题",
+      "versionCode": 9,
+      "versionName": "1.2",
+      "apkFileName": "kaihang-scanner-v1.2-9.apk",
+      "changelog": "补充打印诊断日志，增强打印动作配置解析与页面取值排查能力",
       "releasedAt": "2026-07-01",
       "notes": [
-        "修复检查更新下载完成后未自动弹出安装界面",
-        "统一更新文件上传路径到服务器 static 目录"
+        "补充 single/table 打印模式诊断日志，便于定位配置和页面取值问题",
+        "兼容嵌套字符串 JSON 的打印动作 options 解析",
+        "优化打印字段 selector 读取，优先取可见且有值的节点"
       ]
     }
   ]
