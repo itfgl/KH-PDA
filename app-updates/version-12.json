@@ -1,0 +1,13 @@
+{
+  "versionCode": 12,
+  "versionName": "1.2.3",
+  "apkFileName": "kaihang-scanner-v1.2.3-12.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.3-12.apk",
+  "changelog": "移除页面动作角色限制，并增强 WebView JS/控制台错误诊断，便于继续排查打印链路",
+  "releasedAt": "2026-07-01",
+  "notes": [
+    "页面动作改为仅按页面命中，不再因为 root/technician 角色不同丢失按钮动作",
+    "原生日志新增 WebView console 输出、JS 错误文件名行号、资源加载错误和 promise rejection 细节",
+    "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
+  ]
+}
