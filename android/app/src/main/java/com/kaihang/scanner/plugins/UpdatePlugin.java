@@ -1,6 +1,7 @@
 package com.kaihang.scanner.plugins;
 
 import android.app.DownloadManager;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -99,8 +100,23 @@ public class UpdatePlugin extends Plugin {
                         return;
                     }
                     if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                        String localUriString = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
                         c.close();
-                        installApk(dest);
+                        Uri apkUri = null;
+                        if (localUriString != null && !localUriString.isEmpty()) {
+                            try {
+                                apkUri = Uri.parse(localUriString);
+                            } catch (Exception ignored) {}
+                        }
+                        Uri finalApkUri = apkUri;
+                        getActivity().runOnUiThread(() -> {
+                            try {
+                                installApk(finalApkUri, dest);
+                                call.resolve();
+                            } catch (Exception e) {
+                                call.reject("拉起系统安装界面失败: " + e.getMessage());
+                            }
+                        });
                         break;
                     }
                     long downloaded = c.getLong(
@@ -119,8 +135,6 @@ public class UpdatePlugin extends Plugin {
                     }
                     try { Thread.sleep(300); } catch (InterruptedException e) { break; }
                 }
-                // 下载完成后已拉起系统安装器
-                call.resolve();
             }).start();
 
         } catch (Exception e) {
@@ -156,22 +170,41 @@ public class UpdatePlugin extends Plugin {
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
-    private void installApk(File file) {
-        Intent intent = new Intent(Intent.ACTION_VIEW);
+    private void installApk(Uri downloadedUri, File fallbackFile) {
+        Intent intent = new Intent(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+            ? Intent.ACTION_INSTALL_PACKAGE
+            : Intent.ACTION_VIEW);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            Uri apkUri = FileProvider.getUriForFile(
-                getContext(),
-                getContext().getPackageName() + ".fileprovider",
-                file
-            );
-            intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } else {
-            intent.setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive");
+        Uri installUri = null;
+        if (downloadedUri != null) {
+            String scheme = downloadedUri.getScheme();
+            if ("content".equalsIgnoreCase(scheme) || "file".equalsIgnoreCase(scheme)) {
+                installUri = downloadedUri;
+            }
+        }
+        if (installUri == null) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                installUri = FileProvider.getUriForFile(
+                    getContext(),
+                    getContext().getPackageName() + ".fileprovider",
+                    fallbackFile
+                );
+            } else {
+                installUri = Uri.fromFile(fallbackFile);
+            }
         }
 
+        intent.setDataAndType(installUri, "application/vnd.android.package-archive");
+        intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+        intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+
+        Activity activity = getActivity();
+        if (activity != null) {
+            activity.startActivity(intent);
+            return;
+        }
         getContext().startActivity(intent);
     }
 
