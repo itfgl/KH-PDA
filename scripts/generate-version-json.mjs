@@ -3,11 +3,11 @@ import path from 'node:path';
 
 const args = process.argv.slice(2);
 if (args.length < 2) {
-  console.error('Usage: node scripts/generate-version-json.mjs <manifestJson> <outputJson> [apkSource] [apkDir]');
+  console.error('Usage: node scripts/generate-version-json.mjs <manifestJson> <outputJson>');
   process.exit(1);
 }
 
-const [manifestFile, outputFile, apkSourceFile, apkOutputDir] = args;
+const [manifestFile, outputFile] = args;
 const manifestPath = path.resolve(manifestFile);
 const outputPath = path.resolve(outputFile);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -38,15 +38,6 @@ const payload = {
   currentVersionCode,
   releases: normalizedHistory,
 };
-
-if (apkSourceFile && apkOutputDir) {
-  const sourcePath = path.resolve(apkSourceFile);
-  const targetDir = path.resolve(apkOutputDir);
-  const apkFileName = currentEntry.apkFileName || 'app-release.apk';
-  fs.mkdirSync(targetDir, { recursive: true });
-  fs.copyFileSync(sourcePath, path.join(targetDir, apkFileName));
-  console.log(`Copied APK to ${path.join(targetDir, apkFileName)}`);
-}
 
 fs.mkdirSync(path.dirname(outputPath), { recursive: true });
 fs.writeFileSync(outputPath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');

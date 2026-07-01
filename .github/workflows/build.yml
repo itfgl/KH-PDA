@@ -50,37 +50,45 @@ jobs:
 
     - name: 7. 生成版本元数据和版本化 APK
       run: |
-        rm -rf release-dist
-        node scripts/generate-version-json.mjs release-manifest.json release-version.json android/app/build/outputs/apk/release/app-release.apk release-dist
+        rm -f release-version.json
+        node scripts/generate-version-json.mjs release-manifest.json release-version.json
 
     - name: 8. 读取当前版本 APK 文件名
       run: |
         CURRENT_APK_FILE=$(node -e "const fs=require('fs'); const manifest=JSON.parse(fs.readFileSync('release-manifest.json','utf8')); const current=(manifest.releases||[]).find(item => Number(item.versionCode)===Number(manifest.currentVersionCode)); if(!current||!current.apkFileName){process.exit(1)}; process.stdout.write(current.apkFileName);")
         echo "CURRENT_APK_FILE=${CURRENT_APK_FILE}" >> "$GITHUB_ENV"
 
-    - name: 9. 上传 Release APK 和版本元数据
+    - name: 9. 整理当前版本 APK 到同目录
+      run: |
+        cp android/app/build/outputs/apk/release/app-release.apk ./${{ env.CURRENT_APK_FILE }}
+
+    - name: 10. 上传 Release APK 和版本元数据
       uses: actions/upload-artifact@v4
       with:
         name: kaihang-scanner-release
         path: |
-          release-dist/${{ env.CURRENT_APK_FILE }}
+          ./${{ env.CURRENT_APK_FILE }}
           release-version.json
 
-    - name: 10. 配置 SSH
+    - name: 11. 配置 SSH
       run: |
         chmod 600 ./github_actions_apk
         mkdir -p ~/.ssh
         ssh-keyscan 115.29.178.34 >> ~/.ssh/known_hosts
 
-    - name: 11. 上传当前版本 APK 和版本元数据到服务器
+    - name: 12. 确保服务器静态目录存在
+      run: |
+        ssh -i ./github_actions_apk root@115.29.178.34 "mkdir -p ${REMOTE_STATIC_DIR}"
+
+    - name: 13. 上传当前版本 APK 和版本元数据到服务器
       run: |
         scp -i ./github_actions_apk \
-          release-dist/${{ env.CURRENT_APK_FILE }} \
+          ./${{ env.CURRENT_APK_FILE }} \
           root@115.29.178.34:${REMOTE_STATIC_DIR}/${{ env.CURRENT_APK_FILE }}
         scp -i ./github_actions_apk \
           release-version.json \
           root@115.29.178.34:${REMOTE_STATIC_DIR}/version.json
 
-    - name: 12. 校验服务器上的版本文件
+    - name: 14. 校验服务器上的版本文件
       run: |
         ssh -i ./github_actions_apk root@115.29.178.34 "ls -l ${REMOTE_STATIC_DIR}/version.json ${REMOTE_STATIC_DIR}/${{ env.CURRENT_APK_FILE }}"
