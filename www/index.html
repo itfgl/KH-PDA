@@ -397,9 +397,7 @@
     setStatus('login-status', '正在检查更新…', 'info');
     try {
       const localInfo = await window.UpdatePlugin.getVersionInfo();
-      const res = await fetch(API.getUpdateBase() + '/api/app/version');
-      if (!res.ok) throw new Error('无法获取最新版本信息');
-      const serverInfo = await res.json();
+      const serverInfo = await fetchUpdateInfo();
       if (serverInfo.versionCode > localInfo.versionCode) {
         const apkName = serverInfo.apkFileName ? `\nAPK 文件: ${serverInfo.apkFileName}` : '';
         const ok = confirm(`发现新版本 APK: ${serverInfo.versionName}${apkName}\n\n更新说明:\n${serverInfo.changelog}\n\n是否立即下载安装更新？`);
@@ -414,6 +412,49 @@
       }
     } catch (e) {
       setStatus('login-status', '检查更新失败：' + e.message, 'err');
+    }
+  }
+
+  async function fetchUpdateInfo() {
+    const updateBase = API.getUpdateBase();
+    const tried = [];
+    const fetchJson = async (url) => {
+      const res = await fetch(url, { headers: { 'X-Client-Type': 'capacitor' } });
+      if (!res.ok) throw new Error(`HTTP ${res.status} @ ${url}`);
+      return res.json();
+    };
+
+    try {
+      const indexUrl = new URL('/app-updates/versions.json', updateBase).href;
+      tried.push(indexUrl);
+      const indexInfo = await fetchJson(indexUrl);
+      let currentVersionFile = String(indexInfo.currentVersionFile || '').trim();
+      if (!currentVersionFile) {
+        const currentVersionCode = Number(indexInfo.currentVersionCode || 0);
+        if (currentVersionCode > 0) currentVersionFile = `version-${currentVersionCode}.json`;
+      }
+      if (!currentVersionFile) throw new Error('versions.json 缺少 currentVersionFile');
+      const detailUrl = new URL(`/app-updates/${currentVersionFile}`, updateBase).href;
+      tried.push(detailUrl);
+      const detailInfo = await fetchJson(detailUrl);
+      if (!detailInfo.apkUrl && detailInfo.apkFileName) {
+        detailInfo.apkUrl = `/app-updates/${detailInfo.apkFileName}`;
+      }
+      return detailInfo;
+    } catch (_) {}
+
+    try {
+      const staticVersionUrl = new URL('/version.json', updateBase).href;
+      tried.push(staticVersionUrl);
+      return await fetchJson(staticVersionUrl);
+    } catch (_) {}
+
+    try {
+      const apiUrl = new URL('/api/app/version', updateBase).href;
+      tried.push(apiUrl);
+      return await fetchJson(apiUrl);
+    } catch (e) {
+      throw new Error(`无法获取最新版本信息，已尝试: ${tried.join(' , ')}，${e.message}`);
     }
   }
 

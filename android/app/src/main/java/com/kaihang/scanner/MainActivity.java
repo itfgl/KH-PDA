@@ -744,22 +744,7 @@ public class MainActivity extends BridgeActivity {
             try {
                 com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
                 String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
-                java.net.URL requestUrl = new java.net.URL(updateBase + "/api/app/version");
-                java.net.HttpURLConnection connection = (java.net.HttpURLConnection) requestUrl.openConnection();
-                connection.setRequestMethod("GET");
-                connection.setConnectTimeout(8000);
-                connection.setReadTimeout(8000);
-                connection.setRequestProperty("X-Client-Type", "capacitor");
-                int status = connection.getResponseCode();
-                if (status < 200 || status >= 300) {
-                    throw new java.io.IOException("HTTP " + status);
-                }
-                String body;
-                try (java.io.InputStream inputStream = connection.getInputStream();
-                     java.util.Scanner scanner = new java.util.Scanner(inputStream, "UTF-8").useDelimiter("\\A")) {
-                    body = scanner.hasNext() ? scanner.next() : "{}";
-                }
-                org.json.JSONObject serverInfo = new org.json.JSONObject(body);
+                org.json.JSONObject serverInfo = fetchUpdateInfo(updateBase);
                 long localVersionCode = getLocalVersionCode();
                 String localVersionName = getLocalVersionName();
                 long remoteVersionCode = serverInfo.optLong("versionCode", 0);
@@ -826,6 +811,67 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("启动下载失败: " + e.getMessage());
             toast("启动下载失败: " + e.getMessage());
         }
+    }
+
+    private org.json.JSONObject fetchUpdateInfo(String updateBase) throws Exception {
+        java.util.ArrayList<String> attemptedUrls = new java.util.ArrayList<>();
+
+        String indexUrl = resolveAbsoluteUrl(updateBase, "/app-updates/versions.json");
+        attemptedUrls.add(indexUrl);
+        try {
+            org.json.JSONObject indexInfo = fetchJsonObject(indexUrl);
+            String currentVersionFile = indexInfo.optString("currentVersionFile", "").trim();
+            if (currentVersionFile.isEmpty()) {
+                long currentVersionCode = indexInfo.optLong("currentVersionCode", 0);
+                if (currentVersionCode > 0) {
+                    currentVersionFile = "version-" + currentVersionCode + ".json";
+                }
+            }
+            if (!currentVersionFile.isEmpty()) {
+                String detailUrl = resolveAbsoluteUrl(updateBase, "/app-updates/" + currentVersionFile);
+                attemptedUrls.add(detailUrl);
+                org.json.JSONObject detailInfo = fetchJsonObject(detailUrl);
+                if (!detailInfo.has("apkUrl") && detailInfo.has("apkFileName")) {
+                    detailInfo.put("apkUrl", "/app-updates/" + detailInfo.optString("apkFileName", ""));
+                }
+                return detailInfo;
+            }
+        } catch (Exception ignored) {}
+
+        String staticVersionUrl = resolveAbsoluteUrl(updateBase, "/version.json");
+        attemptedUrls.add(staticVersionUrl);
+        try {
+            return fetchJsonObject(staticVersionUrl);
+        } catch (Exception ignored) {}
+
+        String apiVersionUrl = resolveAbsoluteUrl(updateBase, "/api/app/version");
+        attemptedUrls.add(apiVersionUrl);
+        try {
+            return fetchJsonObject(apiVersionUrl);
+        } catch (Exception ignored) {}
+
+        throw new java.io.IOException("无法获取最新版本信息，已尝试: " + android.text.TextUtils.join(", ", attemptedUrls));
+    }
+
+    private org.json.JSONObject fetchJsonObject(String url) throws Exception {
+        java.net.URL requestUrl = new java.net.URL(url);
+        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) requestUrl.openConnection();
+        connection.setRequestMethod("GET");
+        connection.setConnectTimeout(8000);
+        connection.setReadTimeout(8000);
+        connection.setRequestProperty("X-Client-Type", "capacitor");
+        int status = connection.getResponseCode();
+        if (status < 200 || status >= 300) {
+            throw new java.io.IOException("HTTP " + status + " @ " + url);
+        }
+        String body;
+        try (java.io.InputStream inputStream = connection.getInputStream();
+             java.util.Scanner scanner = new java.util.Scanner(inputStream, "UTF-8").useDelimiter("\\A")) {
+            body = scanner.hasNext() ? scanner.next() : "{}";
+        } finally {
+            connection.disconnect();
+        }
+        return new org.json.JSONObject(body);
     }
 
     private void showNativeLogDialog() {
@@ -995,7 +1041,8 @@ public class MainActivity extends BridgeActivity {
         script.append("kh.signalActionTriggered=function(message,type){kh.pushLog(message,type||'info');kh.showToast(message,type||'info');};");
         script.append("kh.getPaperTypeLabel=function(value){return kh.normalizePaperTypeValue(value)==='black_mark'?'黑标标签纸':'普通热敏纸';};");
         script.append("kh.getLayoutPresetLabel=function(value){var raw=kh.normalizeLayoutPresetValue(value);return ({standard:'标准排版',compact:'紧凑排版',large:'大字排版'})[raw]||'标准排版';};");
-        script.append("kh.triggerAppUpdate=function(setStatus){var plugin=kh.getUpdatePlugin();if(!plugin||!plugin.getVersionInfo){setStatus&&setStatus('当前环境不支持原生更新检测','warn');return Promise.resolve(false);}setStatus&&setStatus('正在检查更新…','info');return Promise.resolve(plugin.getVersionInfo()).then(function(localInfo){return window.fetch(kh.getUpdateBase()+'/api/app/version',{headers:{'X-Client-Type':'capacitor'}}).then(function(res){if(!res.ok)throw new Error('无法获取最新版本信息');return res.json();}).then(function(serverInfo){if(Number(serverInfo.versionCode||0)>Number(localInfo.versionCode||0)){var note='发现新版本 '+String(serverInfo.versionName||'')+'，是否立即下载安装？';if(serverInfo.changelog)note+='\\n\\n更新说明:\\n'+serverInfo.changelog;if(!window.confirm(note)){setStatus&&setStatus('已取消更新','warn');return false;}return Promise.resolve(plugin.downloadAndInstallApk({url:new URL(serverInfo.apkUrl,kh.getUpdateBase()).href})).then(function(){setStatus&&setStatus('下载完成后将自动弹出系统安装界面','info');return true;});}setStatus&&setStatus('当前已是最新版本 (v'+String(localInfo.versionName||'')+')','ok');return false;});}).catch(function(err){setStatus&&setStatus('检查更新失败: '+String(err&&err.message||err||'unknown'),'err');return false;});};");
+        script.append("kh.fetchUpdateInfo=function(){var updateBase=kh.getUpdateBase();var fetchJson=function(url){return window.fetch(url,{headers:{'X-Client-Type':'capacitor'}}).then(function(res){if(!res.ok)throw new Error('HTTP '+res.status+' @ '+url);return res.json();});};var tried=[];var indexUrl=new URL('/app-updates/versions.json',updateBase).href;tried.push(indexUrl);return fetchJson(indexUrl).then(function(indexInfo){var currentVersionFile=String(indexInfo.currentVersionFile||'').trim();if(!currentVersionFile){var currentVersionCode=Number(indexInfo.currentVersionCode||0);if(currentVersionCode>0)currentVersionFile='version-'+currentVersionCode+'.json';}if(!currentVersionFile)throw new Error('versions.json 缺少 currentVersionFile');var detailUrl=new URL('/app-updates/'+currentVersionFile,updateBase).href;tried.push(detailUrl);return fetchJson(detailUrl);}).catch(function(){var staticVersionUrl=new URL('/version.json',updateBase).href;tried.push(staticVersionUrl);return fetchJson(staticVersionUrl);}).catch(function(){var apiUrl=new URL('/api/app/version',updateBase).href;tried.push(apiUrl);return fetchJson(apiUrl);}).then(function(serverInfo){if(serverInfo&&!serverInfo.apkUrl&&serverInfo.apkFileName){serverInfo.apkUrl='/app-updates/'+serverInfo.apkFileName;}return serverInfo;}).catch(function(err){throw new Error('无法获取最新版本信息，已尝试: '+tried.join(' , ')+'，'+String(err&&err.message||err||'unknown'));});};");
+        script.append("kh.triggerAppUpdate=function(setStatus){var plugin=kh.getUpdatePlugin();if(!plugin||!plugin.getVersionInfo){setStatus&&setStatus('当前环境不支持原生更新检测','warn');return Promise.resolve(false);}setStatus&&setStatus('正在检查更新…','info');return Promise.resolve(plugin.getVersionInfo()).then(function(localInfo){return kh.fetchUpdateInfo().then(function(serverInfo){if(Number(serverInfo.versionCode||0)>Number(localInfo.versionCode||0)){var note='发现新版本 '+String(serverInfo.versionName||'')+'，是否立即下载安装？';if(serverInfo.changelog)note+='\\n\\n更新说明:\\n'+serverInfo.changelog;if(!window.confirm(note)){setStatus&&setStatus('已取消更新','warn');return false;}return Promise.resolve(plugin.downloadAndInstallApk({url:new URL(serverInfo.apkUrl,kh.getUpdateBase()).href})).then(function(){setStatus&&setStatus('下载完成后将自动弹出系统安装界面','info');return true;});}setStatus&&setStatus('当前已是最新版本 (v'+String(localInfo.versionName||'')+')','ok');return false;});}).catch(function(err){setStatus&&setStatus('检查更新失败: '+String(err&&err.message||err||'unknown'),'err');return false;});};");
         script.append("kh.ensureUpdateButton=function(){};");
         script.append("kh.ensureSettingsPanel=function(){if(document.getElementById('kh-settings-overlay'))return;var mount=function(){if(document.getElementById('kh-settings-overlay')||!document.body)return;if(!document.getElementById('kh-settings-style')&&document.head){var style=document.createElement('style');style.id='kh-settings-style';style.textContent='.kh-settings-overlay{position:fixed;inset:0;z-index:2147483002;background:rgba(15,23,42,.42);display:none;align-items:center;justify-content:center;padding:18px}.kh-settings-panel{width:min(100%,390px);background:#fff;border-radius:18px;padding:16px;box-shadow:0 16px 40px rgba(15,23,42,.24)}.kh-settings-title{font-size:13px;font-weight:800;color:#667085;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}.kh-settings-field{margin-bottom:12px}.kh-settings-field label{display:block;font-size:12px;font-weight:600;color:#667085;margin-bottom:6px}.kh-settings-field input,.kh-settings-field select{width:100%;padding:12px 13px;border:1px solid #d0d5dd;border-radius:12px;background:#fff;font-size:15px;outline:none}.kh-settings-field input:focus,.kh-settings-field select:focus{border-color:#1570ef;box-shadow:0 0 0 3px rgba(21,112,239,.12)}.kh-settings-note{font-size:12px;line-height:1.6;color:#667085;margin:8px 0 12px}.kh-settings-meta{font-size:12px;line-height:1.6;color:#344054;background:#f8fafc;border-radius:12px;padding:10px 12px;margin-bottom:10px}.kh-settings-status{display:none;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;background:#f2f4f7;color:#344054;margin-bottom:10px}.kh-settings-status.ok{display:block;background:#dcfae6;color:#166534}.kh-settings-status.err{display:block;background:#fee4e2;color:#b42318}.kh-settings-status.info{display:block;background:#dbeafe;color:#1d4ed8}.kh-settings-status.warn{display:block;background:#fef3c7;color:#92400e}.kh-settings-row{display:flex;gap:8px;margin-top:8px}.kh-settings-btn{flex:1;border:none;border-radius:12px;padding:12px 13px;font-size:14px;font-weight:700;cursor:pointer}.kh-settings-btn.primary{background:#1570ef;color:#fff}.kh-settings-btn.secondary{background:#eaecf0;color:#101828}';document.head.appendChild(style);}var overlay=document.createElement('div');overlay.id='kh-settings-overlay';overlay.className='kh-settings-overlay';overlay.innerHTML='<div class=\"kh-settings-panel\"><div class=\"kh-settings-title\">客户端设置</div><div id=\"kh-settings-status\" class=\"kh-settings-status\"></div><div id=\"kh-settings-meta\" class=\"kh-settings-meta\">服务地址会写入 Android 本地，保存后自动重启并直接打开远程入口。</div><div class=\"kh-settings-field\"><label>服务地址</label><input id=\"kh-settings-server\" type=\"url\" inputmode=\"url\" autocomplete=\"url\" placeholder=\"http://127.0.0.1:13000\"></div><div class=\"kh-settings-field\"><label>更新地址</label><input id=\"kh-settings-update\" type=\"url\" inputmode=\"url\" autocomplete=\"url\" placeholder=\"http://127.0.0.1:13000\"></div><div class=\"kh-settings-field\"><label>纸张类型</label><select id=\"kh-settings-paper\"><option value=\"thermal\">普通热敏纸</option><option value=\"black_mark\">黑标标签纸</option></select></div><div class=\"kh-settings-field\"><label>排版预设</label><select id=\"kh-settings-layout\"><option value=\"standard\">标准排版</option><option value=\"compact\">紧凑排版</option><option value=\"large\">大字排版</option></select></div><div class=\"kh-settings-note\">应用启动时直接打开服务地址根路径，是否需要登录由服务端登录态自行判断。</div><div class=\"kh-settings-row\"><button type=\"button\" class=\"kh-settings-btn primary\" id=\"kh-settings-save\">保存并重启</button><button type=\"button\" class=\"kh-settings-btn secondary\" id=\"kh-settings-update-btn\">检查更新</button></div><div class=\"kh-settings-row\"><button type=\"button\" class=\"kh-settings-btn secondary\" id=\"kh-settings-close\">关闭</button></div></div>';document.body.appendChild(overlay);kh._settingsOverlay=overlay;kh._settingsStatus=overlay.querySelector('#kh-settings-status');kh._settingsMeta=overlay.querySelector('#kh-settings-meta');kh.setSettingsStatus=function(message,type){if(!kh._settingsStatus)return;if(!message){kh._settingsStatus.style.display='none';kh._settingsStatus.textContent='';kh._settingsStatus.className='kh-settings-status';return;}kh._settingsStatus.style.display='block';kh._settingsStatus.textContent=message;kh._settingsStatus.className='kh-settings-status '+(type||'info');};var fill=function(){overlay.querySelector('#kh-settings-server').value=kh.getServerBase();overlay.querySelector('#kh-settings-update').value=kh.getUpdateBase();overlay.querySelector('#kh-settings-paper').value=kh.getPrintPaperType();overlay.querySelector('#kh-settings-layout').value=kh.getPrintLayoutPreset();if(kh._settingsMeta){kh._settingsMeta.textContent='当前打印默认值：'+kh.getPaperTypeLabel(kh.getPrintPaperType())+' / '+kh.getLayoutPresetLabel(kh.getPrintLayoutPreset())+'；构建时间：'+(window.BUILD_TIME?new Date(window.BUILD_TIME).toLocaleString('zh-CN'):'未知');}kh.setSettingsStatus('','');};kh.openSettingsPanel=function(){kh.readClientConfig().then(function(){fill();overlay.style.display='flex';});};kh.closeSettingsPanel=function(){overlay.style.display='none';};overlay.addEventListener('click',function(evt){if(evt.target===overlay)kh.closeSettingsPanel();});overlay.querySelector('#kh-settings-close').addEventListener('click',function(){kh.closeSettingsPanel();});overlay.querySelector('#kh-settings-update-btn').addEventListener('click',function(){kh.triggerAppUpdate(kh.setSettingsStatus);});overlay.querySelector('#kh-settings-save').addEventListener('click',function(){var serverBase=kh.normalizeBaseUrl(overlay.querySelector('#kh-settings-server').value,kh.defaultServerBase);var updateBase=kh.normalizeBaseUrl(overlay.querySelector('#kh-settings-update').value,kh.defaultUpdateBase);var paperType=kh.normalizePaperTypeValue(overlay.querySelector('#kh-settings-paper').value);var layoutPreset=kh.normalizeLayoutPresetValue(overlay.querySelector('#kh-settings-layout').value);if(!serverBase){kh.setSettingsStatus('请输入服务地址','err');return;}if(!updateBase){kh.setSettingsStatus('请输入更新地址','err');return;}var settings={serverBase:serverBase,updateBase:updateBase,paperType:paperType,layoutPreset:layoutPreset};var plugin=kh.getClientConfigPlugin();if(!plugin||!plugin.saveConfig){kh.setSettingsStatus('原生配置插件不可用，无法保存本地地址','err');return;}Promise.resolve(plugin.saveConfig(settings)).then(function(saved){kh.applyClientConfig(saved||settings);kh.setSettingsStatus('配置已保存，应用即将重启…','info');setTimeout(function(){if(plugin.restartApp){Promise.resolve(plugin.restartApp()).catch(function(err){kh.setSettingsStatus('重启失败: '+String(err&&err.message||err||'unknown'),'err');});}else{kh.setSettingsStatus('当前环境不支持自动重启','warn');}},350);}).catch(function(err){kh.setSettingsStatus('保存失败: '+String(err&&err.message||err||'unknown'),'err');});});};if(document.body)mount();else window.addEventListener('DOMContentLoaded',mount,{once:true});};");
         script.append("kh.installGlobalLoggers=function(){kh.ensureFloatingLogger();if(!window.log){window.log=function(msg,type){kh.pushLog(msg,type||'plain');};}if(!window.__khRuntimeErrorHooked){window.__khRuntimeErrorHooked=true;window.addEventListener('error',function(e){kh.pushLog('JS ERROR: '+(e&&e.message||'unknown'),'err');});window.addEventListener('unhandledrejection',function(e){var reason=e&&e.reason;kh.pushLog('UNHANDLED: '+((reason&&reason.message)||reason||'unknown'),'err');});}};");
