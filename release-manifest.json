@@ -1,16 +1,16 @@
 {
-  "currentVersionCode": 9,
+  "currentVersionCode": 10,
   "releases": [
     {
-      "versionCode": 9,
-      "versionName": "1.2",
-      "apkFileName": "kaihang-scanner-v1.2-9.apk",
-      "changelog": "补充打印诊断日志，增强打印动作配置解析与页面取值排查能力",
+      "versionCode": 10,
+      "versionName": "1.2.1",
+      "apkFileName": "kaihang-scanner-v1.2.1-10.apk",
+      "changelog": "网页异常时保留原生设置入口，并补充页面加载失败日志与离线排查能力",
       "releasedAt": "2026-07-01",
       "notes": [
-        "补充 single/table 打印模式诊断日志，便于定位配置和页面取值问题",
-        "兼容嵌套字符串 JSON 的打印动作 options 解析",
-        "优化打印字段 selector 读取，优先取可见且有值的节点"
+        "网页打不开时，悬浮菜单仍可直接进入原生设置和检查更新",
+        "补充 WebView 主页面加载失败和 HTTP 异常原生日志，便于定位 ECONNREFUSED 一类问题",
+        "运行日志改为优先显示原生日志，不再依赖网页先成功初始化"
       ]
     }
   ]
