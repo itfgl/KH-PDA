@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 12,
+  "currentVersionCode": 13,
   "releases": [
+    {
+      "versionCode": 13,
+      "versionName": "1.2.4",
+      "apkFileName": "kaihang-scanner-v1.2.4-13.apk",
+      "changelog": "新增版本号并补充扫码重复注入保护，减少偶发双扫/双提交",
+      "releasedAt": "2026-07-02",
+      "notes": [
+        "Android 版本提升到 1.2.4 (13)",
+        "扫码值已存在于输入框时，跳过重复注入和重复回车",
+        "为 PDA 与 Windows 共性双扫问题补充软件层兜底保护"
+      ]
+    },
     {
       "versionCode": 12,
       "versionName": "1.2.3",

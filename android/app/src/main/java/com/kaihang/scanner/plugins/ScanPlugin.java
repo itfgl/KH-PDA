@@ -110,16 +110,20 @@ public class ScanPlugin extends Plugin {
             "var active=document.activeElement;" +
             "var target=null;" +
             "var isWritable=function(el){if(!el)return false;var tag=(el.tagName||'').toLowerCase();return tag==='input'||tag==='textarea'||el.isContentEditable;};" +
+            "var readValue=function(el){if(!el)return '';if(el.isContentEditable)return String(el.textContent||'').trim();if(el.value!==undefined&&el.value!==null)return String(el.value).trim();return '';};" +
             "if(isWritable(active)){target=active;}" +
             "if(!target){target=document.querySelector(" + js(DEFAULT_SCAN_SELECTOR) + ");}" +
             "if(target){" +
+            "var sameValue=readValue(target)===val;" +
+            "if(!sameValue){" +
             "if(target.isContentEditable){target.textContent=val;}" +
             "else{target.focus();target.value=val;}" +
             "['input','change'].forEach(function(name){target.dispatchEvent(new Event(name,{bubbles:true}));});" +
             "try{target.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));}catch(e){}" +
             "try{target.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));}catch(e){}" +
             "}" +
-            "window.dispatchEvent(new CustomEvent('kh:scan',{detail:{value:val,targetFound:!!target}}));" +
+            "}" +
+            "window.dispatchEvent(new CustomEvent('kh:scan',{detail:{value:val,targetFound:!!target,duplicateInput:!!target&&readValue(target)===val}}));" +
             "})();";
         bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(script, null));
     }
