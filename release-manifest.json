@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 13,
+  "currentVersionCode": 14,
   "releases": [
+    {
+      "versionCode": 14,
+      "versionName": "1.2.5",
+      "apkFileName": "kaihang-scanner-v1.2.5-14.apk",
+      "changelog": "支持模具配对页多字段模板打印，并修正该页打印动作配置",
+      "releasedAt": "2026-07-03",
+      "notes": [
+        "Android 版本提升到 1.2.5 (14)",
+        "打印模板支持从多个页面字段拼接单页文本",
+        "模具配对页打印内容改为输出注塑机台号、模具名、研磨高度和备注",
+        "模具配对页打印按钮选择器改为稳定的 title/type 组合"
+      ]
+    },
     {
       "versionCode": 13,
       "versionName": "1.2.4",
