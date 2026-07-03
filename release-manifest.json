@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 14,
+  "currentVersionCode": 15,
   "releases": [
+    {
+      "versionCode": 15,
+      "versionName": "1.2.6",
+      "apkFileName": "kaihang-scanner-v1.2.6-15.apk",
+      "changelog": "新增打印调用链诊断日志，便于定位重复打印发生在网页层还是原生层",
+      "releasedAt": "2026-07-03",
+      "notes": [
+        "Android 版本提升到 1.2.6 (15)",
+        "原生日志新增 printLabel 调用次数与 payload 摘要",
+        "网页打印链路新增 source/trace 日志，覆盖按钮命中、进入打印入口和调用原生打印桥",
+        "扫码日志新增时间戳与页面路径，便于区分重复扫码与重复打印"
+      ]
+    },
     {
       "versionCode": 14,
       "versionName": "1.2.5",
