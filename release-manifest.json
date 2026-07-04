@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 18,
+  "currentVersionCode": 19,
   "releases": [
+    {
+      "versionCode": 19,
+      "versionName": "1.2.10",
+      "apkFileName": "kaihang-scanner-v1.2.10-19.apk",
+      "changelog": "修复小屏设备设置弹窗不可下拉问题，并补强页面按钮与打印链路诊断日志",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.10 (19)",
+        "客户端设置弹窗改为可滚动，小屏设备也能操作完整选项",
+        "页面动作日志新增按钮 selector 汇总和未命中提示，便于排查为什么点了没反应",
+        "打印链路日志新增 printLabel 调用前 payload 摘要和调用返回结果"
+      ]
+    },
     {
       "versionCode": 18,
       "versionName": "1.2.9",
