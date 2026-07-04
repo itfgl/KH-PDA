@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 15,
+  "currentVersionCode": 16,
   "releases": [
+    {
+      "versionCode": 16,
+      "versionName": "1.2.7",
+      "apkFileName": "kaihang-scanner-v1.2.7-16.apk",
+      "changelog": "统一一维码标签宽度与居中规则，避免不同打印分支出现条码过窄或偏移",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.7 (16)",
+        "通用标签与批次标签的一维码统一按标签宽度约 90% 计算",
+        "所有一维码与二维码图片统一走同一套水平居中逻辑",
+        "修正旧批次标签分支写死 left=10 导致的视觉不一致问题"
+      ]
+    },
     {
       "versionCode": 15,
       "versionName": "1.2.6",

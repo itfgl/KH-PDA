@@ -198,12 +198,10 @@ public class PrintPlugin extends Plugin {
 
                 AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
                 if (barcode != null) {
-                    int barcodeLeft = Math.max(0, (GenericLabelLayout.LABEL_WIDTH - layout.barcodeWidth) / 2);
-                    builder.addBmp(barcode, barcodeLeft, layout.barcodeTop);
+                    builder.addBmp(barcode, resolveCenteredMediaLeft(layout.barcodeWidth), layout.barcodeTop);
                 }
                 if (qr != null) {
-                    int qrLeft = Math.max(0, (GenericLabelLayout.LABEL_WIDTH - layout.qrWidth) / 2);
-                    builder.addBmp(qr, qrLeft, layout.qrTop);
+                    builder.addBmp(qr, resolveCenteredMediaLeft(layout.qrWidth), layout.qrTop);
                 }
 
                 int y = bodyTop;
@@ -380,6 +378,7 @@ public class PrintPlugin extends Plugin {
 
     private static final class GenericLabelLayout {
         static final int LABEL_WIDTH = 384;
+        static final double BARCODE_WIDTH_RATIO = 0.90d;
         final int barcodeWidth;
         final int barcodeHeight;
         final int qrWidth;
@@ -406,6 +405,14 @@ public class PrintPlugin extends Plugin {
             this.minHeight = minHeight;
             this.wrapUnits = wrapUnits;
         }
+    }
+
+    private static int resolveCenteredMediaLeft(int mediaWidth) {
+        return Math.max(0, (GenericLabelLayout.LABEL_WIDTH - mediaWidth) / 2);
+    }
+
+    private static int resolveNinetyPercentBarcodeWidth() {
+        return (int) Math.round(GenericLabelLayout.LABEL_WIDTH * GenericLabelLayout.BARCODE_WIDTH_RATIO);
     }
 
     private static GenericLabelLayout getGenericLabelLayout(String preset) {
@@ -488,8 +495,9 @@ public class PrintPlugin extends Plugin {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
                 List<String> productLines = wrapLabeledText("品类：", productType, 18);
+                int barcodeWidth = resolveNinetyPercentBarcodeWidth();
                 Bitmap barcode = BarcodeCreater.createBarcode(
-                    getContext(), batchNo, 364, 140, false, 1
+                    getContext(), batchNo, barcodeWidth, 140, false, 1
                 );
                 if (barcode == null) { call.reject("barcode bitmap null"); return; }
 
@@ -497,7 +505,7 @@ public class PrintPlugin extends Plugin {
                 String printedLaneLabel = getPrintedLaneLabel(laneNo);
 
                 AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 644)
-                    .addBmp(barcode, 10, 0)
+                    .addBmp(barcode, resolveCenteredMediaLeft(barcodeWidth), 0)
                     .addText(printedBatchText, 36, 0, 180)
                     .addText("机器：" + machineId, 30, 0, 234)
                     .addText("日期：" + date, 30, 0, 282);
@@ -616,12 +624,10 @@ public class PrintPlugin extends Plugin {
 
                 AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
                 if (barcode != null) {
-                    int barcodeLeft = Math.max(0, (GenericLabelLayout.LABEL_WIDTH - layout.barcodeWidth) / 2);
-                    builder.addBmp(barcode, barcodeLeft, layout.barcodeTop);
+                    builder.addBmp(barcode, resolveCenteredMediaLeft(layout.barcodeWidth), layout.barcodeTop);
                 }
                 if (qr != null) {
-                    int qrLeft = Math.max(0, (GenericLabelLayout.LABEL_WIDTH - layout.qrWidth) / 2);
-                    builder.addBmp(qr, qrLeft, layout.qrTop);
+                    builder.addBmp(qr, resolveCenteredMediaLeft(layout.qrWidth), layout.qrTop);
                 }
 
                 int y = bodyTop;
