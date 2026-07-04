@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 16,
+  "currentVersionCode": 17,
   "releases": [
+    {
+      "versionCode": 17,
+      "versionName": "1.2.8",
+      "apkFileName": "kaihang-scanner-v1.2.8-17.apk",
+      "changelog": "统一一维码、二维码、文本标签到底层同一套组版与打印出口，避免不同入口打印结果不一致",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.8 (17)",
+        "printLabelNative、printLabel、printBatchLabel、printMachineQR 统一走同一套标签构建逻辑",
+        "一维码、二维码、纯文本现在共用同一个底层 Printer.print 出口",
+        "保留 PRINT_LAYOUT 原生日志，便于继续核对条码请求尺寸与实际位图尺寸"
+      ]
+    },
     {
       "versionCode": 16,
       "versionName": "1.2.7",

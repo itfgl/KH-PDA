@@ -74,6 +74,29 @@ public class PrintPlugin extends Plugin {
         if (sink != null) sink.onStatus(status, flag);
     }
 
+    private static String bitmapSize(Bitmap bitmap) {
+        if (bitmap == null) return "null";
+        return bitmap.getWidth() + "x" + bitmap.getHeight();
+    }
+
+    private static void emitPrintDiagnostic(String source, String detail) {
+        String message = (source == null || source.trim().isEmpty() ? "unknown" : source)
+            + " | "
+            + (detail == null ? "" : detail);
+        android.util.Log.d("PrintPlugin", message);
+        emitNativeStatus("PRINT_LAYOUT", message);
+    }
+
+    private static final class BuiltLabel {
+        final Bitmap label;
+        final String diagnostic;
+
+        BuiltLabel(Bitmap label, String diagnostic) {
+            this.label = label;
+            this.diagnostic = diagnostic;
+        }
+    }
+
     public static synchronized void connectNative(Activity activity) {
         if (activity == null) return;
         if (nativeConnected) {
@@ -156,6 +179,87 @@ public class PrintPlugin extends Plugin {
         Printer.prepareToPrintLabel();
     }
 
+    private static BuiltLabel buildUnifiedLabel(
+        Context context,
+        String barcodeValue,
+        String qrCodeValue,
+        String textValue,
+        String layoutPreset,
+        String diagnosticSource
+    ) {
+        if (context == null) throw new IllegalArgumentException("context is required");
+        String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
+        String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
+        String safeTextValue = textValue == null ? "" : textValue.trim();
+        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.isEmpty()) {
+            throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
+        }
+
+        GenericLabelLayout layout = getGenericLabelLayout(layoutPreset);
+        Bitmap barcode = null;
+        Bitmap qr = null;
+        if (!safeBarcodeValue.isEmpty()) {
+            barcode = BarcodeCreater.createBarcode(context, safeBarcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
+            if (barcode == null) throw new IllegalStateException("barcode bitmap null");
+        }
+        if (!safeQrCodeValue.isEmpty()) {
+            qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
+            if (qr == null) throw new IllegalStateException("qr bitmap null");
+        }
+
+        List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
+        int bodyTop = 16;
+        if (barcode != null) {
+            bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
+        }
+        if (qr != null) {
+            bodyTop = Math.max(bodyTop, layout.qrTop + layout.qrHeight + layout.mediaGap);
+        }
+        int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
+        int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
+        int barcodeLeft = barcode != null ? resolveCenteredMediaLeft(layout.barcodeWidth) : -1;
+        int qrLeft = qr != null ? resolveCenteredMediaLeft(layout.qrWidth) : -1;
+
+        AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
+        if (barcode != null) {
+            builder.addBmp(barcode, barcodeLeft, layout.barcodeTop);
+        }
+        if (qr != null) {
+            builder.addBmp(qr, qrLeft, layout.qrTop);
+        }
+
+        int y = bodyTop;
+        for (String line : textLines) {
+            builder.addText(line, layout.textSize, resolveLeftAlignedTextLeft(), y);
+            y += layout.lineHeight;
+        }
+
+        Bitmap label = builder.getBitmap();
+        if (label == null) throw new IllegalStateException("label bitmap null");
+        String diagnostic =
+            "layoutPreset=" + normalizeLayoutPreset(layoutPreset)
+                + ", requestBarcode=" + layout.barcodeWidth + "x" + layout.barcodeHeight
+                + ", actualBarcode=" + bitmapSize(barcode)
+                + ", barcodeLeft=" + barcodeLeft
+                + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
+                + ", actualQr=" + bitmapSize(qr)
+                + ", qrLeft=" + qrLeft
+                + ", label=" + bitmapSize(label)
+                + ", bodyTop=" + bodyTop
+                + ", lines=" + textLines.size()
+                + ", source=" + diagnosticSource;
+        return new BuiltLabel(label, diagnostic);
+    }
+
+    private static void printBuiltLabel(Bitmap label, String paperType, String jobName) {
+        String normalizedPaperType = normalizePaperType(paperType);
+        if (PAPER_BLACK_MARK.equals(normalizedPaperType)) {
+            Printer.print(new BitmapData(label, 15, 0), 8, jobName, false);
+        } else {
+            Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, jobName, false);
+        }
+    }
+
     public static void printLabelNative(Context context, Activity activity, String barcodeValue, String qrCodeValue, String textValue, String paperType, String layoutPreset) {
         if (context == null || activity == null) return;
         connectNative(activity);
@@ -166,58 +270,19 @@ public class PrintPlugin extends Plugin {
                     return;
                 }
                 String normalizedPaperType = normalizePaperType(paperType);
-                GenericLabelLayout layout = getGenericLabelLayout(layoutPreset);
-
-                if ((barcodeValue == null || barcodeValue.trim().isEmpty())
-                    && (qrCodeValue == null || qrCodeValue.trim().isEmpty())
-                    && (textValue == null || textValue.trim().isEmpty())) {
-                    throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
-                }
-
-                Bitmap barcode = null;
-                Bitmap qr = null;
-                if (barcodeValue != null && !barcodeValue.trim().isEmpty()) {
-                    barcode = BarcodeCreater.createBarcode(context, barcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
-                    if (barcode == null) throw new IllegalStateException("barcode bitmap null");
-                }
-                if (qrCodeValue != null && !qrCodeValue.trim().isEmpty()) {
-                    qr = BarcodeCreater.createBarcode(context, qrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
-                    if (qr == null) throw new IllegalStateException("qr bitmap null");
-                }
-
-                List<String> textLines = wrapPlainText(textValue, layout.wrapUnits);
-                int bodyTop = 16;
-                if (barcode != null) {
-                    bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-                }
-                if (qr != null) {
-                    bodyTop = Math.max(bodyTop, layout.qrTop + layout.qrHeight + layout.mediaGap);
-                }
-                int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
-                int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
-
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
-                if (barcode != null) {
-                    builder.addBmp(barcode, resolveCenteredMediaLeft(layout.barcodeWidth), layout.barcodeTop);
-                }
-                if (qr != null) {
-                    builder.addBmp(qr, resolveCenteredMediaLeft(layout.qrWidth), layout.qrTop);
-                }
-
-                int y = bodyTop;
-                for (String line : textLines) {
-                    builder.addText(line, layout.textSize, resolveLeftAlignedTextLeft(), y);
-                    y += layout.lineHeight;
-                }
-
-                Bitmap label = builder.getBitmap();
-                if (label == null) throw new IllegalStateException("label bitmap null");
-
-                if (PAPER_BLACK_MARK.equals(normalizedPaperType)) {
-                    Printer.print(new BitmapData(label, 15, 0), 8, "native_generic_label", false);
-                } else {
-                    Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "native_generic_label", false);
-                }
+                BuiltLabel builtLabel = buildUnifiedLabel(
+                    context,
+                    barcodeValue,
+                    qrCodeValue,
+                    textValue,
+                    layoutPreset,
+                    "printLabelNative"
+                );
+                emitPrintDiagnostic(
+                    "printLabelNative",
+                    "paperType=" + normalizedPaperType + ", " + builtLabel.diagnostic
+                );
+                printBuiltLabel(builtLabel.label, normalizedPaperType, "native_generic_label");
             } catch (Exception e) {
                 emitNativeStatus("PRINT_BRIDGE_ERROR", e.getMessage());
             }
@@ -495,37 +560,32 @@ public class PrintPlugin extends Plugin {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
                 List<String> productLines = wrapLabeledText("品类：", productType, 18);
-                int barcodeWidth = resolveNinetyPercentBarcodeWidth();
-                Bitmap barcode = BarcodeCreater.createBarcode(
-                    getContext(), batchNo, barcodeWidth, 140, false, 1
-                );
-                if (barcode == null) { call.reject("barcode bitmap null"); return; }
-
                 String printedBatchText = getPrintedBatchText(batchNo, laneNo);
                 String printedLaneLabel = getPrintedLaneLabel(laneNo);
-
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(384, 644)
-                    .addBmp(barcode, resolveCenteredMediaLeft(barcodeWidth), 0)
-                    .addText(printedBatchText, 36, 0, 180)
-                    .addText("机器：" + machineId, 30, 0, 234)
-                    .addText("日期：" + date, 30, 0, 282);
-                int y = 336;
-                for (String line : productLines) {
-                    builder.addText(line, 30, 0, y);
-                    y += 42;
-                }
-                y += 16;
-                Bitmap label = builder
-                    .addText("穴号：" + cavityNo, 30, 0, y)
-                    .addText("周期：" + periodLabel, 30, 0, y + 42)
-                    .addText("栏号：" + printedLaneLabel, 30, 0, y + 84)
-                    .getBitmap();
-                if (label == null) { call.reject("label bitmap null"); return; }
+                List<String> lines = new ArrayList<>();
+                lines.add("批次：" + printedBatchText);
+                if (!machineId.trim().isEmpty()) lines.add("机器：" + machineId.trim());
+                if (!date.trim().isEmpty()) lines.add("日期：" + date.trim());
+                lines.addAll(productLines);
+                if (!cavityNo.trim().isEmpty()) lines.add("穴号：" + cavityNo.trim());
+                if (!periodLabel.trim().isEmpty()) lines.add("周期：" + periodLabel.trim());
+                if (!printedLaneLabel.trim().isEmpty()) lines.add("栏号：" + printedLaneLabel.trim());
+                BuiltLabel builtLabel = buildUnifiedLabel(
+                    getContext(),
+                    batchNo,
+                    "",
+                    String.join("\n", lines),
+                    LAYOUT_STANDARD,
+                    "printBatchLabel"
+                );
+                emitPrintDiagnostic(
+                    "printBatchLabel",
+                    builtLabel.diagnostic + ", batchNo=" + batchNo + ", productLines=" + productLines.size()
+                );
 
                 if (destroyed) { call.reject("printer destroyed"); return; }
                 android.util.Log.d("PrintPlugin", "printBatchLabel → Printer.print()");
-                // 普通纸（热敏）打印：不走黑标定位，无需 prepareToPrintLabel/checkBlack
-                Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "batch_" + batchNo, false);
+                printBuiltLabel(builtLabel.label, PAPER_THERMAL, "batch_" + batchNo);
                 call.resolve();
             } catch (Exception e) {
                 android.util.Log.e("PrintPlugin", "printBatchLabel crash", e);
@@ -548,29 +608,20 @@ public class PrintPlugin extends Plugin {
         printExecutor.execute(() -> {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
-                Bitmap qr = BarcodeCreater.createBarcode(
-                    getContext(), machineId, 200, 200, false, 2
-                );
-                if (qr == null) {
-                    call.reject("QR code generation failed for machineId: " + machineId);
-                    return;
-                }
-
                 String printTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
                     .format(new Date());
-
-                Bitmap label = new AbsoluteLayoutBitmap(384, 270)
-                    .addBmp(qr, 92, 8)
-                    .addText("机 器：" + machineId, 24, 16, 224)
-                    .addText("打印：" + printTime, 20, 16, 250)
-                    .getBitmap();
-                if (label == null) {
-                    call.reject("Label bitmap creation failed");
-                    return;
-                }
+                BuiltLabel builtLabel = buildUnifiedLabel(
+                    getContext(),
+                    "",
+                    machineId,
+                    "机 器：" + machineId + "\n打印：" + printTime,
+                    "large",
+                    "printMachineQR"
+                );
+                emitPrintDiagnostic("printMachineQR", builtLabel.diagnostic + ", machineId=" + machineId);
 
                 if (destroyed) { call.reject("printer destroyed"); return; }
-                Printer.print(new BitmapData(label, 15, 0), 16, "machine_qr_" + machineId, false);
+                printBuiltLabel(builtLabel.label, PAPER_BLACK_MARK, "machine_qr_" + machineId);
                 call.resolve();
             } catch (Exception e) {
                 call.reject("printMachineQR error: " + e.getMessage(), e);
@@ -590,7 +641,7 @@ public class PrintPlugin extends Plugin {
         String qrCodeValue = getCallString(call, "qrCodeValue");
         String textValue = getCallString(call, "textValue");
         String paperType = normalizePaperType(getCallString(call, "paperType"));
-        GenericLabelLayout layout = getGenericLabelLayout(getCallString(call, "layoutPreset"));
+        String layoutPreset = getCallString(call, "layoutPreset");
 
         if (barcodeValue.isEmpty() && qrCodeValue.isEmpty() && textValue.trim().isEmpty()) {
             call.reject("printLabel requires barcodeValue, qrCodeValue or textValue");
@@ -600,51 +651,21 @@ public class PrintPlugin extends Plugin {
         printExecutor.execute(() -> {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
-                Bitmap barcode = null;
-                Bitmap qr = null;
-                if (!barcodeValue.isEmpty()) {
-                    barcode = BarcodeCreater.createBarcode(getContext(), barcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
-                    if (barcode == null) { call.reject("barcode bitmap null"); return; }
-                }
-                if (!qrCodeValue.isEmpty()) {
-                    qr = BarcodeCreater.createBarcode(getContext(), qrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
-                    if (qr == null) { call.reject("qr bitmap null"); return; }
-                }
-
-                List<String> textLines = wrapPlainText(textValue, layout.wrapUnits);
-                int bodyTop = 16;
-                if (barcode != null) {
-                    bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-                }
-                if (qr != null) {
-                    bodyTop = Math.max(bodyTop, layout.qrTop + layout.qrHeight + layout.mediaGap);
-                }
-                int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
-                int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
-
-                AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
-                if (barcode != null) {
-                    builder.addBmp(barcode, resolveCenteredMediaLeft(layout.barcodeWidth), layout.barcodeTop);
-                }
-                if (qr != null) {
-                    builder.addBmp(qr, resolveCenteredMediaLeft(layout.qrWidth), layout.qrTop);
-                }
-
-                int y = bodyTop;
-                for (String line : textLines) {
-                    builder.addText(line, layout.textSize, resolveLeftAlignedTextLeft(), y);
-                    y += layout.lineHeight;
-                }
-
-                Bitmap label = builder.getBitmap();
-                if (label == null) { call.reject("label bitmap null"); return; }
+                BuiltLabel builtLabel = buildUnifiedLabel(
+                    getContext(),
+                    barcodeValue,
+                    qrCodeValue,
+                    textValue,
+                    layoutPreset,
+                    "printLabelPlugin"
+                );
+                emitPrintDiagnostic(
+                    "printLabelPlugin",
+                    "paperType=" + paperType + ", " + builtLabel.diagnostic
+                );
 
                 if (destroyed) { call.reject("printer destroyed"); return; }
-                if (PAPER_BLACK_MARK.equals(paperType)) {
-                    Printer.print(new BitmapData(label, 15, 0), 8, "generic_label", false);
-                } else {
-                    Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, "generic_label", false);
-                }
+                printBuiltLabel(builtLabel.label, paperType, "generic_label");
                 call.resolve();
             } catch (Exception e) {
                 call.reject("printLabel error: " + e.getMessage(), e);
