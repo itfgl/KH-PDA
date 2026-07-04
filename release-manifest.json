@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 24,
+  "currentVersionCode": 25,
   "releases": [
+    {
+      "versionCode": 25,
+      "versionName": "1.2.16",
+      "apkFileName": "kaihang-scanner-v1.2.16-25.apk",
+      "changelog": "收窄页面动作 observer 观察范围，避免左侧导航展开误触发动作刷新",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.16 (25)",
+        "页面动作 observer 改为优先观察业务主区域，不再盯整页 document",
+        "侧边导航和菜单树变化会被显式忽略，降低左侧展开/收起带来的卡顿",
+        "保留路由变化和业务区内容变化后的动作刷新能力，减少对打印和扫描的影响"
+      ]
+    },
     {
       "versionCode": 24,
       "versionName": "1.2.15",
