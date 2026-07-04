@@ -1,0 +1,14 @@
+{
+  "versionCode": 23,
+  "versionName": "1.2.14",
+  "apkFileName": "kaihang-scanner-v1.2.14-23.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.14-23.apk",
+  "changelog": "调整 WebView 同源导航拦截，避免把前端切页误当成整页新开加载",
+  "releasedAt": "2026-07-04",
+  "notes": [
+    "Android 版本提升到 1.2.14 (23)",
+    "同源 http/https 页面跳转不再强制由原生重新 loadUrl，优先交回 WebView 和前端路由处理",
+    "外链和非网页 scheme 仍保持原生 Intent 接管，避免影响系统协议跳转",
+    "目标是减少 Android 包内页面切换被误判为整页新打开带来的中间加载感"
+  ]
+}

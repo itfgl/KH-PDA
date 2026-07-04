@@ -246,7 +246,12 @@ public class MainActivity extends BridgeActivity {
             return false;
         }
         if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
-            view.loadUrl(url);
+            if (isSameWebOrigin(view, uri)) {
+                return false;
+            }
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW, uri));
+            } catch (Exception ignored) {}
             return true;
         }
         try {
@@ -255,6 +260,50 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception ignored) {
             return true;
         }
+    }
+
+    private boolean isSameWebOrigin(WebView view, Uri targetUri) {
+        if (targetUri == null) {
+            return false;
+        }
+        Uri currentUri = null;
+        try {
+            if (view != null && view.getUrl() != null && !view.getUrl().trim().isEmpty()) {
+                currentUri = Uri.parse(view.getUrl());
+            }
+        } catch (Exception ignored) {}
+        if (currentUri == null) {
+            try {
+                currentUri = Uri.parse(buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE)));
+            } catch (Exception ignored) {
+                currentUri = null;
+            }
+        }
+        if (currentUri == null) {
+            return false;
+        }
+        String targetScheme = safe(targetUri.getScheme());
+        String currentScheme = safe(currentUri.getScheme());
+        String targetHost = safe(targetUri.getHost());
+        String currentHost = safe(currentUri.getHost());
+        int targetPort = targetUri.getPort();
+        int currentPort = currentUri.getPort();
+        return targetScheme.equalsIgnoreCase(currentScheme)
+            && targetHost.equalsIgnoreCase(currentHost)
+            && normalizePort(targetScheme, targetPort) == normalizePort(currentScheme, currentPort);
+    }
+
+    private int normalizePort(String scheme, int port) {
+        if (port >= 0) {
+            return port;
+        }
+        if ("https".equalsIgnoreCase(scheme)) {
+            return 443;
+        }
+        if ("http".equalsIgnoreCase(scheme)) {
+            return 80;
+        }
+        return -1;
     }
 
     private String buildLaunchUrl(String serverBase) {
