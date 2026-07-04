@@ -16,6 +16,13 @@ public class ClientConfigPlugin extends Plugin {
     private static final String KEY_UPDATE_BASE = "update_base";
     private static final String KEY_PAPER_TYPE = "paper_type";
     private static final String KEY_LAYOUT_PRESET = "layout_preset";
+    private static final String KEY_INJECTION_MODE = "injection_mode";
+    private static final String KEY_ENABLE_FLOATING_LOGS = "enable_floating_logs";
+    private static final String KEY_ENABLE_NETWORK_HEADER_PATCH = "enable_network_header_patch";
+    private static final String KEY_ENABLE_HISTORY_PATCH = "enable_history_patch";
+    private static final String KEY_ENABLE_STORAGE_PATCH = "enable_storage_patch";
+    private static final String KEY_ENABLE_UI_READY_OBSERVER = "enable_ui_ready_observer";
+    private static final String KEY_ENABLE_ACTION_OBSERVER = "enable_action_observer";
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
     private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
 
@@ -28,11 +35,31 @@ public class ClientConfigPlugin extends Plugin {
         return readConfig(context);
     }
 
-    public static JSObject saveConfig(Context context, String serverBase, String updateBase, String paperType, String layoutPreset) {
+    public static String getSavedInjectionMode(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        return normalizeInjectionMode(prefs.getString(KEY_INJECTION_MODE, "aggressive"));
+    }
+
+    public static JSObject saveConfig(
+        Context context,
+        String serverBase,
+        String updateBase,
+        String paperType,
+        String layoutPreset,
+        String injectionMode,
+        Boolean enableFloatingLogs,
+        Boolean enableNetworkHeaderPatch,
+        Boolean enableHistoryPatch,
+        Boolean enableStoragePatch,
+        Boolean enableUiReadyObserver,
+        Boolean enableActionObserver
+    ) {
         String normalizedServerBase = normalizeBaseUrl(serverBase, DEFAULT_SERVER_BASE);
         String normalizedUpdateBase = normalizeBaseUrl(updateBase, DEFAULT_UPDATE_BASE);
         String normalizedPaperType = normalizePaperType(paperType);
         String normalizedLayoutPreset = normalizeLayoutPreset(layoutPreset);
+        String normalizedInjectionMode = normalizeInjectionMode(injectionMode);
+        JSObject current = readConfig(context);
 
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit()
@@ -40,6 +67,13 @@ public class ClientConfigPlugin extends Plugin {
             .putString(KEY_UPDATE_BASE, normalizedUpdateBase)
             .putString(KEY_PAPER_TYPE, normalizedPaperType)
             .putString(KEY_LAYOUT_PRESET, normalizedLayoutPreset)
+            .putString(KEY_INJECTION_MODE, normalizedInjectionMode)
+            .putBoolean(KEY_ENABLE_FLOATING_LOGS, enableFloatingLogs != null ? enableFloatingLogs : current.optBoolean("enableFloatingLogs", true))
+            .putBoolean(KEY_ENABLE_NETWORK_HEADER_PATCH, enableNetworkHeaderPatch != null ? enableNetworkHeaderPatch : current.optBoolean("enableNetworkHeaderPatch", true))
+            .putBoolean(KEY_ENABLE_HISTORY_PATCH, enableHistoryPatch != null ? enableHistoryPatch : current.optBoolean("enableHistoryPatch", true))
+            .putBoolean(KEY_ENABLE_STORAGE_PATCH, enableStoragePatch != null ? enableStoragePatch : current.optBoolean("enableStoragePatch", true))
+            .putBoolean(KEY_ENABLE_UI_READY_OBSERVER, enableUiReadyObserver != null ? enableUiReadyObserver : current.optBoolean("enableUiReadyObserver", true))
+            .putBoolean(KEY_ENABLE_ACTION_OBSERVER, enableActionObserver != null ? enableActionObserver : current.optBoolean("enableActionObserver", true))
             .apply();
 
         return readConfig(context);
@@ -62,12 +96,20 @@ public class ClientConfigPlugin extends Plugin {
 
     @PluginMethod
     public void saveConfig(PluginCall call) {
+        JSObject current = readConfig(getContext());
         call.resolve(saveConfig(
             getContext(),
             call.getString("serverBase"),
             call.getString("updateBase"),
             call.getString("paperType"),
-            call.getString("layoutPreset")
+            call.getString("layoutPreset"),
+            call.getString("injectionMode"),
+            call.getBoolean("enableFloatingLogs", current.optBoolean("enableFloatingLogs", true)),
+            call.getBoolean("enableNetworkHeaderPatch", current.optBoolean("enableNetworkHeaderPatch", true)),
+            call.getBoolean("enableHistoryPatch", current.optBoolean("enableHistoryPatch", true)),
+            call.getBoolean("enableStoragePatch", current.optBoolean("enableStoragePatch", true)),
+            call.getBoolean("enableUiReadyObserver", current.optBoolean("enableUiReadyObserver", true)),
+            call.getBoolean("enableActionObserver", current.optBoolean("enableActionObserver", true))
         ));
     }
 
@@ -83,12 +125,26 @@ public class ClientConfigPlugin extends Plugin {
         String updateBase = normalizeBaseUrl(prefs.getString(KEY_UPDATE_BASE, ""), DEFAULT_UPDATE_BASE);
         String paperType = normalizePaperType(prefs.getString(KEY_PAPER_TYPE, "thermal"));
         String layoutPreset = normalizeLayoutPreset(prefs.getString(KEY_LAYOUT_PRESET, "standard"));
+        String injectionMode = normalizeInjectionMode(prefs.getString(KEY_INJECTION_MODE, "aggressive"));
+        boolean enableFloatingLogs = prefs.getBoolean(KEY_ENABLE_FLOATING_LOGS, true);
+        boolean enableNetworkHeaderPatch = prefs.getBoolean(KEY_ENABLE_NETWORK_HEADER_PATCH, true);
+        boolean enableHistoryPatch = prefs.getBoolean(KEY_ENABLE_HISTORY_PATCH, true);
+        boolean enableStoragePatch = prefs.getBoolean(KEY_ENABLE_STORAGE_PATCH, true);
+        boolean enableUiReadyObserver = prefs.getBoolean(KEY_ENABLE_UI_READY_OBSERVER, true);
+        boolean enableActionObserver = prefs.getBoolean(KEY_ENABLE_ACTION_OBSERVER, true);
 
         JSObject data = new JSObject();
         data.put("serverBase", serverBase);
         data.put("updateBase", updateBase);
         data.put("paperType", paperType);
         data.put("layoutPreset", layoutPreset);
+        data.put("injectionMode", injectionMode);
+        data.put("enableFloatingLogs", enableFloatingLogs);
+        data.put("enableNetworkHeaderPatch", enableNetworkHeaderPatch);
+        data.put("enableHistoryPatch", enableHistoryPatch);
+        data.put("enableStoragePatch", enableStoragePatch);
+        data.put("enableUiReadyObserver", enableUiReadyObserver);
+        data.put("enableActionObserver", enableActionObserver);
         return data;
     }
 
@@ -106,5 +162,13 @@ public class ClientConfigPlugin extends Plugin {
         String raw = value == null ? "" : value.trim().toLowerCase();
         if ("compact".equals(raw) || "large".equals(raw)) return raw;
         return "standard";
+    }
+
+    private static String normalizeInjectionMode(String value) {
+        String raw = value == null ? "" : value.trim().toLowerCase();
+        if ("loaded_only".equals(raw) || "commit_loaded".equals(raw) || "manual".equals(raw)) {
+            return raw;
+        }
+        return "aggressive";
     }
 }

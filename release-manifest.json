@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 17,
+  "currentVersionCode": 18,
   "releases": [
+    {
+      "versionCode": 18,
+      "versionName": "1.2.9",
+      "apkFileName": "kaihang-scanner-v1.2.9-18.apk",
+      "changelog": "客户端设置新增注入时机与注入能力开关，便于直接排查 WebView 注入链路对性能的影响",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.9 (18)",
+        "原生设置新增注入时机选项：激进、稳妥、轻量、手动",
+        "设置新增网页浮动日志、请求头补丁、路由监听、存储监听、页面就绪 observer、页面动作 observer 开关",
+        "客户端配置会持久化到本地，保存后重启即可切换注入策略，无需重新改包"
+      ]
+    },
     {
       "versionCode": 17,
       "versionName": "1.2.8",
