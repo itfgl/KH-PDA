@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 21,
+  "currentVersionCode": 22,
   "releases": [
+    {
+      "versionCode": 22,
+      "versionName": "1.2.13",
+      "apkFileName": "kaihang-scanner-v1.2.13-22.apk",
+      "changelog": "修复长内容一维码会明显变窄的问题，并统一按目标尺寸输出条码位图",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.13 (22)",
+        "一维码打印前新增白边裁剪与目标尺寸归一化，避免内容变长时整体看起来缩小",
+        "统一打印底层保留 rawBarcode 与 actualBarcode 诊断日志，便于继续核对条码尺寸",
+        "继续沿用统一的一维码、二维码、文本标签组版与打印出口"
+      ]
+    },
     {
       "versionCode": 21,
       "versionName": "1.2.12",

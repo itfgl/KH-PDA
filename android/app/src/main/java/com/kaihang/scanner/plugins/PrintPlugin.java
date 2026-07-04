@@ -79,6 +79,55 @@ public class PrintPlugin extends Plugin {
         return bitmap.getWidth() + "x" + bitmap.getHeight();
     }
 
+    private static boolean isDarkPixel(int color) {
+        int alpha = (color >>> 24) & 0xff;
+        if (alpha == 0) return false;
+        int red = (color >>> 16) & 0xff;
+        int green = (color >>> 8) & 0xff;
+        int blue = color & 0xff;
+        return ((red + green + blue) / 3) < 200;
+    }
+
+    private static Bitmap cropBitmapToContent(Bitmap bitmap) {
+        if (bitmap == null) return null;
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
+        int left = width;
+        int top = height;
+        int right = -1;
+        int bottom = -1;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                if (!isDarkPixel(bitmap.getPixel(x, y))) continue;
+                if (x < left) left = x;
+                if (x > right) right = x;
+                if (y < top) top = y;
+                if (y > bottom) bottom = y;
+            }
+        }
+        if (right < left || bottom < top) return bitmap;
+        int croppedWidth = right - left + 1;
+        int croppedHeight = bottom - top + 1;
+        if (croppedWidth <= 0 || croppedHeight <= 0) return bitmap;
+        if (croppedWidth == width && croppedHeight == height) return bitmap;
+        return Bitmap.createBitmap(bitmap, left, top, croppedWidth, croppedHeight);
+    }
+
+    private static Bitmap normalizeBarcodeBitmap(Bitmap barcode, int targetWidth, int targetHeight) {
+        if (barcode == null) return null;
+        Bitmap cropped = cropBitmapToContent(barcode);
+        if (cropped == null) return barcode;
+        if (cropped.getWidth() == targetWidth && cropped.getHeight() == targetHeight) {
+            return cropped;
+        }
+        return Bitmap.createScaledBitmap(
+            cropped,
+            Math.max(1, targetWidth),
+            Math.max(1, targetHeight),
+            false
+        );
+    }
+
     private static void emitPrintDiagnostic(String source, String detail) {
         String message = (source == null || source.trim().isEmpty() ? "unknown" : source)
             + " | "
@@ -198,9 +247,12 @@ public class PrintPlugin extends Plugin {
         GenericLabelLayout layout = getGenericLabelLayout(layoutPreset);
         Bitmap barcode = null;
         Bitmap qr = null;
+        String rawBarcodeSize = "null";
         if (!safeBarcodeValue.isEmpty()) {
             barcode = BarcodeCreater.createBarcode(context, safeBarcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
             if (barcode == null) throw new IllegalStateException("barcode bitmap null");
+            rawBarcodeSize = bitmapSize(barcode);
+            barcode = normalizeBarcodeBitmap(barcode, layout.barcodeWidth, layout.barcodeHeight);
         }
         if (!safeQrCodeValue.isEmpty()) {
             qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
@@ -239,6 +291,7 @@ public class PrintPlugin extends Plugin {
         String diagnostic =
             "layoutPreset=" + normalizeLayoutPreset(layoutPreset)
                 + ", requestBarcode=" + layout.barcodeWidth + "x" + layout.barcodeHeight
+                + ", rawBarcode=" + rawBarcodeSize
                 + ", actualBarcode=" + bitmapSize(barcode)
                 + ", barcodeLeft=" + barcodeLeft
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
