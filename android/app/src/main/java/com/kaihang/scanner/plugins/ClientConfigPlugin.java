@@ -18,11 +18,13 @@ public class ClientConfigPlugin extends Plugin {
     private static final String KEY_LAYOUT_PRESET = "layout_preset";
     private static final String KEY_INJECTION_MODE = "injection_mode";
     private static final String KEY_ENABLE_FLOATING_LOGS = "enable_floating_logs";
+    private static final String KEY_ENABLE_VERBOSE_LOGS = "enable_verbose_logs";
     private static final String KEY_ENABLE_NETWORK_HEADER_PATCH = "enable_network_header_patch";
     private static final String KEY_ENABLE_HISTORY_PATCH = "enable_history_patch";
     private static final String KEY_ENABLE_STORAGE_PATCH = "enable_storage_patch";
     private static final String KEY_ENABLE_UI_READY_OBSERVER = "enable_ui_ready_observer";
     private static final String KEY_ENABLE_ACTION_OBSERVER = "enable_action_observer";
+    private static final String KEY_ENABLE_RUNTIME_REUSE = "enable_runtime_reuse";
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
     private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
 
@@ -48,11 +50,13 @@ public class ClientConfigPlugin extends Plugin {
         String layoutPreset,
         String injectionMode,
         Boolean enableFloatingLogs,
+        Boolean enableVerboseLogs,
         Boolean enableNetworkHeaderPatch,
         Boolean enableHistoryPatch,
         Boolean enableStoragePatch,
         Boolean enableUiReadyObserver,
-        Boolean enableActionObserver
+        Boolean enableActionObserver,
+        Boolean enableRuntimeReuse
     ) {
         String normalizedServerBase = normalizeBaseUrl(serverBase, DEFAULT_SERVER_BASE);
         String normalizedUpdateBase = normalizeBaseUrl(updateBase, DEFAULT_UPDATE_BASE);
@@ -69,11 +73,13 @@ public class ClientConfigPlugin extends Plugin {
             .putString(KEY_LAYOUT_PRESET, normalizedLayoutPreset)
             .putString(KEY_INJECTION_MODE, normalizedInjectionMode)
             .putBoolean(KEY_ENABLE_FLOATING_LOGS, enableFloatingLogs != null ? enableFloatingLogs : current.optBoolean("enableFloatingLogs", true))
+            .putBoolean(KEY_ENABLE_VERBOSE_LOGS, enableVerboseLogs != null ? enableVerboseLogs : current.optBoolean("enableVerboseLogs", true))
             .putBoolean(KEY_ENABLE_NETWORK_HEADER_PATCH, enableNetworkHeaderPatch != null ? enableNetworkHeaderPatch : current.optBoolean("enableNetworkHeaderPatch", true))
             .putBoolean(KEY_ENABLE_HISTORY_PATCH, enableHistoryPatch != null ? enableHistoryPatch : current.optBoolean("enableHistoryPatch", true))
             .putBoolean(KEY_ENABLE_STORAGE_PATCH, enableStoragePatch != null ? enableStoragePatch : current.optBoolean("enableStoragePatch", true))
             .putBoolean(KEY_ENABLE_UI_READY_OBSERVER, enableUiReadyObserver != null ? enableUiReadyObserver : current.optBoolean("enableUiReadyObserver", true))
             .putBoolean(KEY_ENABLE_ACTION_OBSERVER, enableActionObserver != null ? enableActionObserver : current.optBoolean("enableActionObserver", true))
+            .putBoolean(KEY_ENABLE_RUNTIME_REUSE, enableRuntimeReuse != null ? enableRuntimeReuse : current.optBoolean("enableRuntimeReuse", true))
             .apply();
 
         return readConfig(context);
@@ -105,11 +111,13 @@ public class ClientConfigPlugin extends Plugin {
             call.getString("layoutPreset"),
             call.getString("injectionMode"),
             call.getBoolean("enableFloatingLogs", current.optBoolean("enableFloatingLogs", true)),
+            call.getBoolean("enableVerboseLogs", current.optBoolean("enableVerboseLogs", true)),
             call.getBoolean("enableNetworkHeaderPatch", current.optBoolean("enableNetworkHeaderPatch", true)),
             call.getBoolean("enableHistoryPatch", current.optBoolean("enableHistoryPatch", true)),
             call.getBoolean("enableStoragePatch", current.optBoolean("enableStoragePatch", true)),
             call.getBoolean("enableUiReadyObserver", current.optBoolean("enableUiReadyObserver", true)),
-            call.getBoolean("enableActionObserver", current.optBoolean("enableActionObserver", true))
+            call.getBoolean("enableActionObserver", current.optBoolean("enableActionObserver", true)),
+            call.getBoolean("enableRuntimeReuse", current.optBoolean("enableRuntimeReuse", true))
         ));
     }
 
@@ -127,11 +135,13 @@ public class ClientConfigPlugin extends Plugin {
         String layoutPreset = normalizeLayoutPreset(prefs.getString(KEY_LAYOUT_PRESET, "standard"));
         String injectionMode = normalizeInjectionMode(prefs.getString(KEY_INJECTION_MODE, "aggressive"));
         boolean enableFloatingLogs = prefs.getBoolean(KEY_ENABLE_FLOATING_LOGS, true);
+        boolean enableVerboseLogs = prefs.getBoolean(KEY_ENABLE_VERBOSE_LOGS, true);
         boolean enableNetworkHeaderPatch = prefs.getBoolean(KEY_ENABLE_NETWORK_HEADER_PATCH, true);
         boolean enableHistoryPatch = prefs.getBoolean(KEY_ENABLE_HISTORY_PATCH, true);
         boolean enableStoragePatch = prefs.getBoolean(KEY_ENABLE_STORAGE_PATCH, true);
         boolean enableUiReadyObserver = prefs.getBoolean(KEY_ENABLE_UI_READY_OBSERVER, true);
         boolean enableActionObserver = prefs.getBoolean(KEY_ENABLE_ACTION_OBSERVER, true);
+        boolean enableRuntimeReuse = prefs.getBoolean(KEY_ENABLE_RUNTIME_REUSE, true);
 
         JSObject data = new JSObject();
         data.put("serverBase", serverBase);
@@ -140,11 +150,13 @@ public class ClientConfigPlugin extends Plugin {
         data.put("layoutPreset", layoutPreset);
         data.put("injectionMode", injectionMode);
         data.put("enableFloatingLogs", enableFloatingLogs);
+        data.put("enableVerboseLogs", enableVerboseLogs);
         data.put("enableNetworkHeaderPatch", enableNetworkHeaderPatch);
         data.put("enableHistoryPatch", enableHistoryPatch);
         data.put("enableStoragePatch", enableStoragePatch);
         data.put("enableUiReadyObserver", enableUiReadyObserver);
         data.put("enableActionObserver", enableActionObserver);
+        data.put("enableRuntimeReuse", enableRuntimeReuse);
         return data;
     }
 

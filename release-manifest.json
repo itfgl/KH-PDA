@@ -1,6 +1,32 @@
 {
-  "currentVersionCode": 19,
+  "currentVersionCode": 21,
   "releases": [
+    {
+      "versionCode": 21,
+      "versionName": "1.2.12",
+      "apkFileName": "kaihang-scanner-v1.2.12-21.apk",
+      "changelog": "新增详细运行日志开关，支持压缩大量过程日志输出，便于现场排查卡顿",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.12 (21)",
+        "客户端设置新增详细运行日志开关，关闭后只保留 warn 和 err 等关键日志",
+        "网页侧运行日志现在可过滤初始化、observer、动作匹配等高频过程日志",
+        "原生侧控制台转发和部分注入链路日志也会跟随详细日志开关收敛"
+      ]
+    },
+    {
+      "versionCode": 20,
+      "versionName": "1.2.11",
+      "apkFileName": "kaihang-scanner-v1.2.11-20.apk",
+      "changelog": "新增同页 runtime 复用开关，减少重复整段注入，并补强稳妥模式初始化兜底",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.11 (20)",
+        "客户端设置新增同页复用 runtime 开关，命中已初始化 runtime 时只刷新页面动作，不重复整段注入",
+        "稳妥模式在 commit 阶段改为更早注入，并在页面长期未就绪时自动补一次强制初始化",
+        "保留旧按钮 class 选择器的宽松匹配兜底，降低页面按钮配置脆弱性"
+      ]
+    },
     {
       "versionCode": 19,
       "versionName": "1.2.10",
