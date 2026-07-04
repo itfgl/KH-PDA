@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 23,
+  "currentVersionCode": 24,
   "releases": [
+    {
+      "versionCode": 24,
+      "versionName": "1.2.15",
+      "apkFileName": "kaihang-scanner-v1.2.15-24.apk",
+      "changelog": "取消同源链接的全局强制 location.assign，继续收敛 WebView 内整页重载",
+      "releasedAt": "2026-07-04",
+      "notes": [
+        "Android 版本提升到 1.2.15 (24)",
+        "注入脚本不再劫持同源 a[href] 点击并强制改成整页 location.assign",
+        "同源 window.open/_self/_blank 也不再优先走强制整页跳转，尽量保留前端原生路由行为",
+        "外链和跨域 http/https 仍保持特殊接管逻辑，避免影响外部链接打开"
+      ]
+    },
     {
       "versionCode": 23,
       "versionName": "1.2.14",

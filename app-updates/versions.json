@@ -1,7 +1,14 @@
 {
-  "currentVersionCode": 23,
-  "currentVersionFile": "version-23.json",
+  "currentVersionCode": 24,
+  "currentVersionFile": "version-24.json",
   "releases": [
+    {
+      "versionCode": 24,
+      "versionName": "1.2.15",
+      "apkFileName": "kaihang-scanner-v1.2.15-24.apk",
+      "releasedAt": "2026-07-04",
+      "versionFile": "version-24.json"
+    },
     {
       "versionCode": 23,
       "versionName": "1.2.14",
