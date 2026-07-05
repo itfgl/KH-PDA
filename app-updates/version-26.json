@@ -1,0 +1,14 @@
+{
+  "versionCode": 26,
+  "versionName": "1.2.17",
+  "apkFileName": "kaihang-scanner-v1.2.17-26.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.17-26.apk",
+  "changelog": "客户端新增页面动作核对面板，并优化 Windows/Android 端诊断结果展示层级",
+  "releasedAt": "2026-07-06",
+  "notes": [
+    "Android 版本提升到 1.2.17 (26)",
+    "客户端设置新增“动作核对”和“复制结果”，可直接查看当前页动作命中、可用性和不匹配原因",
+    "移动端诊断结果改为卡片化摘要，优先展示当前页问题动作，再显示全局总数和状态汇总",
+    "Windows 端同步优化动作诊断展示层级，便于两端用同一口径排查 selector、字段取值和打印核对问题"
+  ]
+}
