@@ -1,0 +1,14 @@
+{
+  "versionCode": 29,
+  "versionName": "1.2.20",
+  "apkFileName": "kaihang-scanner-v1.2.20-29.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.20-29.apk",
+  "changelog": "补齐远程业务页客户端设置的原生配置保存桥，并增强网页运行时 JS 错误明细日志",
+  "releasedAt": "2026-07-06",
+  "notes": [
+    "Android 版本提升到 1.2.20 (29)",
+    "KaihangNativeBridge 新增读取配置、保存配置和重启能力，远程业务页里的客户端设置不再依赖 Capacitor 插件对象",
+    "客户端设置保存地址时可直接回落到原生桥，修复“原生配置插件不可用，无法保存本地地址”提示",
+    "网页运行时 JS 错误日志现在会补充 source、line、col、stack、页面路径和当前焦点等上下文，便于继续排查现场问题"
+  ]
+}

@@ -839,6 +839,44 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public String getClientConfig() {
+            return ClientConfigPlugin.getSavedConfig(MainActivity.this).toString();
+        }
+
+        @JavascriptInterface
+        public String saveClientConfig(String payloadJson) {
+            try {
+                org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
+                com.getcapacitor.JSObject current = ClientConfigPlugin.getSavedConfig(MainActivity.this);
+                com.getcapacitor.JSObject saved = ClientConfigPlugin.saveConfig(
+                    MainActivity.this,
+                    payload.optString("serverBase", null),
+                    payload.optString("updateBase", null),
+                    payload.optString("paperType", null),
+                    payload.optString("layoutPreset", null),
+                    payload.optString("injectionMode", null),
+                    payload.has("enableFloatingLogs") ? payload.optBoolean("enableFloatingLogs") : current.optBoolean("enableFloatingLogs", true),
+                    payload.has("enableVerboseLogs") ? payload.optBoolean("enableVerboseLogs") : current.optBoolean("enableVerboseLogs", true),
+                    payload.has("enableNetworkHeaderPatch") ? payload.optBoolean("enableNetworkHeaderPatch") : current.optBoolean("enableNetworkHeaderPatch", true),
+                    payload.has("enableHistoryPatch") ? payload.optBoolean("enableHistoryPatch") : current.optBoolean("enableHistoryPatch", true),
+                    payload.has("enableStoragePatch") ? payload.optBoolean("enableStoragePatch") : current.optBoolean("enableStoragePatch", true),
+                    payload.has("enableUiReadyObserver") ? payload.optBoolean("enableUiReadyObserver") : current.optBoolean("enableUiReadyObserver", true),
+                    payload.has("enableActionObserver") ? payload.optBoolean("enableActionObserver") : current.optBoolean("enableActionObserver", true),
+                    payload.has("enableRuntimeReuse") ? payload.optBoolean("enableRuntimeReuse") : current.optBoolean("enableRuntimeReuse", true)
+                );
+                return saved.toString();
+            } catch (Exception e) {
+                appendNativeLog("保存客户端配置失败: " + e.getMessage());
+                return null;
+            }
+        }
+
+        @JavascriptInterface
+        public void restartApp() {
+            runOnUiThread(() -> ClientConfigPlugin.restartApp(MainActivity.this));
+        }
+
+        @JavascriptInterface
         public void setScanActionEnabled(boolean enabled) {
             runOnUiThread(() -> setNativeScanActionVisible(enabled));
         }
