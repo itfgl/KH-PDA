@@ -1,4 +1,4 @@
-var khRuntimeValues=window.__khRuntimeValues||{};
+(()=>{var khRuntimeValues=window.__khRuntimeValues||{};
 if(kh.isFeatureEnabled('enableNetworkHeaderPatch',true)){patchFetch();patchXhr();}else{kh.pushLog('网络请求头 patch 已关闭','warn');}
 if(khRuntimeValues.shouldBootstrap){
 try{
