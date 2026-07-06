@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / "android-entry" / "android" / "app" / "src" / "main" / "java" / "com" / "kaihang" / "scanner" / "MainActivity.java"
+RUNTIME_DIR = ROOT / "android-entry" / "android" / "app" / "src" / "main" / "assets" / "runtime"
+SOURCES = [
+    RUNTIME_DIR / "client-runtime.core.js",
+    RUNTIME_DIR / "client-runtime.bootstrap.js",
+]
 TARGET = ROOT / "android-entry" / "ui" / "settings-diagnostic-harness.html"
 
 
@@ -405,11 +408,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 def build_runtime_script() -> str:
-    text = SOURCE.read_text(encoding="utf-8")
-    parts = [
-        json.loads(f'"{match}"')
-        for match in re.findall(r'script\.append\("((?:[^"\\]|\\.)*)"\);', text)
-    ]
+    runtime_values = {
+        "buildTime": "",
+        "versionName": "",
+        "versionCode": 0,
+        "pageActionsApi": "/api/test/page-actions",
+        "defaultServerBase": "",
+        "defaultUpdateBase": "",
+        "shouldBootstrap": False,
+        "khToken": "",
+        "khAuth": "basic",
+        "khRole": "",
+        "khApp": "",
+        "khPaper": "",
+        "khLayout": "",
+        "redirect": "",
+        "nocobaseStoragePrefix": "NOCOBASE_",
+        "defaultStorageAppName": "main",
+    }
+    parts: list[str] = [f"(function(){{window.__khRuntimeValues={json.dumps(runtime_values, ensure_ascii=False)};}})();"]
+    for source in SOURCES:
+        if not source.exists():
+            continue
+        parts.append(source.read_text(encoding="utf-8"))
     return "\n".join(parts)
 
 

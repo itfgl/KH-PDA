@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 26,
+  "currentVersionCode": 27,
   "releases": [
+    {
+      "versionCode": 27,
+      "versionName": "1.2.18",
+      "apkFileName": "kaihang-scanner-v1.2.18-27.apk",
+      "changelog": "修复客户端设置动作核对入口，并拆分原生与运行时脚本结构，便于后续继续排查页面动作问题",
+      "releasedAt": "2026-07-06",
+      "notes": [
+        "Android 版本提升到 1.2.18 (27)",
+        "客户端设置恢复“动作核对”和“复制结果”入口，可直接查看当前页动作命中、可用性和失败原因",
+        "页面动作诊断现在会补充 selector 未挂载、字段取值结果等上下文，便于核对为什么当前页不能执行",
+        "MainActivity 的设置弹窗、更新逻辑和运行时脚本已拆分到独立文件，后续继续维护会更稳一些"
+      ]
+    },
     {
       "versionCode": 26,
       "versionName": "1.2.17",

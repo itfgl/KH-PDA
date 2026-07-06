@@ -608,9 +608,10 @@ public class MainActivity extends BridgeActivity {
         android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
         menu.getMenu().add(0, 1, 0, "重新初始化");
         menu.getMenu().add(0, 2, 1, "扫码");
-        menu.getMenu().add(0, 3, 2, "设置");
-        menu.getMenu().add(0, 4, 3, "检查更新");
-        menu.getMenu().add(0, 5, 4, "日志");
+        menu.getMenu().add(0, 3, 2, "客户端设置");
+        menu.getMenu().add(0, 4, 3, "原生配置");
+        menu.getMenu().add(0, 5, 4, "检查更新");
+        menu.getMenu().add(0, 6, 5, "日志");
         menu.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
             if (id == 1) {
@@ -625,16 +626,21 @@ public class MainActivity extends BridgeActivity {
                 return true;
             }
             if (id == 3) {
-                appendNativeLog("打开原生设置");
-                showNativeSettingsDialog();
+                appendNativeLog("打开客户端设置面板");
+                openClientRuntimeSettings();
                 return true;
             }
             if (id == 4) {
+                appendNativeLog("打开原生配置");
+                showNativeSettingsDialog();
+                return true;
+            }
+            if (id == 5) {
                 appendNativeLog("触发原生更新检查");
                 showNativeUpdateDialog();
                 return true;
             }
-            if (id == 5) {
+            if (id == 6) {
                 appendNativeLog("打开运行日志");
                 showNativeLogDialog();
                 return true;
@@ -675,6 +681,25 @@ public class MainActivity extends BridgeActivity {
                 webView.postDelayed(() -> webView.evaluateJavascript(command, null), 180);
             }
         ));
+    }
+
+    private void openClientRuntimeSettings() {
+        if (bridge == null || bridge.getWebView() == null) {
+            appendNativeLog("打开客户端设置失败: WebView 不可用，回退到原生配置");
+            showNativeSettingsDialog();
+            return;
+        }
+        setNativePageReadyState("loading", "open settings");
+        runClientRuntimeCommand(
+            "(function(){"
+                + "if(!window.__khClientRuntime||!window.__khClientRuntime.openSettingsPanel){"
+                + "window.log&&window.log('客户端设置面板未就绪，回退原生配置','warn');"
+                + "return false;"
+                + "}"
+                + "window.__khClientRuntime.openSettingsPanel();"
+                + "return true;"
+            + "})();"
+        );
     }
 
     private void emitPrintStatusToPage(String value, String flag, boolean isConnection) {
@@ -767,7 +792,7 @@ public class MainActivity extends BridgeActivity {
 
         @JavascriptInterface
         public void openSettings() {
-            runOnUiThread(() -> showNativeSettingsDialog());
+            runOnUiThread(() -> openClientRuntimeSettings());
         }
 
         @JavascriptInterface
@@ -871,389 +896,56 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void showNativeSettingsDialog() {
-        com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
-        android.widget.LinearLayout root = new android.widget.LinearLayout(this);
-        root.setOrientation(android.widget.LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(12), dp(20), dp(4));
-
-        android.widget.EditText serverInput = createUrlInput(config.optString("serverBase", DEFAULT_SERVER_BASE));
-        android.widget.EditText updateInput = createUrlInput(config.optString("updateBase", DEFAULT_UPDATE_BASE));
-        android.widget.Spinner paperSpinner = createSpinner(new String[]{"普通热敏纸", "黑标标签纸"});
-        android.widget.Spinner layoutSpinner = createSpinner(new String[]{"标准排版", "紧凑排版", "大字排版"});
-        android.widget.Spinner injectionModeSpinner = createSpinner(new String[]{"激进模式（started + commit + loaded）", "稳妥模式（commit + loaded）", "轻量模式（仅 loaded）", "手动模式（只手动初始化）"});
-        androidx.appcompat.widget.SwitchCompat floatingLogsSwitch = createSwitchRow(root, "网页浮动日志", "控制网页侧日志面板、日志持久化和全局错误日志");
-        androidx.appcompat.widget.SwitchCompat verboseLogsSwitch = createSwitchRow(root, "详细运行日志", "控制是否记录大量初始化、observer、动作匹配和控制台过程日志");
-        androidx.appcompat.widget.SwitchCompat networkPatchSwitch = createSwitchRow(root, "自动补 X-Client-Type", "控制是否 patch fetch / XHR 并自动补客户端请求头");
-        androidx.appcompat.widget.SwitchCompat historyPatchSwitch = createSwitchRow(root, "路由监听", "控制是否 patch history.pushState / replaceState");
-        androidx.appcompat.widget.SwitchCompat storagePatchSwitch = createSwitchRow(root, "存储监听", "控制是否 patch localStorage / sessionStorage 变更");
-        androidx.appcompat.widget.SwitchCompat uiReadyObserverSwitch = createSwitchRow(root, "页面就绪 observer", "控制网页 ready 的 DOM 兜底检测");
-        androidx.appcompat.widget.SwitchCompat actionObserverSwitch = createSwitchRow(root, "页面动作 observer", "控制 DOM 变化时是否自动刷新页面动作");
-        androidx.appcompat.widget.SwitchCompat runtimeReuseSwitch = createSwitchRow(root, "同页复用 runtime", "控制检测到已初始化 runtime 后是否只刷新页面动作，不再重复整段注入");
-        paperSpinner.setSelection("black_mark".equals(config.optString("paperType", "thermal")) ? 1 : 0);
-        String layoutPreset = config.optString("layoutPreset", "standard");
-        layoutSpinner.setSelection("compact".equals(layoutPreset) ? 1 : ("large".equals(layoutPreset) ? 2 : 0));
-        injectionModeSpinner.setSelection(getInjectionModeSelection(config.optString("injectionMode", "aggressive")));
-        floatingLogsSwitch.setChecked(config.optBoolean("enableFloatingLogs", true));
-        verboseLogsSwitch.setChecked(config.optBoolean("enableVerboseLogs", true));
-        networkPatchSwitch.setChecked(config.optBoolean("enableNetworkHeaderPatch", true));
-        historyPatchSwitch.setChecked(config.optBoolean("enableHistoryPatch", true));
-        storagePatchSwitch.setChecked(config.optBoolean("enableStoragePatch", true));
-        uiReadyObserverSwitch.setChecked(config.optBoolean("enableUiReadyObserver", true));
-        actionObserverSwitch.setChecked(config.optBoolean("enableActionObserver", true));
-        runtimeReuseSwitch.setChecked(config.optBoolean("enableRuntimeReuse", true));
-
-        root.addView(createSectionLabel("服务地址"));
-        root.addView(serverInput);
-        root.addView(createSectionLabel("更新地址"));
-        root.addView(updateInput);
-        root.addView(createSectionLabel("纸张类型"));
-        root.addView(paperSpinner);
-        root.addView(createSectionLabel("排版预设"));
-        root.addView(layoutSpinner);
-        root.addView(createSectionLabel("注入时机"));
-        root.addView(injectionModeSpinner);
-        root.addView(createSectionLabel("性能开关"));
-
-        android.widget.TextView note = new android.widget.TextView(this);
-        note.setText("保存后会写入 Android 本地配置，并重启后直接加载新的远程地址。性能问题排查时可以单独关闭某个注入能力，不用重新改包。");
-        note.setTextSize(13);
-        note.setTextColor(android.graphics.Color.parseColor("#667085"));
-        note.setPadding(0, dp(14), 0, 0);
-        root.addView(note);
-
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("客户端设置")
-            .setView(wrapInDialogScrollView(root))
-            .setPositiveButton("保存并重启", null)
-            .setNegativeButton("关闭", null)
-            .create();
-        dialog.setOnShowListener(d -> dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            String serverBase = normalizeBaseUrl(serverInput.getText().toString(), DEFAULT_SERVER_BASE);
-            String updateBase = normalizeBaseUrl(updateInput.getText().toString(), DEFAULT_UPDATE_BASE);
-            if (serverBase.isEmpty()) {
-                toast("请输入服务地址");
-                return;
+        NativeSettingsDialog.show(this, ClientConfigPlugin.getSavedConfig(this), DEFAULT_SERVER_BASE, DEFAULT_UPDATE_BASE, new NativeSettingsDialog.Callbacks() {
+            @Override
+            public String normalizeBaseUrl(String value, String fallback) {
+                return MainActivity.this.normalizeBaseUrl(value, fallback);
             }
-            if (updateBase.isEmpty()) {
-                toast("请输入更新地址");
-                return;
+
+            @Override
+            public void toast(String message) {
+                MainActivity.this.toast(message);
             }
-            String paperType = paperSpinner.getSelectedItemPosition() == 1 ? "black_mark" : "thermal";
-            String layout = layoutSpinner.getSelectedItemPosition() == 1 ? "compact" : (layoutSpinner.getSelectedItemPosition() == 2 ? "large" : "standard");
-            String injectionMode = getInjectionModeValue(injectionModeSpinner.getSelectedItemPosition());
-            boolean enableFloatingLogs = floatingLogsSwitch.isChecked();
-            boolean enableVerboseLogs = verboseLogsSwitch.isChecked();
-            boolean enableNetworkHeaderPatch = networkPatchSwitch.isChecked();
-            boolean enableHistoryPatch = historyPatchSwitch.isChecked();
-            boolean enableStoragePatch = storagePatchSwitch.isChecked();
-            boolean enableUiReadyObserver = uiReadyObserverSwitch.isChecked();
-            boolean enableActionObserver = actionObserverSwitch.isChecked();
-            boolean enableRuntimeReuse = runtimeReuseSwitch.isChecked();
-            ClientConfigPlugin.saveConfig(
-                this,
-                serverBase,
-                updateBase,
-                paperType,
-                layout,
-                injectionMode,
-                enableFloatingLogs,
-                enableVerboseLogs,
-                enableNetworkHeaderPatch,
-                enableHistoryPatch,
-                enableStoragePatch,
-                enableUiReadyObserver,
-                enableActionObserver,
-                enableRuntimeReuse
-            );
-            appendNativeLog(buildSettingsSaveSummary(
-                serverBase,
-                updateBase,
-                paperType,
-                layout,
-                injectionMode,
-                enableFloatingLogs,
-                enableVerboseLogs,
-                enableNetworkHeaderPatch,
-                enableHistoryPatch,
-                enableStoragePatch,
-                enableUiReadyObserver,
-                enableActionObserver,
-                enableRuntimeReuse
-            ));
-            toast("配置已保存，应用即将重启");
-            dialog.dismiss();
-            nativeControlButton.postDelayed(() -> ClientConfigPlugin.restartApp(this), 300);
-        }));
-        dialog.show();
-    }
 
-    private android.widget.TextView createSectionLabel(String text) {
-        android.widget.TextView label = new android.widget.TextView(this);
-        label.setText(text);
-        label.setTextSize(14);
-        label.setTextColor(android.graphics.Color.parseColor("#344054"));
-        label.setPadding(0, dp(12), 0, dp(6));
-        return label;
-    }
-
-    private android.widget.EditText createUrlInput(String value) {
-        android.widget.EditText input = new android.widget.EditText(this);
-        input.setText(value);
-        input.setSingleLine(true);
-        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
-        input.setPadding(dp(12), dp(12), dp(12), dp(12));
-        return input;
-    }
-
-    private android.widget.Spinner createSpinner(String[] items) {
-        android.widget.Spinner spinner = new android.widget.Spinner(this);
-        android.widget.ArrayAdapter<String> adapter = new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_item, items);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinner.setAdapter(adapter);
-        return spinner;
-    }
-
-    private android.widget.ScrollView wrapInDialogScrollView(android.view.View content) {
-        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
-        scrollView.setFillViewport(true);
-        scrollView.setScrollbarFadingEnabled(false);
-        scrollView.addView(content, new android.widget.ScrollView.LayoutParams(
-            android.widget.ScrollView.LayoutParams.MATCH_PARENT,
-            android.widget.ScrollView.LayoutParams.WRAP_CONTENT
-        ));
-        return scrollView;
-    }
-
-    private androidx.appcompat.widget.SwitchCompat createSwitchRow(android.widget.LinearLayout root, String title, String summary) {
-        android.widget.LinearLayout row = new android.widget.LinearLayout(this);
-        row.setOrientation(android.widget.LinearLayout.HORIZONTAL);
-        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(6), 0, dp(6));
-
-        android.widget.LinearLayout textWrap = new android.widget.LinearLayout(this);
-        textWrap.setOrientation(android.widget.LinearLayout.VERTICAL);
-        android.widget.LinearLayout.LayoutParams textParams = new android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        textWrap.setLayoutParams(textParams);
-
-        android.widget.TextView titleView = new android.widget.TextView(this);
-        titleView.setText(title);
-        titleView.setTextSize(14);
-        titleView.setTextColor(android.graphics.Color.parseColor("#101828"));
-
-        android.widget.TextView summaryView = new android.widget.TextView(this);
-        summaryView.setText(summary);
-        summaryView.setTextSize(12);
-        summaryView.setTextColor(android.graphics.Color.parseColor("#667085"));
-        summaryView.setPadding(0, dp(4), dp(12), 0);
-
-        textWrap.addView(titleView);
-        textWrap.addView(summaryView);
-
-        androidx.appcompat.widget.SwitchCompat toggle = new androidx.appcompat.widget.SwitchCompat(this);
-        toggle.setChecked(true);
-
-        row.addView(textWrap);
-        row.addView(toggle);
-        root.addView(row);
-        return toggle;
-    }
-
-    private int getInjectionModeSelection(String mode) {
-        String normalized = safe(mode).trim().toLowerCase(java.util.Locale.ROOT);
-        if ("commit_loaded".equals(normalized)) {
-            return 1;
-        }
-        if ("loaded_only".equals(normalized)) {
-            return 2;
-        }
-        if ("manual".equals(normalized)) {
-            return 3;
-        }
-        return 0;
-    }
-
-    private String getInjectionModeValue(int selection) {
-        if (selection == 1) {
-            return "commit_loaded";
-        }
-        if (selection == 2) {
-            return "loaded_only";
-        }
-        if (selection == 3) {
-            return "manual";
-        }
-        return "aggressive";
-    }
-
-    private String buildSettingsSaveSummary(
-        String serverBase,
-        String updateBase,
-        String paperType,
-        String layout,
-        String injectionMode,
-        boolean enableFloatingLogs,
-        boolean enableVerboseLogs,
-        boolean enableNetworkHeaderPatch,
-        boolean enableHistoryPatch,
-        boolean enableStoragePatch,
-        boolean enableUiReadyObserver,
-        boolean enableActionObserver,
-        boolean enableRuntimeReuse
-    ) {
-        return "已保存原生设置: serverBase=" + serverBase
-            + ", updateBase=" + updateBase
-            + ", paperType=" + paperType
-            + ", layout=" + layout
-            + ", injectionMode=" + injectionMode
-            + ", floatingLogs=" + enableFloatingLogs
-            + ", verboseLogs=" + enableVerboseLogs
-            + ", headerPatch=" + enableNetworkHeaderPatch
-            + ", historyPatch=" + enableHistoryPatch
-            + ", storagePatch=" + enableStoragePatch
-            + ", uiReadyObserver=" + enableUiReadyObserver
-            + ", actionObserver=" + enableActionObserver
-            + ", runtimeReuse=" + enableRuntimeReuse;
+            @Override
+            public void onSave(NativeSettingsDialog.SettingsValues values) {
+                ClientConfigPlugin.saveConfig(
+                    MainActivity.this,
+                    values.serverBase,
+                    values.updateBase,
+                    values.paperType,
+                    values.layout,
+                    values.injectionMode,
+                    values.enableFloatingLogs,
+                    values.enableVerboseLogs,
+                    values.enableNetworkHeaderPatch,
+                    values.enableHistoryPatch,
+                    values.enableStoragePatch,
+                    values.enableUiReadyObserver,
+                    values.enableActionObserver,
+                    values.enableRuntimeReuse
+                );
+                appendNativeLog(values.buildSaveSummary());
+                toast("配置已保存，应用即将重启");
+                nativeControlButton.postDelayed(() -> ClientConfigPlugin.restartApp(MainActivity.this), 300);
+            }
+        });
     }
 
     private void showNativeUpdateDialog() {
-        androidx.appcompat.app.AlertDialog progressDialog = new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("检查更新")
-            .setMessage("正在检查更新...")
-            .setCancelable(false)
-            .create();
-        progressDialog.show();
-        new Thread(() -> {
-            try {
-                com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
-                String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
-                org.json.JSONObject serverInfo = fetchUpdateInfo(updateBase);
-                long localVersionCode = getLocalVersionCode();
-                String localVersionName = getLocalVersionName();
-                long remoteVersionCode = serverInfo.optLong("versionCode", 0);
-                String remoteVersionName = serverInfo.optString("versionName", "");
-                String changelog = serverInfo.optString("changelog", "");
-                String apkUrl = resolveAbsoluteUrl(updateBase, serverInfo.optString("apkUrl", ""));
-                runOnUiThread(() -> {
-                    progressDialog.dismiss();
-                    if (remoteVersionCode > localVersionCode && !apkUrl.isEmpty()) {
-                        StringBuilder message = new StringBuilder();
-                        message.append("发现新版本 ").append(remoteVersionName).append(" (").append(remoteVersionCode).append(")\n");
-                        message.append("当前版本 ").append(localVersionName).append(" (").append(localVersionCode).append(")");
-                        if (!changelog.isEmpty()) {
-                            message.append("\n\n更新说明:\n").append(changelog);
-                        }
-                        new androidx.appcompat.app.AlertDialog.Builder(this)
-                            .setTitle("发现新版本")
-                            .setMessage(message.toString())
-                            .setPositiveButton("下载更新", (dialog, which) -> {
-                                appendNativeLog("开始下载更新: " + apkUrl);
-                                downloadApkWithSystemManager(apkUrl);
-                            })
-                            .setNegativeButton("取消", null)
-                            .show();
-                    } else {
-                        appendNativeLog("当前已是最新版本: " + localVersionName + " (" + localVersionCode + ")");
-                        new androidx.appcompat.app.AlertDialog.Builder(this)
-                            .setTitle("检查更新")
-                            .setMessage("当前已是最新版本\n版本: " + localVersionName + " (" + localVersionCode + ")")
-                            .setPositiveButton("知道了", null)
-                            .show();
-                    }
-                });
-            } catch (Exception e) {
-                appendNativeLog("检查更新失败: " + e.getMessage());
-                runOnUiThread(() -> {
-                    progressDialog.dismiss();
-                    new androidx.appcompat.app.AlertDialog.Builder(this)
-                        .setTitle("检查更新失败")
-                        .setMessage(String.valueOf(e.getMessage()))
-                        .setPositiveButton("知道了", null)
-                        .show();
-                });
+        com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
+        String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
+        NativeUpdateHelper.showUpdateDialog(this, updateBase, new NativeUpdateHelper.Callbacks() {
+            @Override
+            public void appendLog(String message) {
+                MainActivity.this.appendNativeLog(message);
             }
-        }).start();
-    }
 
-    private void downloadApkWithSystemManager(String url) {
-        try {
-            android.app.DownloadManager.Request request = new android.app.DownloadManager.Request(android.net.Uri.parse(url));
-            request.setTitle("凯航扫码 更新");
-            request.setDescription("正在下载新版本...");
-            request.setMimeType("application/vnd.android.package-archive");
-            request.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, "kaihang_update.apk");
-            request.setAllowedNetworkTypes(android.app.DownloadManager.Request.NETWORK_WIFI | android.app.DownloadManager.Request.NETWORK_MOBILE);
-            android.app.DownloadManager manager = (android.app.DownloadManager) getSystemService(android.content.Context.DOWNLOAD_SERVICE);
-            if (manager == null) {
-                throw new IllegalStateException("DownloadManager unavailable");
+            @Override
+            public void toast(String message) {
+                MainActivity.this.toast(message);
             }
-            manager.enqueue(request);
-            toast("已开始下载更新，请查看系统通知");
-        } catch (Exception e) {
-            appendNativeLog("启动下载失败: " + e.getMessage());
-            toast("启动下载失败: " + e.getMessage());
-        }
-    }
-
-    private org.json.JSONObject fetchUpdateInfo(String updateBase) throws Exception {
-        java.util.ArrayList<String> attemptedUrls = new java.util.ArrayList<>();
-
-        String indexUrl = resolveAbsoluteUrl(updateBase, "/app-updates/versions.json");
-        attemptedUrls.add(indexUrl);
-        try {
-            org.json.JSONObject indexInfo = fetchJsonObject(indexUrl);
-            String currentVersionFile = indexInfo.optString("currentVersionFile", "").trim();
-            if (currentVersionFile.isEmpty()) {
-                long currentVersionCode = indexInfo.optLong("currentVersionCode", 0);
-                if (currentVersionCode > 0) {
-                    currentVersionFile = "version-" + currentVersionCode + ".json";
-                }
-            }
-            if (!currentVersionFile.isEmpty()) {
-                String detailUrl = resolveAbsoluteUrl(updateBase, "/app-updates/" + currentVersionFile);
-                attemptedUrls.add(detailUrl);
-                org.json.JSONObject detailInfo = fetchJsonObject(detailUrl);
-                if (!detailInfo.has("apkUrl") && detailInfo.has("apkFileName")) {
-                    detailInfo.put("apkUrl", "/app-updates/" + detailInfo.optString("apkFileName", ""));
-                }
-                return detailInfo;
-            }
-        } catch (Exception ignored) {}
-
-        String staticVersionUrl = resolveAbsoluteUrl(updateBase, "/version.json");
-        attemptedUrls.add(staticVersionUrl);
-        try {
-            return fetchJsonObject(staticVersionUrl);
-        } catch (Exception ignored) {}
-
-        String apiVersionUrl = resolveAbsoluteUrl(updateBase, "/api/app/version");
-        attemptedUrls.add(apiVersionUrl);
-        try {
-            return fetchJsonObject(apiVersionUrl);
-        } catch (Exception ignored) {}
-
-        throw new java.io.IOException("无法获取最新版本信息，已尝试: " + android.text.TextUtils.join(", ", attemptedUrls));
-    }
-
-    private org.json.JSONObject fetchJsonObject(String url) throws Exception {
-        java.net.URL requestUrl = new java.net.URL(url);
-        java.net.HttpURLConnection connection = (java.net.HttpURLConnection) requestUrl.openConnection();
-        connection.setRequestMethod("GET");
-        connection.setConnectTimeout(8000);
-        connection.setReadTimeout(8000);
-        connection.setRequestProperty("X-Client-Type", "capacitor");
-        int status = connection.getResponseCode();
-        if (status < 200 || status >= 300) {
-            throw new java.io.IOException("HTTP " + status + " @ " + url);
-        }
-        String body;
-        try (java.io.InputStream inputStream = connection.getInputStream();
-             java.util.Scanner scanner = new java.util.Scanner(inputStream, "UTF-8").useDelimiter("\\A")) {
-            body = scanner.hasNext() ? scanner.next() : "{}";
-        } finally {
-            connection.disconnect();
-        }
-        return new org.json.JSONObject(body);
+        });
     }
 
     private void showNativeLogDialog() {
@@ -1341,206 +1033,23 @@ public class MainActivity extends BridgeActivity {
         return raw.replaceAll("/+$", "");
     }
 
-    private String resolveAbsoluteUrl(String baseUrl, String path) {
-        try {
-            return new java.net.URL(new java.net.URL(baseUrl + "/"), path).toString();
-        } catch (Exception ignored) {
-            return "";
-        }
-    }
-
-    private long getLocalVersionCode() throws Exception {
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-            return getPackageManager().getPackageInfo(getPackageName(), 0).getLongVersionCode();
-        }
-        return getPackageManager().getPackageInfo(getPackageName(), 0).versionCode;
-    }
-
-    private String getLocalVersionName() throws Exception {
-        return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
-    }
-
     private void toast(String message) {
         android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
     }
 
     private String buildClientRuntimeScript(String currentUrl) {
-        Uri uri = null;
-        try {
-            uri = Uri.parse(currentUrl == null ? "" : currentUrl);
-        } catch (Exception ignored) {}
-
-        String khToken = uri != null ? safe(uri.getQueryParameter("kh_token")) : "";
-        String khAuth = uri != null ? safe(uri.getQueryParameter("kh_auth")) : "";
-        String khRole = uri != null ? safe(uri.getQueryParameter("kh_role")) : "";
-        String khApp = uri != null ? safe(uri.getQueryParameter("kh_app")) : DEFAULT_STORAGE_APP_NAME;
-        String khPaper = uri != null ? safe(uri.getQueryParameter("kh_paper")) : "";
-        String khLayout = uri != null ? safe(uri.getQueryParameter("kh_layout")) : "";
-        String redirect = uri != null ? safe(uri.getQueryParameter("redirect")) : "";
-        boolean shouldBootstrap = uri != null
-            && !khToken.isEmpty()
-            && !redirect.isEmpty();
-
-        StringBuilder script = new StringBuilder();
-        script.append("(function(){");
-        script.append("var h='X-Client-Type',v='capacitor';");
-        script.append("var kh=window.__khClientRuntime||(window.__khClientRuntime={});");
-        script.append("kh.bootState=kh.bootState||'idle';kh.bootInstalled=!!kh.bootInstalled;kh.pageApplyState=kh.pageApplyState||'idle';kh.pageApplySignature=kh.pageApplySignature||'';kh.actionCatalogVersion=kh.actionCatalogVersion||0;kh.uiReadySignature=kh.uiReadySignature||'';kh._webReadyNotified=!!kh._webReadyNotified;kh._readyFallbackTimer=kh._readyFallbackTimer||null;");
-        script.append("window.BUILD_TIME=").append(js(BuildConfig.BUILD_TIME)).append(";");
-        script.append("window.APP_VERSION_NAME=").append(js(BuildConfig.VERSION_NAME)).append(";");
-        script.append("window.APP_VERSION_CODE=").append(BuildConfig.VERSION_CODE).append(";");
-        script.append("kh.pageActionsApi=").append(js(DEFAULT_PAGE_ACTIONS_API_PATH)).append(";");
-        script.append("kh.defaultServerBase=").append(js(DEFAULT_SERVER_BASE)).append(";");
-        script.append("kh.defaultUpdateBase=").append(js(DEFAULT_UPDATE_BASE)).append(";");
-        script.append("kh.paperTypeStorageKey='NOCOBASE_PAPER_TYPE';");
-        script.append("kh.layoutPresetStorageKey='NOCOBASE_LAYOUT_PRESET';");
-        script.append("kh.logStorageKey='KH_FLOATING_LOGS';");
-        script.append("kh.getNativeBridge=function(){return window.KaihangNativeBridge||null;};");
-        script.append("kh.reportPageReadyState=function(state,detail){var bridge=kh.getNativeBridge();if(bridge&&bridge.reportPageReadyState){try{bridge.reportPageReadyState(String(state||'loading'),String(detail||''));}catch(e){}}};");
-        script.append("kh.setPageApplyState=function(state,detail){kh.pageApplyState=String(state||'idle');kh.reportPageReadyState(kh.pageApplyState,detail||'');};");
-        script.append("kh.notifyWebReady=function(detail,source,forceRefresh){var tag=String(source||'web');var reason=String(detail||'ready');kh._webReadyNotified=true;kh._uiReadyObserved=true;if(kh._readyFallbackTimer){clearTimeout(kh._readyFallbackTimer);kh._readyFallbackTimer=null;}if(kh._uiReadyObserver&&kh._uiReadyObserver.disconnect){try{kh._uiReadyObserver.disconnect();}catch(e){}}kh._uiReadyObserver=null;kh.uiReadySignature=['web-ready',window.location.pathname+window.location.search+window.location.hash,tag,reason].join('@@');kh.pushLog('网页主动上报 ready: source='+tag+', detail='+reason,'ok');kh.setPageApplyState('ready',tag+': '+reason);if(!kh._uiReadyRefreshQueued){kh._uiReadyRefreshQueued=true;setTimeout(function(){kh._uiReadyRefreshQueued=false;kh.refreshCurrentPage(forceRefresh!==false).catch(function(){return null;});},30);}return true;};");
-        script.append("window.KaihangAppReady=window.KaihangAppReady||{ready:function(detail){return kh.notifyWebReady(detail,'KaihangAppReady.ready',true);},refresh:function(force){return kh.refreshCurrentPage(force!==false);},loading:function(detail){kh.setPageApplyState('loading',String(detail||'web loading'));return true;},log:function(message,type){kh.pushLog(String(message||''),type||'info');return true;}};");
-        script.append("kh.ensureDeviceClient=function(){if(window.DeviceClient)return window.DeviceClient;var bridge=kh.getNativeBridge();window.DeviceClient={scan:function(){return bridge&&bridge.startScan?Promise.resolve(bridge.startScan()):kh.startGlobalScan();},stopScan:function(){return bridge&&bridge.stopScan?Promise.resolve(bridge.stopScan()):Promise.resolve(false);},openSettings:function(){if(bridge&&bridge.openSettings){bridge.openSettings();return Promise.resolve(true);}return Promise.resolve(false);},checkUpdate:function(){if(bridge&&bridge.checkUpdate){bridge.checkUpdate();return Promise.resolve(true);}return Promise.resolve(false);},showLogs:function(){if(bridge&&bridge.showLogs){bridge.showLogs();return Promise.resolve(true);}return Promise.resolve(false);}};return window.DeviceClient;};");
-        script.append("kh.getClientConfigPlugin=function(){return window.ClientConfigPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.ClientConfigPlugin)||null;};");
-        script.append("kh.getUpdatePlugin=function(){return window.UpdatePlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.UpdatePlugin)||null;};");
-        script.append("kh.normalizeBaseUrl=function(value,fallback){var raw=String(value||'').trim();if(!raw)raw=String(fallback||'').trim();return raw?raw.replace(/\\/+$/,''):'';};");
-        script.append("kh.getCurrentHttpOrigin=function(){try{var url=new URL(window.location.href);if(/^https?:$/i.test(url.protocol))return url.origin;}catch(e){}return '';};");
-        script.append("kh.normalizePaperTypeValue=function(value){return String(value||'').trim().toLowerCase()==='black_mark'?'black_mark':'thermal';};");
-        script.append("kh.normalizeLayoutPresetValue=function(value){var raw=String(value||'').trim().toLowerCase();return ['compact','large'].indexOf(raw)>=0?raw:'standard';};");
-        script.append("kh.normalizeInjectionModeValue=function(value){var raw=String(value||'').trim().toLowerCase();return ['commit_loaded','loaded_only','manual'].indexOf(raw)>=0?raw:'aggressive';};");
-        script.append("kh.normalizeBoolValue=function(value,defaultValue){if(value===undefined||value===null)return defaultValue!==false;if(typeof value==='boolean')return value;if(typeof value==='number')return value!==0;var raw=String(value||'').trim().toLowerCase();if(['1','true','yes','on'].indexOf(raw)>=0)return true;if(['0','false','no','off'].indexOf(raw)>=0)return false;return defaultValue!==false;};");
-        script.append("kh.applyClientConfig=function(config){config=config||{};var serverBase=kh.normalizeBaseUrl(config.serverBase,kh.getCurrentHttpOrigin()||kh.defaultServerBase);var updateBase=kh.normalizeBaseUrl(config.updateBase,kh.defaultUpdateBase);var paperType=kh.normalizePaperTypeValue(config.paperType);var layoutPreset=kh.normalizeLayoutPresetValue(config.layoutPreset);var injectionMode=kh.normalizeInjectionModeValue(config.injectionMode);kh.clientConfig={serverBase:serverBase,updateBase:updateBase,paperType:paperType,layoutPreset:layoutPreset,injectionMode:injectionMode,enableFloatingLogs:kh.normalizeBoolValue(config.enableFloatingLogs,true),enableVerboseLogs:kh.normalizeBoolValue(config.enableVerboseLogs,true),enableNetworkHeaderPatch:kh.normalizeBoolValue(config.enableNetworkHeaderPatch,true),enableHistoryPatch:kh.normalizeBoolValue(config.enableHistoryPatch,true),enableStoragePatch:kh.normalizeBoolValue(config.enableStoragePatch,true),enableUiReadyObserver:kh.normalizeBoolValue(config.enableUiReadyObserver,true),enableActionObserver:kh.normalizeBoolValue(config.enableActionObserver,true),enableRuntimeReuse:kh.normalizeBoolValue(config.enableRuntimeReuse,true)};return kh.clientConfig;};");
-        script.append("kh.clientConfig=kh.applyClientConfig({serverBase:kh.getCurrentHttpOrigin()||kh.defaultServerBase,updateBase:kh.defaultUpdateBase,paperType:'thermal',layoutPreset:'standard',injectionMode:'aggressive',enableFloatingLogs:true,enableVerboseLogs:true,enableNetworkHeaderPatch:true,enableHistoryPatch:true,enableStoragePatch:true,enableUiReadyObserver:true,enableActionObserver:true,enableRuntimeReuse:true});");
-        script.append("kh.readClientConfig=function(){var plugin=kh.getClientConfigPlugin();if(!plugin||!plugin.getConfig)return Promise.resolve(kh.clientConfig);return Promise.resolve(plugin.getConfig()).then(function(config){return kh.applyClientConfig(config);}).catch(function(err){kh.pushLog('读取客户端配置失败: '+String(err&&err.message||err||'unknown'),'warn');return kh.clientConfig;});};");
-        script.append("kh.getServerBase=function(){return (kh.clientConfig&&kh.clientConfig.serverBase)||kh.defaultServerBase;};");
-        script.append("kh.getUpdateBase=function(){return (kh.clientConfig&&kh.clientConfig.updateBase)||kh.getServerBase();};");
-        script.append("kh.getPrintPaperType=function(){return (kh.clientConfig&&kh.clientConfig.paperType)||'thermal';};");
-        script.append("kh.getPrintLayoutPreset=function(){return (kh.clientConfig&&kh.clientConfig.layoutPreset)||'standard';};");
-        script.append("kh.getInjectionMode=function(){return (kh.clientConfig&&kh.clientConfig.injectionMode)||'aggressive';};");
-        script.append("kh.isFeatureEnabled=function(name,defaultValue){var config=kh.clientConfig||{};return kh.normalizeBoolValue(config[name],defaultValue!==false);};");
-        script.append("kh.appendFloatingLog=function(text,type){if(!kh._logBody)return;var line=document.createElement('div');line.className='kh-log-line kh-'+(type||'plain');line.textContent=text;kh._logBody.appendChild(line);kh._logBody.scrollTop=kh._logBody.scrollHeight;};");
-        script.append("kh.clearFloatingLogs=function(){try{window.localStorage&&window.localStorage.removeItem(kh.logStorageKey);}catch(e){}if(kh._logBody)kh._logBody.innerHTML='';};");
-        script.append("kh.ensureFloatingLogger=function(){if(!kh.isFeatureEnabled('enableFloatingLogs',true))return;if(document.getElementById('kh-log-overlay'))return;var mount=function(){if(document.getElementById('kh-log-overlay')||!document.body)return;if(!document.getElementById('kh-log-style')&&document.head){var style=document.createElement('style');style.id='kh-log-style';style.textContent='.kh-log-overlay{position:fixed;inset:0;z-index:2147483001;background:rgba(28,28,30,.32);display:none;align-items:flex-end;justify-content:stretch;padding:16px}.kh-log-panel{width:100%;max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:14px;box-shadow:0 12px 32px rgba(0,0,0,.2)}.kh-log-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}.kh-log-title{font-size:12px;font-weight:700;color:#8e8e93;letter-spacing:.4px;text-transform:uppercase}.kh-log-actions{display:flex;gap:6px}.kh-log-btn{border:none;background:#e5e5ea;color:#1c1c1e;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700}.kh-log-body{background:#1c1c1e;border-radius:10px;padding:10px;max-height:min(55vh,420px);overflow-y:auto}.kh-log-line{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all;border-bottom:1px solid #2c2c2e}.kh-log-line.kh-info{color:#64d2ff}.kh-log-line.kh-ok{color:#30d158}.kh-log-line.kh-err{color:#ff453a}.kh-log-line.kh-warn{color:#ffd60a}.kh-log-line.kh-plain{color:#ebebf5}';document.head.appendChild(style);}var overlay=document.createElement('div');overlay.id='kh-log-overlay';overlay.className='kh-log-overlay';overlay.innerHTML='<div class=\"kh-log-panel\"><div class=\"kh-log-head\"><span class=\"kh-log-title\">运行日志</span><div class=\"kh-log-actions\"><button type=\"button\" class=\"kh-log-btn\" id=\"kh-log-clear\">清空</button><button type=\"button\" class=\"kh-log-btn\" id=\"kh-log-close\">关闭</button></div></div><div class=\"kh-log-body\" id=\"kh-log-body\"></div></div>';document.body.appendChild(overlay);kh._logOverlay=overlay;kh._logBody=overlay.querySelector('#kh-log-body');overlay.addEventListener('click',function(evt){if(evt.target===overlay)overlay.style.display='none';});overlay.querySelector('#kh-log-close').addEventListener('click',function(){overlay.style.display='none';});overlay.querySelector('#kh-log-clear').addEventListener('click',function(){kh.clearFloatingLogs();});var saved=[];try{saved=JSON.parse((window.localStorage&&window.localStorage.getItem(kh.logStorageKey))||'[]');}catch(e){saved=[];}if(Array.isArray(saved)){saved.forEach(function(item){if(item&&typeof item==='object')kh.appendFloatingLog(item.text||'',item.type||'plain');else if(item)kh.appendFloatingLog(String(item),'plain');});}};if(document.body)mount();else window.addEventListener('DOMContentLoaded',mount,{once:true});};");
-        script.append("kh.toggleFloatingLog=function(show){if(!kh.isFeatureEnabled('enableFloatingLogs',true))return;kh.ensureFloatingLogger();if(kh._logOverlay)kh._logOverlay.style.display=show?'flex':'none';};");
-        script.append("kh.pushLog=function(msg,type){var level=String(type||'plain');var text='['+new Date().toTimeString().slice(0,8)+'] '+String(msg||'');var verbose=kh.isFeatureEnabled('enableVerboseLogs',true);if(!verbose&&['err','warn'].indexOf(level)<0)return text;if(!kh.isFeatureEnabled('enableFloatingLogs',true))return text;try{var saved=JSON.parse((window.localStorage&&window.localStorage.getItem(kh.logStorageKey))||'[]');if(!Array.isArray(saved))saved=[];saved.push({text:text,type:level});if(saved.length>200)saved=saved.slice(saved.length-200);window.localStorage&&window.localStorage.setItem(kh.logStorageKey,JSON.stringify(saved));window.__khLastLogSnapshot=saved;}catch(e){}kh.ensureFloatingLogger();kh.appendFloatingLog(text,level);return text;};");
-        script.append("kh.showToast=function(message,type){if(!message)return;var mount=function(){if(!document.body)return;var host=document.getElementById('kh-toast-host');if(!host){if(!document.getElementById('kh-toast-style')&&document.head){var style=document.createElement('style');style.id='kh-toast-style';style.textContent='.kh-toast-host{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:2147483003;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}.kh-toast{max-width:min(92vw,420px);padding:11px 14px;border-radius:12px;background:rgba(17,24,39,.92);color:#fff;font-size:14px;line-height:1.5;box-shadow:0 12px 28px rgba(0,0,0,.22);opacity:0;transform:translateY(8px);transition:opacity .18s ease,transform .18s ease}.kh-toast.show{opacity:1;transform:translateY(0)}.kh-toast.info{background:rgba(29,78,216,.94)}.kh-toast.ok{background:rgba(22,101,52,.94)}.kh-toast.warn{background:rgba(146,64,14,.94)}.kh-toast.err{background:rgba(180,35,24,.94)}';document.head.appendChild(style);}host=document.createElement('div');host.id='kh-toast-host';host.className='kh-toast-host';document.body.appendChild(host);}var toast=document.createElement('div');toast.className='kh-toast '+(type||'info');toast.textContent=String(message);host.appendChild(toast);requestAnimationFrame(function(){toast.classList.add('show');});setTimeout(function(){toast.classList.remove('show');setTimeout(function(){toast.remove();},220);},2200);};if(document.body)mount();else window.addEventListener('DOMContentLoaded',mount,{once:true});};");
-        script.append("kh.signalActionTriggered=function(message,type){kh.pushLog(message,type||'info');kh.showToast(message,type||'info');};");
-        script.append("kh.getPaperTypeLabel=function(value){return kh.normalizePaperTypeValue(value)==='black_mark'?'黑标标签纸':'普通热敏纸';};");
-        script.append("kh.getLayoutPresetLabel=function(value){var raw=kh.normalizeLayoutPresetValue(value);return ({standard:'标准排版',compact:'紧凑排版',large:'大字排版'})[raw]||'标准排版';};");
-        script.append("kh.getInjectionModeLabel=function(value){var raw=kh.normalizeInjectionModeValue(value);return ({aggressive:'激进模式（started + commit + loaded）',commit_loaded:'稳妥模式（commit + loaded）',loaded_only:'轻量模式（仅 loaded）',manual:'手动模式（只手动初始化）'})[raw]||'激进模式（started + commit + loaded）';};");
-        script.append("kh.fetchUpdateInfo=function(){var updateBase=kh.getUpdateBase();var fetchJson=function(url){return window.fetch(url,{headers:{'X-Client-Type':'capacitor'}}).then(function(res){if(!res.ok)throw new Error('HTTP '+res.status+' @ '+url);return res.json();});};var tried=[];var indexUrl=new URL('/app-updates/versions.json',updateBase).href;tried.push(indexUrl);return fetchJson(indexUrl).then(function(indexInfo){var currentVersionFile=String(indexInfo.currentVersionFile||'').trim();if(!currentVersionFile){var currentVersionCode=Number(indexInfo.currentVersionCode||0);if(currentVersionCode>0)currentVersionFile='version-'+currentVersionCode+'.json';}if(!currentVersionFile)throw new Error('versions.json 缺少 currentVersionFile');var detailUrl=new URL('/app-updates/'+currentVersionFile,updateBase).href;tried.push(detailUrl);return fetchJson(detailUrl);}).catch(function(){var staticVersionUrl=new URL('/version.json',updateBase).href;tried.push(staticVersionUrl);return fetchJson(staticVersionUrl);}).catch(function(){var apiUrl=new URL('/api/app/version',updateBase).href;tried.push(apiUrl);return fetchJson(apiUrl);}).then(function(serverInfo){if(serverInfo&&!serverInfo.apkUrl&&serverInfo.apkFileName){serverInfo.apkUrl='/app-updates/'+serverInfo.apkFileName;}return serverInfo;}).catch(function(err){throw new Error('无法获取最新版本信息，已尝试: '+tried.join(' , ')+'，'+String(err&&err.message||err||'unknown'));});};");
-        script.append("kh.triggerAppUpdate=function(setStatus){var plugin=kh.getUpdatePlugin();if(!plugin||!plugin.getVersionInfo){setStatus&&setStatus('当前环境不支持原生更新检测','warn');return Promise.resolve(false);}setStatus&&setStatus('正在检查更新…','info');return Promise.resolve(plugin.getVersionInfo()).then(function(localInfo){return kh.fetchUpdateInfo().then(function(serverInfo){if(Number(serverInfo.versionCode||0)>Number(localInfo.versionCode||0)){var note='发现新版本 '+String(serverInfo.versionName||'')+'，是否立即下载安装？';if(serverInfo.changelog)note+='\\n\\n更新说明:\\n'+serverInfo.changelog;if(!window.confirm(note)){setStatus&&setStatus('已取消更新','warn');return false;}return Promise.resolve(plugin.downloadAndInstallApk({url:new URL(serverInfo.apkUrl,kh.getUpdateBase()).href})).then(function(){setStatus&&setStatus('下载完成后将自动弹出系统安装界面','info');return true;});}setStatus&&setStatus('当前已是最新版本 (v'+String(localInfo.versionName||'')+')','ok');return false;});}).catch(function(err){setStatus&&setStatus('检查更新失败: '+String(err&&err.message||err||'unknown'),'err');return false;});};");
-        script.append("kh.ensureUpdateButton=function(){};");
-        script.append("kh.ensureSettingsPanel=function(){if(document.getElementById('kh-settings-overlay'))return;var mount=function(){if(document.getElementById('kh-settings-overlay')||!document.body)return;if(!document.getElementById('kh-settings-style')&&document.head){var style=document.createElement('style');style.id='kh-settings-style';style.textContent='.kh-settings-overlay{position:fixed;inset:0;z-index:2147483002;background:rgba(15,23,42,.42);display:none;align-items:center;justify-content:center;padding:18px}.kh-settings-panel{width:min(100%,420px);max-height:min(88vh,860px);overflow:auto;background:#fff;border-radius:18px;padding:16px;box-shadow:0 16px 40px rgba(15,23,42,.24)}.kh-settings-title{font-size:13px;font-weight:800;color:#667085;letter-spacing:.08em;text-transform:uppercase;margin-bottom:12px}.kh-settings-field{margin-bottom:12px}.kh-settings-field label{display:block;font-size:12px;font-weight:600;color:#667085;margin-bottom:6px}.kh-settings-field input,.kh-settings-field select{width:100%;padding:12px 13px;border:1px solid #d0d5dd;border-radius:12px;background:#fff;font-size:15px;outline:none}.kh-settings-field input:focus,.kh-settings-field select:focus{border-color:#1570ef;box-shadow:0 0 0 3px rgba(21,112,239,.12)}.kh-settings-toggle{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #eaecf0}.kh-settings-toggle:last-of-type{border-bottom:none}.kh-settings-toggle-text{flex:1}.kh-settings-toggle-title{font-size:13px;font-weight:700;color:#101828}.kh-settings-toggle-desc{font-size:12px;line-height:1.5;color:#667085;margin-top:4px}.kh-settings-note{font-size:12px;line-height:1.6;color:#667085;margin:8px 0 12px}.kh-settings-meta{font-size:12px;line-height:1.6;color:#344054;background:#f8fafc;border-radius:12px;padding:10px 12px;margin-bottom:10px}.kh-settings-status{display:none;border-radius:12px;padding:10px 12px;font-size:13px;line-height:1.5;background:#f2f4f7;color:#344054;margin-bottom:10px}.kh-settings-status.ok{display:block;background:#dcfae6;color:#166534}.kh-settings-status.err{display:block;background:#fee4e2;color:#b42318}.kh-settings-status.info{display:block;background:#dbeafe;color:#1d4ed8}.kh-settings-status.warn{display:block;background:#fef3c7;color:#92400e}.kh-settings-row{display:flex;gap:8px;margin-top:8px}.kh-settings-btn{flex:1;border:none;border-radius:12px;padding:12px 13px;font-size:14px;font-weight:700;cursor:pointer}.kh-settings-btn.primary{background:#1570ef;color:#fff}.kh-settings-btn.secondary{background:#eaecf0;color:#101828}.kh-settings-diag{margin-top:14px;padding-top:14px;border-top:1px solid #eaecf0}.kh-settings-diag-title{font-size:12px;font-weight:800;color:#667085;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}.kh-settings-diag-body{max-height:min(34vh,320px);overflow:auto;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:10px}.kh-settings-diag-empty{font-size:12px;color:#64748b;line-height:1.6}.kh-settings-diag-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}.kh-settings-diag-chip{background:#fff;border:1px solid #dbe4ff;border-radius:12px;padding:8px 10px}.kh-settings-diag-chip strong{display:block;font-size:16px;color:#0f172a}.kh-settings-diag-chip span{display:block;font-size:11px;color:#64748b;margin-top:2px}.kh-settings-diag-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:10px;margin-bottom:8px}.kh-settings-diag-card:last-child{margin-bottom:0}.kh-settings-diag-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px}.kh-settings-diag-name{font-size:13px;font-weight:700;color:#0f172a;line-height:1.4}.kh-settings-diag-meta{font-size:11px;color:#64748b;line-height:1.5}.kh-settings-diag-badge{flex-shrink:0;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:800}.kh-settings-diag-badge.available{background:#dcfce7;color:#166534}.kh-settings-diag-badge.waiting{background:#fef3c7;color:#92400e}.kh-settings-diag-badge.unavailable{background:#fee2e2;color:#b91c1c}.kh-settings-diag-badge.unsupported{background:#e2e8f0;color:#334155}.kh-settings-diag-line{font-size:12px;line-height:1.55;color:#334155;margin-top:4px;white-space:pre-wrap;word-break:break-word}.kh-settings-diag-reason{font-size:12px;line-height:1.55;color:#b42318;margin-top:4px}.kh-settings-diag-warn{font-size:12px;line-height:1.55;color:#92400e;margin-top:4px}';document.head.appendChild(style);}var overlay=document.createElement('div');overlay.id='kh-settings-overlay';overlay.className='kh-settings-overlay';overlay.innerHTML='<div class=\"kh-settings-panel\"><div class=\"kh-settings-title\">客户端设置</div><div id=\"kh-settings-status\" class=\"kh-settings-status\"></div><div id=\"kh-settings-meta\" class=\"kh-settings-meta\">服务地址会写入 Android 本地，保存后自动重启并直接打开远程入口。</div><div class=\"kh-settings-field\"><label>服务地址</label><input id=\"kh-settings-server\" type=\"url\" inputmode=\"url\" autocomplete=\"url\" placeholder=\"http://127.0.0.1:13000\"></div><div class=\"kh-settings-field\"><label>更新地址</label><input id=\"kh-settings-update\" type=\"url\" inputmode=\"url\" autocomplete=\"url\" placeholder=\"http://127.0.0.1:13000\"></div><div class=\"kh-settings-field\"><label>纸张类型</label><select id=\"kh-settings-paper\"><option value=\"thermal\">普通热敏纸</option><option value=\"black_mark\">黑标标签纸</option></select></div><div class=\"kh-settings-field\"><label>排版预设</label><select id=\"kh-settings-layout\"><option value=\"standard\">标准排版</option><option value=\"compact\">紧凑排版</option><option value=\"large\">大字排版</option></select></div><div class=\"kh-settings-field\"><label>注入时机</label><select id=\"kh-settings-injection-mode\"><option value=\"aggressive\">激进模式（started + commit + loaded）</option><option value=\"commit_loaded\">稳妥模式（commit + loaded）</option><option value=\"loaded_only\">轻量模式（仅 loaded）</option><option value=\"manual\">手动模式（只手动初始化）</option></select></div><div class=\"kh-settings-field\"><label>性能开关</label><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">网页浮动日志</div><div class=\"kh-settings-toggle-desc\">控制网页侧日志面板、日志持久化和全局错误日志</div></div><input id=\"kh-settings-floating-logs\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">详细运行日志</div><div class=\"kh-settings-toggle-desc\">控制是否输出大量初始化、observer、动作匹配和控制台过程日志</div></div><input id=\"kh-settings-verbose-logs\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">自动补 X-Client-Type</div><div class=\"kh-settings-toggle-desc\">控制是否 patch fetch / XHR 并自动补客户端请求头</div></div><input id=\"kh-settings-network-patch\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">路由监听</div><div class=\"kh-settings-toggle-desc\">控制是否 patch history.pushState / replaceState</div></div><input id=\"kh-settings-history-patch\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">存储监听</div><div class=\"kh-settings-toggle-desc\">控制是否 patch localStorage / sessionStorage 变更</div></div><input id=\"kh-settings-storage-patch\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">页面就绪 observer</div><div class=\"kh-settings-toggle-desc\">控制网页 ready 的 DOM 兜底检测</div></div><input id=\"kh-settings-ui-ready\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">页面动作 observer</div><div class=\"kh-settings-toggle-desc\">控制 DOM 变化时是否自动刷新页面动作</div></div><input id=\"kh-settings-action-observer\" type=\"checkbox\"></div><div class=\"kh-settings-toggle\"><div class=\"kh-settings-toggle-text\"><div class=\"kh-settings-toggle-title\">同页复用 runtime</div><div class=\"kh-settings-toggle-desc\">控制检测到当前页面已初始化 runtime 后是否只刷新页面动作，不再重复整段注入</div></div><input id=\"kh-settings-runtime-reuse\" type=\"checkbox\"></div></div><div class=\"kh-settings-diag\"><div class=\"kh-settings-diag-title\">动作核对</div><div class=\"kh-settings-row\"><button type=\"button\" class=\"kh-settings-btn secondary\" id=\"kh-settings-diagnose-btn\">动作核对</button><button type=\"button\" class=\"kh-settings-btn secondary\" id=\"kh-settings-copy-btn\">复制结果</button></div><div id=\"kh-settings-diagnostics\" class=\"kh-settings-diag-body\"><div class=\"kh-settings-diag-empty\">点击“动作核对”后，这里会显示全局动作、当前页可用动作以及不匹配原因。</div></div></div><div class=\"kh-settings-note\">应用启动时直接打开服务地址根路径，是否需要登录由服务端登录态自行判断。</div><div class=\"kh-settings-row\"><button type=\"button\" class=\"kh-settings-btn primary\" id=\"kh-settings-save\">保存并重启</button><button type=\"button\" class=\"kh-settings-btn secondary\" id=\"kh-settings-update-btn\">检查更新</button></div><div class=\"kh-settings-row\"><button type=\"button\" class=\"kh-settings-btn secondary\" id=\"kh-settings-close\">关闭</button></div></div>';document.body.appendChild(overlay);kh._settingsOverlay=overlay;kh._settingsStatus=overlay.querySelector('#kh-settings-status');kh._settingsMeta=overlay.querySelector('#kh-settings-meta');kh._settingsDiagnostics=overlay.querySelector('#kh-settings-diagnostics');kh.setSettingsStatus=function(message,type){if(!kh._settingsStatus)return;if(!message){kh._settingsStatus.style.display='none';kh._settingsStatus.textContent='';kh._settingsStatus.className='kh-settings-status';return;}kh._settingsStatus.style.display='block';kh._settingsStatus.textContent=message;kh._settingsStatus.className='kh-settings-status '+(type||'info');};var fill=function(){overlay.querySelector('#kh-settings-server').value=kh.getServerBase();overlay.querySelector('#kh-settings-update').value=kh.getUpdateBase();overlay.querySelector('#kh-settings-paper').value=kh.getPrintPaperType();overlay.querySelector('#kh-settings-layout').value=kh.getPrintLayoutPreset();overlay.querySelector('#kh-settings-injection-mode').value=kh.getInjectionMode();overlay.querySelector('#kh-settings-floating-logs').checked=kh.isFeatureEnabled('enableFloatingLogs',true);overlay.querySelector('#kh-settings-verbose-logs').checked=kh.isFeatureEnabled('enableVerboseLogs',true);overlay.querySelector('#kh-settings-network-patch').checked=kh.isFeatureEnabled('enableNetworkHeaderPatch',true);overlay.querySelector('#kh-settings-history-patch').checked=kh.isFeatureEnabled('enableHistoryPatch',true);overlay.querySelector('#kh-settings-storage-patch').checked=kh.isFeatureEnabled('enableStoragePatch',true);overlay.querySelector('#kh-settings-ui-ready').checked=kh.isFeatureEnabled('enableUiReadyObserver',true);overlay.querySelector('#kh-settings-action-observer').checked=kh.isFeatureEnabled('enableActionObserver',true);overlay.querySelector('#kh-settings-runtime-reuse').checked=kh.isFeatureEnabled('enableRuntimeReuse',true);if(kh._settingsMeta){kh._settingsMeta.textContent='当前打印默认值：'+kh.getPaperTypeLabel(kh.getPrintPaperType())+' / '+kh.getLayoutPresetLabel(kh.getPrintLayoutPreset())+'；注入时机：'+kh.getInjectionModeLabel(kh.getInjectionMode())+'；同页复用：'+(kh.isFeatureEnabled('enableRuntimeReuse',true)?'开启':'关闭')+'；详细日志：'+(kh.isFeatureEnabled('enableVerboseLogs',true)?'开启':'关闭')+'；构建时间：'+(window.BUILD_TIME?new Date(window.BUILD_TIME).toLocaleString('zh-CN'):'未知');}kh.setSettingsStatus('','');};kh.openSettingsPanel=function(){kh.readClientConfig().then(function(){fill();overlay.style.display='flex';});};kh.closeSettingsPanel=function(){overlay.style.display='none';};overlay.addEventListener('click',function(evt){if(evt.target===overlay)kh.closeSettingsPanel();});overlay.querySelector('#kh-settings-close').addEventListener('click',function(){kh.closeSettingsPanel();});overlay.querySelector('#kh-settings-update-btn').addEventListener('click',function(){kh.triggerAppUpdate(kh.setSettingsStatus);});overlay.querySelector('#kh-settings-diagnose-btn').addEventListener('click',function(){kh.runSettingsDiagnostics(true).then(function(report){kh.pushLog('动作核对完成: pageMatched='+(report&&report.catalog&&report.catalog.pageMatched||0)+', runnable='+(report&&report.catalog&&report.catalog.pageRunnable||0),'info');}).catch(function(){return null;});});overlay.querySelector('#kh-settings-copy-btn').addEventListener('click',function(){Promise.resolve(kh.copySettingsDiagnostics()).then(function(result){kh.setSettingsStatus(result&&result.ok?'核对结果已复制':'复制核对结果失败: '+String(result&&result.error||'unknown'),result&&result.ok?'ok':'err');}).catch(function(err){kh.setSettingsStatus('复制核对结果失败: '+String(err&&err.message||err||'unknown'),'err');});});overlay.querySelector('#kh-settings-save').addEventListener('click',function(){var serverBase=kh.normalizeBaseUrl(overlay.querySelector('#kh-settings-server').value,kh.defaultServerBase);var updateBase=kh.normalizeBaseUrl(overlay.querySelector('#kh-settings-update').value,kh.defaultUpdateBase);var paperType=kh.normalizePaperTypeValue(overlay.querySelector('#kh-settings-paper').value);var layoutPreset=kh.normalizeLayoutPresetValue(overlay.querySelector('#kh-settings-layout').value);var injectionMode=kh.normalizeInjectionModeValue(overlay.querySelector('#kh-settings-injection-mode').value);if(!serverBase){kh.setSettingsStatus('请输入服务地址','err');return;}if(!updateBase){kh.setSettingsStatus('请输入更新地址','err');return;}var settings={serverBase:serverBase,updateBase:updateBase,paperType:paperType,layoutPreset:layoutPreset,injectionMode:injectionMode,enableFloatingLogs:overlay.querySelector('#kh-settings-floating-logs').checked,enableVerboseLogs:overlay.querySelector('#kh-settings-verbose-logs').checked,enableNetworkHeaderPatch:overlay.querySelector('#kh-settings-network-patch').checked,enableHistoryPatch:overlay.querySelector('#kh-settings-history-patch').checked,enableStoragePatch:overlay.querySelector('#kh-settings-storage-patch').checked,enableUiReadyObserver:overlay.querySelector('#kh-settings-ui-ready').checked,enableActionObserver:overlay.querySelector('#kh-settings-action-observer').checked,enableRuntimeReuse:overlay.querySelector('#kh-settings-runtime-reuse').checked};var plugin=kh.getClientConfigPlugin();if(!plugin||!plugin.saveConfig){kh.setSettingsStatus('原生配置插件不可用，无法保存本地地址','err');return;}Promise.resolve(plugin.saveConfig(settings)).then(function(saved){kh.applyClientConfig(saved||settings);kh.setSettingsStatus('配置已保存，应用即将重启…','info');setTimeout(function(){if(plugin.restartApp){Promise.resolve(plugin.restartApp()).catch(function(err){kh.setSettingsStatus('重启失败: '+String(err&&err.message||err||'unknown'),'err');});}else{kh.setSettingsStatus('当前环境不支持自动重启','warn');}},350);}).catch(function(err){kh.setSettingsStatus('保存失败: '+String(err&&err.message||err||'unknown'),'err');});});};if(document.body)mount();else window.addEventListener('DOMContentLoaded',mount,{once:true});};");
-        script.append("kh.installGlobalLoggers=function(){if(!kh.isFeatureEnabled('enableFloatingLogs',true))return;kh.ensureFloatingLogger();if(!window.log){window.log=function(msg,type){kh.pushLog(msg,type||'plain');};}if(!window.__khRuntimeErrorHooked){window.__khRuntimeErrorHooked=true;window.addEventListener('error',function(e){var target=e&&e.target;var isResourceError=target&&target!==window;var detail='JS ERROR: '+String(e&&e.message||'unknown');if(e&&e.filename)detail+=' @ '+e.filename;if(e&&e.lineno)detail+=':'+e.lineno;if(e&&e.colno)detail+=':'+e.colno;if(isResourceError){var tag=String(target.tagName||'').toLowerCase();var src='';try{src=target.src||target.href||'';}catch(err){}detail='RESOURCE ERROR: tag='+tag+(src?(', src='+src):'');}kh.pushLog(detail,'err');});window.addEventListener('unhandledrejection',function(e){var reason=e&&e.reason;var detail='UNHANDLED: '+((reason&&reason.message)||reason||'unknown');try{if(reason&&reason.stack)detail+=' | stack='+String(reason.stack).slice(0,400);}catch(err){}kh.pushLog(detail,'err');});if(!window.__khConsolePatched){window.__khConsolePatched=true;var originalError=console.error;console.error=function(){try{var parts=[];for(var i=0;i<arguments.length;i++){var item=arguments[i];if(item&&item.stack)parts.push(String(item.stack));else if(typeof item==='object')parts.push(JSON.stringify(item));else parts.push(String(item));}kh.pushLog('console.error: '+parts.join(' | '),'err');}catch(err){}return originalError&&originalError.apply(console,arguments);};}}};");
-        script.append("kh.bootOnce=function(){if(kh.bootInstalled||kh.bootState==='booting')return Promise.resolve(kh.bootState);kh.bootState='booting';kh._webReadyNotified=false;kh.setPageApplyState('loading','booting');kh.patchWindowOpen();kh.ensureDeviceClient();kh.ensureSettingsPanel();kh.ensureUpdateButton();return kh.readClientConfig().catch(function(){return kh.clientConfig;}).then(function(){kh.installUiReadySignals();kh.patchHistory();kh.patchStorage();kh.attachButtonActions();kh.installActionObserver();kh.installGlobalLoggers();kh.pushLog('网页日志桥已启动 version='+String(window.APP_VERSION_NAME||'')+' ('+String(window.APP_VERSION_CODE||'')+'), buildTime='+String(window.BUILD_TIME||''),'info');kh.pushLog('当前性能开关: logs='+kh.isFeatureEnabled('enableFloatingLogs',true)+', headerPatch='+kh.isFeatureEnabled('enableNetworkHeaderPatch',true)+', historyPatch='+kh.isFeatureEnabled('enableHistoryPatch',true)+', storagePatch='+kh.isFeatureEnabled('enableStoragePatch',true)+', uiReadyObserver='+kh.isFeatureEnabled('enableUiReadyObserver',true)+', actionObserver='+kh.isFeatureEnabled('enableActionObserver',true)+', runtimeReuse='+kh.isFeatureEnabled('enableRuntimeReuse',true),'info');kh.pushLog('等待网页主动上报 ready，observer 仅作兜底','info');return kh.ensureScanBridge().catch(function(){return null;});}).then(function(){kh.bootInstalled=true;kh.bootState='ready';return 'ready';}).catch(function(err){kh.bootState='error';kh.setPageApplyState('error',String(err&&err.message||err||'boot failed'));throw err;});};");
-        script.append("kh.isSameOriginHttpUrl=function(url){if(!url)return false;try{var resolved=new URL(url,window.location.href);return /^https?:\\/\\//i.test(resolved.toString())&&resolved.origin===window.location.origin;}catch(e){return false;}};");
-        script.append("kh.navigateInApp=function(url){if(!url)return false;try{var resolved=new URL(url,window.location.href).toString();if(!/^https?:\\/\\//i.test(resolved))return false;if(kh.isSameOriginHttpUrl(resolved))return false;kh.pushLog('应用内跳转: '+resolved,'info');window.location.assign(resolved);return true;}catch(e){kh.pushLog('应用内跳转失败: '+String(e&&e.message||e||'unknown'),'warn');return false;}};");
-        script.append("kh.patchWindowOpen=function(){if(window.__khWindowOpenPatched)return;var originalOpen=window.open;window.open=function(url,target){var normalizedTarget=String(target||'').toLowerCase();if(url&&(!normalizedTarget||normalizedTarget==='_self'||normalizedTarget==='_blank')){if(kh.isSameOriginHttpUrl(url))return typeof originalOpen==='function'?originalOpen.apply(window,arguments):null;if(kh.navigateInApp(url))return window;}return typeof originalOpen==='function'?originalOpen.apply(window,arguments):null;};document.addEventListener('click',function(event){var link=event.target&&event.target.closest?event.target.closest('a[href]'):null;if(!link)return;var href=link.getAttribute('href')||'';var target=String(link.getAttribute('target')||'').toLowerCase();var resolved=link.href||href;if(!/^https?:\\/\\//i.test(resolved))return;if(kh.isSameOriginHttpUrl(resolved))return;if(target&&target!=='_self'&&target!=='_blank')return;event.preventDefault();event.stopPropagation();kh.navigateInApp(resolved);},true);window.__khWindowOpenPatched=true;};");
-        script.append("kh.getScanPlugin=function(){var nativeBridge=kh.getNativeBridge();if(nativeBridge&&nativeBridge.startScan){return {addListener:function(event,handler){if(event!=='scanResult')return Promise.resolve({remove:function(){}});var listener=function(e){handler&&handler({value:e&&e.detail&&e.detail.value?String(e.detail.value):''});};window.addEventListener('kh:scan',listener);return Promise.resolve({remove:function(){window.removeEventListener('kh:scan',listener);}});},startScan:function(){return Promise.resolve(nativeBridge.startScan());},stopScan:function(){return Promise.resolve(nativeBridge.stopScan&&nativeBridge.stopScan());}};}return window.ScanPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.ScanPlugin)||null;};");
-        script.append("kh.ensureScanBridge=function(){if(kh._scanBridgeReady)return kh._scanBridgeReady;var plugin=kh.getScanPlugin();if(!plugin||!plugin.addListener){kh._scanBridgeReady=Promise.reject(new Error('Scan bridge unavailable'));return kh._scanBridgeReady;}kh._scanBridgeReady=Promise.resolve(plugin.addListener('scanResult',function(evt){var value=evt&&evt.value?String(evt.value):'';if(!value)return;kh.pushLog('收到扫码: '+value+', page='+window.location.pathname+', ts='+Date.now(),'ok');var bridge=kh.getNativeBridge();if(bridge&&bridge.onScanCompleted)bridge.onScanCompleted();var handled=kh.execTriggeredActions&&kh.execTriggeredActions('scan',value,'scanResult');if(!handled){kh.pushLog('扫码未命中页面 scan 动作，走兜底注入','warn');kh.injectValue('',value,false);}})).then(function(){kh.pushLog('扫码桥已就绪','info');return true;}).catch(function(err){kh.pushLog('扫码桥初始化失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});return kh._scanBridgeReady;};");
-        script.append("kh.startGlobalScan=function(){var plugin=kh.getScanPlugin();if(!plugin||!plugin.startScan){kh.signalActionTriggered('扫码桥不可用','warn');return Promise.resolve({mock:true,reason:'Scan bridge unavailable'});}return kh.ensureScanBridge().catch(function(){return true;}).then(function(){kh.pushLog('手动触发扫码','info');return Promise.resolve(plugin.startScan()).then(function(){kh.showToast('已触发扫码','info');return true;}).catch(function(err){kh.pushLog('触发扫码失败: '+String(err&&err.message||err||'unknown'),'err');kh.showToast('扫码触发失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});});};");
-        script.append("kh.ensureGlobalScanButton=function(){};");
-        script.append("kh.ensureControlMenu=function(){};");
-        script.append("kh.resetUiReadyState=function(reason){kh.uiReadySignature='';kh._uiReadyObserved=false;kh._uiReadyRefreshQueued=false;if(kh._uiReadyObserver&&kh._uiReadyObserver.disconnect){try{kh._uiReadyObserver.disconnect();}catch(e){}}kh._uiReadyObserver=null;if(kh.pageApplyState==='ready'){kh.setPageApplyState('loading',reason||'ui reset');}};");
-        script.append("kh.findUiReadyHost=function(){var selectors=['[data-kh-action]','.kh-print-batch-btn','.nb-block-item','.nb-action-btn','.ant-form','.ant-table-wrapper','main [class*=block]','main [class*=form]','main [class*=table]','main','.ant-layout-content'];for(var i=0;i<selectors.length;i++){var node=document.querySelector(selectors[i]);if(node){kh._lastUiReadySelector=selectors[i];return node;}}if(document.body&&document.body.children&&document.body.children.length>3){kh._lastUiReadySelector='document.body';return document.body;}kh._lastUiReadySelector='';return null;};");
-        script.append("kh.describeReadyHost=function(node){if(!node)return 'none';var cls='';try{cls=String(node.className||'').trim();}catch(e){}return [String(node.tagName||'node').toLowerCase(),node.id?('#'+node.id):'',cls?('.'+cls.replace(/\\s+/g,'.')):''].join('');};");
-        script.append("kh.markUiReady=function(detail){var host=kh.findUiReadyHost();if(!host)return false;var hostDesc=kh.describeReadyHost(host);var selector=kh._lastUiReadySelector||'<unknown>';var signature=[window.location.pathname+window.location.search+window.location.hash,hostDesc,String(host.childElementCount||0)].join('@@');if(signature===kh.uiReadySignature)return true;kh.uiReadySignature=signature;kh._uiReadyObserved=true;if(kh._uiReadyObserver&&kh._uiReadyObserver.disconnect){try{kh._uiReadyObserver.disconnect();}catch(e){}}kh._uiReadyObserver=null;kh.pushLog('页面渲染就绪: selector='+selector+', host='+hostDesc+', detail='+(detail||''),'ok');kh.setPageApplyState('ready',detail||hostDesc);if(!kh._uiReadyRefreshQueued){kh._uiReadyRefreshQueued=true;setTimeout(function(){kh._uiReadyRefreshQueued=false;kh.refreshCurrentPage(false).catch(function(){return null;});},30);}return true;};");
-        script.append("kh.findActionRefreshHost=function(){var selectors=['main','.ant-layout-content','.nb-app-main','.nb-block-item','.ant-tabs-content-holder','.ant-drawer-body','.ant-modal-body'];for(var i=0;i<selectors.length;i++){var node=document.querySelector(selectors[i]);if(node)return node;}return kh.findUiReadyHost();};");
-        script.append("kh.isIgnoredActionMutation=function(node){if(!node||!node.closest)return false;return !!node.closest('.ant-layout-sider,.ant-menu,.ant-menu-sub,.ant-menu-inline,.nb-sidebar,.nb-app-sidebar,[class*=sider],[class*=sidebar]');};");
-        script.append("kh.hasMeaningfulActionMutation=function(mutations,host){if(!host)return false;for(var i=0;i<mutations.length;i++){var mutation=mutations[i];var target=mutation&&mutation.target;if(!target||!host.contains(target))continue;if(kh.isIgnoredActionMutation(target))continue;if(mutation.type==='childList'){var added=Array.from(mutation.addedNodes||[]).some(function(node){return node&&node.nodeType===1&&!kh.isIgnoredActionMutation(node);});var removed=Array.from(mutation.removedNodes||[]).some(function(node){return node&&node.nodeType===1&&!kh.isIgnoredActionMutation(node);});if(added||removed)return true;continue;}if(mutation.type==='attributes')return true;}return false;};");
-        script.append("kh.installUiReadySignals=function(){if(kh._uiReadySignalsInstalled)return;kh._uiReadySignalsInstalled=true;if(!kh.isFeatureEnabled('enableUiReadyObserver',true)){kh.pushLog('页面就绪 observer 已关闭','warn');return;}kh.pushLog('注册网页 ready 兜底机制','info');var checkTimer=null;var scheduleCheck=function(detail){if(checkTimer)clearTimeout(checkTimer);checkTimer=setTimeout(function(){checkTimer=null;requestAnimationFrame(function(){requestAnimationFrame(function(){if(!kh._webReadyNotified)kh.markUiReady(detail||'mutation');});});},80);};var ensureObserver=function(){if(kh._webReadyNotified||kh._uiReadyObserver||kh._uiReadyObserved)return;if(!window.MutationObserver||!document.documentElement)return;kh._uiReadyObserver=new MutationObserver(function(mutations){for(var i=0;i<mutations.length;i++){var mutation=mutations[i];if(mutation.type==='childList'&&((mutation.addedNodes&&mutation.addedNodes.length)||(mutation.removedNodes&&mutation.removedNodes.length))){scheduleCheck('mutation childList');return;}}});kh._uiReadyObserver.observe(document.documentElement,{childList:true,subtree:true,attributes:false});kh.pushLog('页面就绪 observer 已启动(兜底)','warn');scheduleCheck('observer started');};var armFallback=function(reason){if(kh._readyFallbackTimer)clearTimeout(kh._readyFallbackTimer);kh._readyFallbackTimer=setTimeout(function(){kh._readyFallbackTimer=null;if(kh._webReadyNotified)return;kh.pushLog('网页未主动上报 ready，启用 observer 兜底: '+String(reason||''),'warn');ensureObserver();scheduleCheck('fallback '+String(reason||''));},2000);};armFallback('boot');window.addEventListener('pageshow',function(){kh.resetUiReadyState('pageshow');armFallback('pageshow');});window.addEventListener('kh:routeChanged',function(){kh.resetUiReadyState('route changed');armFallback('route changed');});window.addEventListener('kh:storageChanged',function(evt){var key=String(evt&&evt.detail&&evt.detail.key||'');if(/NOCOBASE_(MAIN_)?(TOKEN|AUTH|ROLE)$/i.test(key)){kh.resetUiReadyState('auth changed');armFallback('auth changed');}});};");
-        script.append("var patchFetch=function(){var of=window.fetch;if(!of||of.__khWrapped)return;var wf=function(r,i){i=i||{};var hs=new Headers(i.headers||(r&&r.headers)||{});if(!hs.has(h))hs.set(h,v);i.headers=hs;return of.call(this,r,i);};wf.__khWrapped=true;window.fetch=wf;};");
-        script.append("var patchXhr=function(){if(XMLHttpRequest.prototype.__khWrapped)return;var oo=XMLHttpRequest.prototype.open,os=XMLHttpRequest.prototype.send,osr=XMLHttpRequest.prototype.setRequestHeader;");
-        script.append("XMLHttpRequest.prototype.open=function(){this.__khSet=false;return oo.apply(this,arguments);};");
-        script.append("XMLHttpRequest.prototype.setRequestHeader=function(n,val){if(String(n).toLowerCase()===h.toLowerCase())this.__khSet=true;return osr.apply(this,arguments);};");
-        script.append("XMLHttpRequest.prototype.send=function(b){if(!this.__khSet){osr.call(this,h,v);this.__khSet=true;}return os.call(this,b);};");
-        script.append("XMLHttpRequest.prototype.__khWrapped=true;};");
-        script.append("kh.normalizeBool=function(value,def){if(value===undefined||value===null)return !!def;if(typeof value==='boolean')return value;if(typeof value==='number')return !!value;var text=String(value).trim().toLowerCase();if(['1','true','yes','y','on'].indexOf(text)>=0)return true;if(['0','false','no','n','off'].indexOf(text)>=0)return false;return !!def;};");
-        script.append("kh.isEditable=function(el){if(!el)return false;if(el.isContentEditable)return true;var tag=(el.tagName||'').toLowerCase();if(tag==='textarea')return true;if(tag!=='input')return false;var type=(el.type||'text').toLowerCase();return ['button','submit','reset','checkbox','radio','file','image','hidden'].indexOf(type)<0;};");
-        script.append("kh.pickTarget=function(selector){var isVisible=function(el){if(!el)return false;var style=window.getComputedStyle(el);return style.display!=='none'&&style.visibility!=='hidden'&&!el.disabled;};if(selector){var nodes=Array.from(document.querySelectorAll(selector));for(var i=0;i<nodes.length;i++){if(kh.isEditable(nodes[i])&&isVisible(nodes[i]))return nodes[i];}}var active=document.activeElement;if(kh.isEditable(active)&&isVisible(active))return active;var all=Array.from(document.querySelectorAll('input,textarea,[contenteditable=\"true\"]'));for(var j=0;j<all.length;j++){if(kh.isEditable(all[j])&&isVisible(all[j]))return all[j];}return null;};");
-        script.append("kh.injectValue=function(selector,value,autoPressEnter){var target=kh.pickTarget(selector);if(!target)return false;var nextValue=String(value||'').trim();var currentValue=target.isContentEditable?String(target.textContent||'').trim():(target.value!==undefined&&target.value!==null?String(target.value).trim():'');if(nextValue&&currentValue===nextValue){kh.pushLog('跳过重复注入: '+nextValue,'warn');return true;}target.focus&&target.focus();target.click&&target.click();if(target.isContentEditable){target.textContent=nextValue;}else{var proto=(target.tagName||'').toLowerCase()==='textarea'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;var desc=Object.getOwnPropertyDescriptor(proto,'value');if(desc&&desc.set){desc.set.call(target,nextValue);}else{target.value=nextValue;}}target.dispatchEvent(new Event('input',{bubbles:true}));target.dispatchEvent(new Event('change',{bubbles:true}));if(autoPressEnter){try{target.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));target.dispatchEvent(new KeyboardEvent('keyup',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true}));}catch(e){}}return true;};");
-        script.append("kh.clickSelector=function(selector){if(!selector)return false;var target=document.querySelector(selector);if(!target)return false;target.focus&&target.focus();target.click&&target.click();return true;};");
-        script.append("kh.normalizeAction=function(item,index){if(!item||typeof item!=='object')return null;var options=item.options;var originalOptionsType=typeof options;var parseDepthUsed=0;for(var parseDepth=0;parseDepth<3&&typeof options==='string'&&options.trim();parseDepth++){parseDepthUsed=parseDepth+1;try{options=JSON.parse(options);}catch(e){options={};break;}}if(!options||typeof options!=='object')options={};var triggerType=String(item.trigger_type||item.triggerType||item.trigger||item.event||options.trigger_type||options.trigger||'').trim().toLowerCase();var actionType=String(item.action_type||item.actionType||item.action||item.type||options.action_type||options.action||'').trim().toLowerCase();if(!triggerType||!actionType)return null;var sortOrder=parseInt(item.sort||item.sortOrder||item.order||options.sort||options.order||index,10);if(Number.isNaN(sortOrder))sortOrder=index;var delayMs=parseInt(item.delay_ms||item.delayMs||options.delay_ms||0,10);if(Number.isNaN(delayMs)||delayMs<0)delayMs=0;var preventDefault=kh.normalizeBool(item.prevent_default!==undefined?item.prevent_default:(options.prevent_default!==undefined?options.prevent_default:options.consume_click),false);var stopPropagation=kh.normalizeBool(item.stop_propagation!==undefined?item.stop_propagation:(options.stop_propagation!==undefined?options.stop_propagation:preventDefault),preventDefault);return {id:String(item.id||item.key||('page-action-'+index)),name:String(item.name||item.title||actionType),enabled:kh.normalizeBool(item.enabled,true),roleName:String(item.role_name||item.roleName||item.role||options.role_name||options.role||'').trim(),pagePath:String(item.page_path||item.pagePath||item.page||item.path||item.page_url||item.pageUrl||options.page_path||options.page||'').trim(),triggerType:triggerType,triggerSelector:String(item.trigger_selector||item.triggerSelector||options.trigger_selector||'').trim(),actionType:actionType,targetSelector:String(item.target_selector||item.targetSelector||options.target_selector||'').trim(),value:String(item.value||options.value||'').trim(),autoPressEnter:kh.normalizeBool(item.auto_press_enter!==undefined?item.auto_press_enter:options.auto_press_enter,false),delayMs:delayMs,sortOrder:sortOrder,preventDefault:preventDefault,stopPropagation:stopPropagation,options:options,raw:item,_debug:{originalOptionsType:originalOptionsType,parseDepthUsed:parseDepthUsed,finalOptionsType:typeof options}};};");
-        script.append("kh.describeAction=function(action){if(!action)return '<null action>';var parts=[];parts.push('id='+(action.id||''));parts.push('trigger='+(action.triggerType||''));parts.push('type='+(action.actionType||''));if(action.triggerSelector)parts.push('triggerSelector='+(action.triggerSelector));if(action.targetSelector)parts.push('targetSelector='+(action.targetSelector));if(action.pagePath)parts.push('page='+(action.pagePath));if(action.roleName)parts.push('role='+(action.roleName));if(action.value)parts.push('value='+(action.value));if(action.delayMs)parts.push('delayMs='+(action.delayMs));if(action.preventDefault)parts.push('preventDefault=true');if(action.stopPropagation)parts.push('stopPropagation=true');return parts.join(', ');};");
-        script.append("kh.getActionSignature=function(scan,button){var pack=function(list){return (list||[]).map(function(action){return [action.id,action.triggerType,action.actionType,action.triggerSelector,action.targetSelector,action.pagePath,action.roleName,action.value,action.delayMs].join('|');}).join('||');};return pack(scan)+'###'+pack(button);};");
-        script.append("kh.summarizeActionSelectors=function(list){return (list||[]).map(function(action){return String(action&&action.triggerSelector||'<empty>');}).filter(Boolean).join(' | ');};");
-        script.append("kh.tryLooseClassSelectorMatch=function(element,selector){if(!element||!selector||!element.matches)return null;var text=String(selector||'').trim();var match=text.match(/^([a-zA-Z0-9_-]+)?\\[class=['\\\"]([^'\\\"]+)['\\\"]\\]$/);if(!match)return null;var tagName=String(match[1]||'').trim().toLowerCase();if(tagName&&String(element.tagName||'').toLowerCase()!==tagName)return null;var rawClasses=String(match[2]||'').trim();if(!rawClasses)return null;var expectedClasses=rawClasses.split(/\\s+/).filter(Boolean).filter(function(name){return name!=='css-dev-only-do-not-override-17h1pxo'&&name.indexOf('css-dev-only-do-not-override-')!==0;});if(!expectedClasses.length)return null;for(var i=0;i<expectedClasses.length;i++){if(!element.classList||!element.classList.contains(expectedClasses[i]))return null;}return element;};");
-        script.append("kh.findTriggeredButtonTarget=function(eventTarget,action){if(!eventTarget||!action)return null;var selector=String(action.triggerSelector||'').trim();if(!selector)return null;var target=eventTarget.closest&&eventTarget.closest(selector);if(target)return target;var clickable=eventTarget.closest&&eventTarget.closest('button,[role=\"button\"],input[type=\"button\"],input[type=\"submit\"]');if(!clickable)return null;return kh.tryLooseClassSelectorMatch(clickable,selector);};");
-        script.append("kh.describeElement=function(element){if(!element)return '<null element>';var parts=[];var tag=String(element.tagName||'').toLowerCase();if(tag)parts.push('tag='+tag);if(element.id)parts.push('id='+element.id);var className='';try{className=typeof element.className==='string'?element.className:(element.className&&element.className.baseVal)||'';}catch(e){className='';}className=String(className||'').trim().replace(/\\s+/g,'.');if(className)parts.push('class=.'+className);var khAction='';try{khAction=element.getAttribute&&element.getAttribute('data-kh-action')||'';}catch(e){khAction='';}if(khAction)parts.push('data-kh-action='+khAction); var name='';try{name=element.getAttribute&&element.getAttribute('name')||'';}catch(e){name='';}if(name)parts.push('name='+name);var text=String(element.innerText||element.textContent||'').trim().replace(/\\s+/g,' ');if(text)parts.push('text='+(text.length>80?text.slice(0,80)+'...':text));return parts.join(', ');};");
-        script.append("kh.roleMatch=function(){return true;};");
-        script.append("kh.pageMatch=function(pagePath,currentUrl){var path=String(pagePath||'').trim();if(!path)return true;if(/^https?:\\/\\//i.test(path))return String(currentUrl||'').indexOf(path)===0;var url;try{url=new URL(currentUrl||window.location.href);}catch(e){url=window.location;}var currentPath=url.pathname||'/';var expected=path.charAt(0)==='/'?path:('/'+path);return currentPath.indexOf(expected)===0;};");
-        script.append("kh.readSelector=function(selector){if(!selector)return '';var isVisible=function(el){if(!el)return false;var style=window.getComputedStyle?window.getComputedStyle(el):null;return !style||(style.display!=='none'&&style.visibility!=='hidden');};var readNode=function(el){if(!el)return '';var value=('value' in el&&el.value!==undefined&&el.value!==null)?String(el.value).trim():'';if(value)return value;return String(el.textContent||el.innerText||'').trim();};var nodes=Array.from(document.querySelectorAll(selector));if(!nodes.length)return '';var fallback='';for(var i=0;i<nodes.length;i++){var current=readNode(nodes[i]);if(!current)continue;if(isVisible(nodes[i]))return current;if(!fallback)fallback=current;}return fallback;};");
-        script.append("kh.readActionOption=function(action,key){var options=action&&action.options||{};var raw=action&&action.raw||{};var value=options[key];if((value===undefined||value===null||String(value).trim()==='')&&raw[key]!==undefined)value=raw[key];return value;};");
-        script.append("kh.resolveTemplateToken=function(action,token,scanValue){var name=String(token||'').trim();if(!name)return '';if(name.toLowerCase()==='scan')return String(scanValue||'');var direct=kh.readActionOption(action,name);if(direct!==undefined&&direct!==null&&String(direct).trim()!=='')return String(direct).trim();var selector=kh.readActionOption(action,name+'_selector');if((selector===undefined||selector===null||String(selector).trim()===''))selector=kh.readActionOption(action,name+'Selector');if(selector){var selected=kh.readSelector(String(selector));if(selected)return selected;kh.pushLog('模板字段未取到值: field='+name+', selector='+selector,'warn');}return '';};");
-        script.append("kh.applyTemplate=function(value,scanValue,action){return String(value||'').replace(/\\{\\{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\}\\}|\\{\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*\\}/g,function(_,tokenA,tokenB){return kh.resolveTemplateToken(action,tokenA||tokenB,scanValue);});};");
-        script.append("kh.getStoredValue=function(key){var storages=[window.localStorage,window.sessionStorage].filter(Boolean);for(var i=0;i<storages.length;i++){var value=storages[i].getItem(key);if(value!==null&&value!==undefined&&String(value).trim()!=='')return String(value).trim();}return '';};");
-        script.append("kh.normalizePaperType=function(value){return String(value||'').trim().toLowerCase()==='black_mark'?'black_mark':'thermal';};");
-        script.append("kh.normalizeLayoutPreset=function(value){var raw=String(value||'').trim().toLowerCase();return ['compact','large'].indexOf(raw)>=0?raw:'standard';};");
-        script.append("kh.resolveActionField=function(action,name,scanValue){var options=action&&action.options||{};var raw=action&&action.raw||{};var direct=options[name];if((direct===undefined||direct===null||String(direct).trim()==='')&&raw[name]!==undefined)direct=raw[name];if(direct!==undefined&&direct!==null&&String(direct).trim()!=='')return kh.applyTemplate(String(direct),scanValue,action);var selector=options[name+'_selector']||options[name+'Selector']||raw[name+'_selector']||raw[name+'Selector']||'';if(selector){var selected=kh.readSelector(selector);if(selected)return kh.applyTemplate(selected,scanValue,action);kh.pushLog('打印字段未取到值: field='+name+', selector='+selector,'warn');}if(name==='barcode_value'&&scanValue)return String(scanValue).trim();if(name==='barcode_value'&&action&&action.value)return kh.applyTemplate(action.value,scanValue,action);return '';};");
-        script.append("kh.resolvePrintConfig=function(action,row){var options=action&&action.options||{};var raw=action&&action.raw||{};var rowData=row||{};var paperType=rowData.paperType||options.paper_type||options.paperType||raw.paper_type||raw.paperType||kh.getStoredValue(kh.paperTypeStorageKey)||kh.getPrintPaperType()||'thermal';var layoutPreset=rowData.layoutPreset||options.layout_preset||options.layoutPreset||raw.layout_preset||raw.layoutPreset||kh.getStoredValue(kh.layoutPresetStorageKey)||kh.getPrintLayoutPreset()||'standard';return {paperType:kh.normalizePaperType(paperType),layoutPreset:kh.normalizeLayoutPreset(layoutPreset)};};");
-        script.append("kh.resolvePrintSourceType=function(action){var options=action&&action.options||{};var raw=action&&action.raw||{};return String(options.print_source_type||options.printSourceType||raw.print_source_type||raw.printSourceType||'single').trim().toLowerCase()||'single';};");
-        script.append("kh.resolveTableCells=function(row){if(!row||!row.children)return [];var cells=Array.from(row.children||[]).filter(function(node){return !!node;});if(cells.length)return cells;return Array.from(row.querySelectorAll(':scope > *'));};");
-        script.append("kh.readNodeText=function(node){if(!node)return '';if('value' in node&&node.value!==undefined&&node.value!==null&&String(node.value).trim()!=='')return String(node.value).trim();return String(node.innerText||node.textContent||'').trim();};");
-        script.append("kh.readIndexedCell=function(row,index){var parsed=parseInt(index,10);if(Number.isNaN(parsed)||parsed<0)return '';var cells=kh.resolveTableCells(row);if(parsed>=cells.length)return '';return kh.readNodeText(cells[parsed]);};");
-        script.append("kh.renderTableTextTemplate=function(row,template){var raw=String(template||'');if(!raw.trim())return '';return raw.replace(/\\{\\s*(\\d+)\\s*\\}/g,function(_,indexText){var idx=parseInt(indexText,10);if(Number.isNaN(idx)||idx<1)return '';return kh.readIndexedCell(row,idx-1);});};");
-        script.append("kh.resolveTablePrintItems=function(action){var options=action&&action.options||{};var raw=action&&action.raw||{};var selector=String(options.table_selector||options.tableSelector||raw.table_selector||raw.tableSelector||'').trim();if(!selector){kh.pushLog('table 打印缺少 table_selector: '+kh.describeAction(action),'err');return [];}var rows=Array.from(document.querySelectorAll(selector));var barcodeIndex=options.barcode_index!==undefined?options.barcode_index:(options.barcodeIndex!==undefined?options.barcodeIndex:raw.barcode_index);var qrcodeIndex=options.qrcode_index!==undefined?options.qrcode_index:(options.qrcodeIndex!==undefined?options.qrcodeIndex:raw.qrcode_index);var textIndex=options.text_index!==undefined?options.text_index:(options.textIndex!==undefined?options.textIndex:raw.text_index);var textTemplate=String(options.text_template||options.textTemplate||raw.text_template||raw.textTemplate||'');var copiesIndex=options.copies_index!==undefined?options.copies_index:(options.copiesIndex!==undefined?options.copiesIndex:raw.copies_index);var paperTypeIndex=options.paper_type_index!==undefined?options.paper_type_index:(options.paperTypeIndex!==undefined?options.paperTypeIndex:raw.paper_type_index);var layoutPresetIndex=options.layout_preset_index!==undefined?options.layout_preset_index:(options.layoutPresetIndex!==undefined?options.layoutPresetIndex:raw.layout_preset_index);kh.pushLog('table 打印配置: selector='+selector+', rows='+rows.length+', barcodeIndex='+String(barcodeIndex)+', qrcodeIndex='+String(qrcodeIndex)+', textIndex='+String(textIndex)+', copiesIndex='+String(copiesIndex)+', paperTypeIndex='+String(paperTypeIndex)+', layoutPresetIndex='+String(layoutPresetIndex)+', textTemplate='+(textTemplate?textTemplate.replace(/\\s+/g,' ').slice(0,80):'<empty>'),'info');return rows.map(function(row,rowIndex){var cells=kh.resolveTableCells(row);var textValue=textTemplate?kh.renderTableTextTemplate(row,textTemplate):kh.readIndexedCell(row,textIndex);var item={barcodeValue:kh.readIndexedCell(row,barcodeIndex),qrCodeValue:kh.readIndexedCell(row,qrcodeIndex),textValue:textValue,copies:kh.readIndexedCell(row,copiesIndex),paperType:kh.readIndexedCell(row,paperTypeIndex),layoutPreset:kh.readIndexedCell(row,layoutPresetIndex)};kh.pushLog('table 行['+(rowIndex+1)+'/'+rows.length+']: cells='+cells.length+', barcode='+String(item.barcodeValue||'')+', qrcode='+String(item.qrCodeValue||'')+', text='+String(item.textValue||'')+', copies='+String(item.copies||'')+', paperType='+String(item.paperType||'')+', layoutPreset='+String(item.layoutPreset||''),'plain');return item;}).filter(function(item){return !!(String(item.barcodeValue||'').trim()||String(item.qrCodeValue||'').trim()||String(item.textValue||'').trim());});};");
-        script.append("kh.getPrintPlugin=function(){var nativeBridge=kh.getNativeBridge();if(nativeBridge&&nativeBridge.printLabel){kh._printBridgeMode='native';return {addListener:function(event,handler){if(event!=='printStatus')return Promise.resolve({remove:function(){}});var listener=function(e){handler&&handler(e&&e.detail?e.detail:{});};window.addEventListener('kh:printStatus',listener);return Promise.resolve({remove:function(){window.removeEventListener('kh:printStatus',listener);}});},connect:function(){return Promise.resolve(nativeBridge.connectPrinter&&nativeBridge.connectPrinter());},prepareToPrintLabel:function(){return Promise.resolve(nativeBridge.prepareToPrintLabel&&nativeBridge.prepareToPrintLabel());},printLabel:function(payload){return Promise.resolve(nativeBridge.printLabel&&nativeBridge.printLabel(JSON.stringify(payload||{})));}};}var plugin=window.PrintPlugin||(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PrintPlugin)||null;kh._printBridgeMode=plugin?'legacy-plugin':'missing';return plugin;};");
-        script.append("kh.waitPrintStatus=function(plugin,wanted,timeoutMs){var ERRORS=['NO_PAPER','PRINTER_CLOSED','SEND_DATA_FAILED','PRINT_FAILED','BLACK_FLAG_NOT_FOUND','PREPARE_LABEL_NO_PAPER','PREPARE_LABEL_BLACK_FLAG_NOT_FOUND','PREPARE_LABEL_FAILED','PREPARE_LABEL_PRINTER_CLOSED','PREPARE_LABEL_SEND_DATA_FAILED'];return new Promise(function(resolve,reject){var done=false;var sub=null;var timer=setTimeout(function(){finish(new Error('print status timeout: '+wanted));},timeoutMs||15000);var finish=function(err){if(done)return;done=true;clearTimeout(timer);try{sub&&sub.remove&&sub.remove();}catch(e){}if(err)reject(err);else resolve();};Promise.resolve(plugin.addListener('printStatus',function(evt){var status=evt&&evt.status;if(!status)return;if(status===wanted){finish();}else if(ERRORS.indexOf(status)>=0){finish(new Error(status));}})).then(function(handle){sub=handle;}).catch(finish);});};");
-        script.append("kh.ensurePrintConnected=function(plugin){kh._printConnectPromise=kh._printConnectPromise||Promise.resolve(plugin.connect&&plugin.connect()).catch(function(){return null;});return kh._printConnectPromise;};");
-        script.append("kh.runSinglePrintPayload=function(plugin,action,payload,trace){var printConfig=kh.resolvePrintConfig(action,payload);var finalPayload={barcodeValue:String(payload.barcodeValue||'').trim(),qrCodeValue:String(payload.qrCodeValue||'').trim(),textValue:String(payload.textValue||'').trim(),paperType:printConfig.paperType,layoutPreset:printConfig.layoutPreset};if(!finalPayload.barcodeValue&&!finalPayload.qrCodeValue&&!finalPayload.textValue)return Promise.reject(new Error('print action missing barcode/qrcode/text'));kh.pushLog('开始打印动作: '+(action.id||action.actionType)+' trace='+(trace||'<none>')+' ['+finalPayload.paperType+'/'+finalPayload.layoutPreset+'] barcode='+finalPayload.barcodeValue+', qrcode='+finalPayload.qrCodeValue+', text='+finalPayload.textValue,'info');return kh.ensurePrintConnected(plugin).then(function(){if(finalPayload.paperType==='black_mark'&&plugin.prepareToPrintLabel){kh.pushLog('打印前黑标定位 trace='+(trace||'<none>'),'info');return Promise.resolve(plugin.prepareToPrintLabel()).catch(function(){return null;});}return null;}).then(function(){var waitDone=kh.waitPrintStatus(plugin,'PRINT_OK',15000);kh.pushLog('调用原生 printLabel trace='+(trace||'<none>')+', ts='+Date.now()+', payloadSummary={barcode:'+finalPayload.barcodeValue+', qrcode:'+finalPayload.qrCodeValue+', text:'+finalPayload.textValue+'}','warn');return Promise.resolve(plugin.printLabel(finalPayload)).then(function(result){kh.pushLog('原生 printLabel 已返回 trace='+(trace||'<none>')+', result='+String(result),'info');return waitDone;});});};");
-        script.append("kh.runPrintAction=function(action,scanValue,trace){var plugin=kh.getPrintPlugin();var actionType=String(action.actionType||'').toLowerCase();if(actionType==='print_label'||actionType==='print_batch_label'){var sourceType=kh.resolvePrintSourceType(action);var debug=action&&action._debug||{};var traceLabel=trace||('action:'+String(action&&action.id||actionType));kh.pushLog('打印动作配置: trace='+traceLabel+', sourceType='+sourceType+', optionsType='+(debug.originalOptionsType||typeof(action&&action.options))+', parseDepth='+(debug.parseDepthUsed||0)+', finalOptionsType='+(debug.finalOptionsType||typeof(action&&action.options))+', page='+(action&&action.pagePath||'')+', info='+(action&&action.id||actionType),'info');var payloads=[];if(sourceType==='table'){payloads=kh.resolveTablePrintItems(action);}else{payloads=[{barcodeValue:kh.resolveActionField(action,'barcode_value',scanValue),qrCodeValue:kh.resolveActionField(action,'qrcode_value',scanValue),textValue:kh.resolveActionField(action,'text_value',scanValue)}];kh.pushLog('single 打印取值: trace='+traceLabel+', barcode='+String(payloads[0].barcodeValue||'')+', qrcode='+String(payloads[0].qrCodeValue||'')+', text='+String(payloads[0].textValue||''),'info');}if(!payloads.length)return Promise.reject(new Error('print action missing rows'));kh.pushLog('打印桥模式: '+String(kh._printBridgeMode||'unknown')+', payloadCount='+payloads.length+', trace='+traceLabel,'info');if(!plugin){kh.signalActionTriggered('已触发打印动作，但当前设备无打印能力','warn');return Promise.resolve({mock:true,reason:'PrintPlugin unavailable',payloads:payloads,bridgeMode:kh._printBridgeMode||'missing'});}return payloads.reduce(function(chain,rowPayload,rowIndex){return chain.then(function(){var copies=parseInt(rowPayload&&rowPayload.copies,10);if(Number.isNaN(copies)||copies<1)copies=1;kh.pushLog('打印队列项['+(rowIndex+1)+'/'+payloads.length+'] copies='+copies+', trace='+traceLabel,'info');var copyChain=Promise.resolve();for(var i=0;i<copies;i++){(function(copyIndex){copyChain=copyChain.then(function(){var callTrace=traceLabel+'#row'+(rowIndex+1)+'#copy'+(copyIndex+1);kh.pushLog('执行打印副本['+(copyIndex+1)+'/'+copies+']，队列项='+(rowIndex+1)+', trace='+callTrace,'info');return kh.runSinglePrintPayload(plugin,action,rowPayload,callTrace);});})(i);}return copyChain;});},Promise.resolve());}return Promise.reject(new Error('unsupported print action: '+actionType));};");
-        script.append("kh.execAction=function(action,scanValue,source){if(!action||!action.enabled)return false;var sourceLabel=source||'direct';kh.pushLog('准备执行动作: source='+sourceLabel+', '+kh.describeAction(action)+(scanValue?(', scanValue='+scanValue):''),'info');var runner=function(){if(action.actionType==='fill_input'||action.actionType==='fill'||action.actionType==='scan_fill'||action.actionType==='input'){return kh.injectValue(action.targetSelector,scanValue||action.value||'',!!action.autoPressEnter);}if(action.actionType==='click'||action.actionType==='tap'){return kh.clickSelector(action.targetSelector);}if(action.actionType==='scan'||action.actionType==='start_scan'||action.actionType==='device_scan'){kh.startGlobalScan().catch(function(err){kh.pushLog('动作触发扫码失败: '+String(err&&err.message||err||'unknown'),'err');});return true;}if(action.actionType==='stop_scan'){var bridge=kh.getNativeBridge();if(bridge&&bridge.stopScan){bridge.stopScan();kh.pushLog('已执行停止扫码动作: '+(action.id||action.actionType),'info');return true;}kh.pushLog('停止扫码桥不可用: '+(action.id||action.actionType),'warn');return false;}if(action.actionType==='print_label'||action.actionType==='print_batch_label'){var trace='source='+sourceLabel+',action='+(action.id||action.actionType)+',ts='+Date.now();kh.pushLog('进入打印动作入口: '+trace,'warn');kh.runPrintAction(action,scanValue||'',trace).then(function(result){if(result&&result.mock){kh.signalActionTriggered('打印动作已命中，当前使用无设备确认模式','warn');return;}kh.pushLog('打印动作成功: '+(action.id||action.actionType)+', trace='+trace,'ok');}).catch(function(err){kh.pushLog('打印动作失败: '+String(err&&err.message||err||'print failed')+', trace='+trace,'err');window.__khLastActionError=String(err&&err.message||err||'print failed');});return true;}if(action.actionType==='debug_notice'||action.actionType==='toast'||action.actionType==='alert'){kh.signalActionTriggered(action.value||('动作已触发: '+(action.id||action.actionType)),'info');return true;}if(action.actionType==='noop'||action.actionType==='none'){kh.pushLog('动作为 noop，跳过执行: '+(action.id||action.actionType),'warn');return true;}kh.pushLog('未支持的动作类型: '+(action.actionType||'<empty>')+'，'+kh.describeAction(action),'warn');return false;};if(action.delayMs>0){kh.pushLog('动作延迟执行 '+action.delayMs+'ms: '+(action.id||action.actionType)+', source='+sourceLabel,'info');setTimeout(runner,action.delayMs);return true;}return runner();};");
-        script.append("kh.execTriggeredActions=function(triggerType,scanValue,source){var grouped=window.__khPageActions||{};var actions=Array.isArray(grouped[triggerType])?grouped[triggerType]:[];if(!actions.length)return false;var sourceLabel=source||triggerType;actions.slice().sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);}).forEach(function(action,index){kh.pushLog('命中动作['+(index+1)+'/'+actions.length+']: source='+sourceLabel+', '+kh.describeAction(action),'info');kh.execAction(action,scanValue||'',sourceLabel);});return true;};");
-        script.append("kh.attachButtonActions=function(){if(window.__khButtonActionsBound)return;document.addEventListener('click',function(event){var actions=(window.__khPageActions&&window.__khPageActions.button)||[];var clickedButton=event.target&&event.target.closest?event.target.closest('button,[role=\"button\"],input[type=\"button\"],input[type=\"submit\"]'):null;for(var i=0;i<actions.length;i++){var action=actions[i];if(!action.triggerSelector)continue;var target=kh.findTriggeredButtonTarget(event.target,action);if(!target)continue;var sourceLabel='button:'+action.triggerSelector+':'+Date.now();kh.pushLog('按钮动作命中 selector: '+action.triggerSelector+'，matched={'+kh.describeElement(target)+'}，source='+sourceLabel+'，'+kh.describeAction(action),'ok');if(action.preventDefault)event.preventDefault();if(action.stopPropagation)event.stopPropagation();setTimeout(function(){kh.execAction(action,'',sourceLabel);},0);return;}if(clickedButton&&actions.length){var now=Date.now();if(!kh._lastButtonMissLogAt||now-kh._lastButtonMissLogAt>1200){kh._lastButtonMissLogAt=now;kh.pushLog('按钮点击未命中任何配置 selector: clicked={'+kh.describeElement(clickedButton)+'}, expectedSelectors=['+kh.summarizeActionSelectors(actions)+']','warn');}}},true);window.__khButtonActionsBound=true;};");
-        script.append("kh.getActionAuth=function(){var storages=[window.localStorage,window.sessionStorage].filter(Boolean);var getStored=function(key){for(var i=0;i<storages.length;i++){var value=storages[i].getItem(key);if(value)return value;}return '';};return {role:getStored('NOCOBASE_ROLE')||getStored('NOCOBASE_MAIN_ROLE')||'',token:getStored('NOCOBASE_TOKEN')||getStored('NOCOBASE_MAIN_TOKEN')||'',auth:getStored('NOCOBASE_AUTH')||getStored('NOCOBASE_MAIN_AUTH')||'basic'};};");
-        script.append("kh.getActionCacheKey=function(authInfo){authInfo=authInfo||kh.getActionAuth();return [authInfo.token||'',authInfo.auth||'',window.location.origin||''].join('|');};");
-        script.append("kh.getActionCatalogStore=function(){var store=window.__khActionCatalogStore||(window.__khActionCatalogStore={cacheKey:'',items:[],fetchedAt:0,loading:null,lastAppliedKey:'',version:0});return store;};");
-        script.append("kh.fetchActionCatalog=function(force){var authInfo=kh.getActionAuth();var token=authInfo.token;var auth=authInfo.auth;var store=kh.getActionCatalogStore();var cacheKey=kh.getActionCacheKey(authInfo);if(!token||!window.fetch){store.items=[];store.cacheKey=cacheKey;store.fetchedAt=0;kh.actionCatalogVersion=store.version||0;return Promise.resolve([]);}var freshEnough=!force&&store.cacheKey===cacheKey&&Array.isArray(store.items)&&store.items.length&&Date.now()-store.fetchedAt<300000;if(freshEnough)return Promise.resolve(store.items);if(store.loading&&store.cacheKey===cacheKey&&!force)return store.loading;var requestUrl=new URL(kh.pageActionsApi,window.location.origin).toString();store.cacheKey=cacheKey;store.loading=window.fetch(requestUrl,{headers:{'Authorization':'Bearer '+token,'X-Authenticator':auth,'X-Requested-With':'XMLHttpRequest'}}).then(function(res){if(!res.ok)throw new Error('page actions '+res.status);return res.json();}).then(function(payload){var data=(payload&&payload.data!==undefined)?payload.data:payload;var items=Array.isArray(data)?data:(Array.isArray(data&&data.items)?data.items:(Array.isArray(data&&data.rows)?data.rows:[]));store.items=items;store.fetchedAt=Date.now();store.version=(store.version||0)+1;kh.actionCatalogVersion=store.version;kh.pushLog('动作总表已缓存: count='+items.length+', version='+store.version,'info');return items;}).catch(function(err){kh.pushLog('动作总表加载失败: '+String(err&&err.message||err||'unknown'),'err');if(Array.isArray(store.items)&&store.items.length)return store.items;throw err;}).finally(function(){store.loading=null;});return store.loading;};");
-        script.append("kh.applyPageActionsFromCatalog=function(items,role){var scan=[];var button=[];for(var i=0;i<items.length;i++){var action=kh.normalizeAction(items[i],i+1);if(!action||!action.enabled)continue;if(!kh.pageMatch(action.pagePath,window.location.href))continue;if(action.triggerType==='button')button.push(action);else if(action.triggerType==='scan')scan.push(action);}scan.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});button.sort(function(a,b){return (a.sortOrder||0)-(b.sortOrder||0);});var bridge=kh.getNativeBridge();var tokenPresent=kh.getActionAuth().token?'1':'0';var urlKey=window.location.pathname+window.location.search+window.location.hash;var applySignature=[urlKey,tokenPresent,String(kh.actionCatalogVersion||0),String(scan.length),String(button.length),kh.getActionSignature(scan,button)].join('@@');if(kh.pageApplyState==='ready'&&kh.pageApplySignature===applySignature&&window.__khPageActions){if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(scan.length>0);return window.__khPageActions;}window.__khPageActions={scan:scan,button:button};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(scan.length>0);kh.pageApplySignature=applySignature;kh.getActionCatalogStore().lastAppliedKey=applySignature;kh.pushLog('页面动作已应用: scan='+scan.length+', button='+button.length+', currentRole='+(role||'<empty>')+', roleFilter=off'+(button.length?(', buttonSelectors=['+kh.summarizeActionSelectors(button)+']'):''),'info');kh.setPageApplyState('ready','scan='+scan.length+',button='+button.length+',roleFilter=off');return window.__khPageActions;};");
-        script.append("kh.loadPageActions=function(force){var authInfo=kh.getActionAuth();var role=authInfo.role||'';var store=kh.getActionCatalogStore();var hasCached=Array.isArray(store.items)&&store.items.length>0;if(force||kh.pageApplyState!=='ready'||!hasCached){kh.setPageApplyState('loading','force='+(!!force)+',path='+window.location.pathname);}if(!force&&hasCached){kh.applyPageActionsFromCatalog(store.items,role);}return kh.fetchActionCatalog(!!force).then(function(items){return kh.applyPageActionsFromCatalog(items||[],role);}).catch(function(err){window.__khPageActions={scan:[],button:[]};window.__khExecTriggeredActions=kh.execTriggeredActions;kh.attachButtonActions();var bridge=kh.getNativeBridge();if(bridge&&bridge.setScanActionEnabled)bridge.setScanActionEnabled(false);kh.pageApplySignature='';kh.setPageApplyState('error',String(err&&err.message||err||'load actions failed'));return window.__khPageActions;});};");
-        script.append("kh.escapeHtml=function(value){return String(value===undefined||value===null?'':value).replace(/[&<>\\\"']/g,function(ch){return ({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',\"'\":'&#39;'})[ch]||ch;});};");
-        script.append("kh.safeQueryAll=function(selector){var text=String(selector||'').trim();if(!text)return {selector:text,items:[],error:''};try{return {selector:text,items:Array.from(document.querySelectorAll(text)),error:''};}catch(err){return {selector:text,items:[],error:String(err&&err.message||err||'invalid selector')};}};");
-        script.append("kh.isVisibleElement=function(el){if(!el)return false;var style=window.getComputedStyle?window.getComputedStyle(el):null;return !style||(style.display!=='none'&&style.visibility!=='hidden');};");
-        script.append("kh.isInteractableElement=function(el){return !!(el&&kh.isVisibleElement(el)&&!el.disabled&&!el.readOnly);};");
-        script.append("kh.checkSelector=function(selector,requireInteractable,preferEditable){var result=kh.safeQueryAll(selector);var items=Array.isArray(result.items)?result.items:[];var visible=items.filter(function(item){return kh.isVisibleElement(item);});var interactable=items.filter(function(item){return kh.isInteractableElement(item);});var preferredList=preferEditable?interactable.filter(function(item){return kh.isEditable(item);}):interactable;var adopted=preferredList[0]||interactable[0]||visible[0]||items[0]||null;var text='';if(adopted){text=String(('value' in adopted&&adopted.value!==undefined&&adopted.value!==null)?adopted.value:(adopted.innerText||adopted.textContent||'')).trim();}var status='ok';if(!String(selector||'').trim())status='missing';else if(result.error)status='invalid';else if(!items.length)status='no-match';else if(requireInteractable&&!interactable.length)status='not-interactable';else if(items.length>1)status='multiple';return {selector:String(selector||''),matchCount:items.length,visibleCount:visible.length,interactableCount:interactable.length,status:status,adoptedText:text,error:result.error};};");
-        script.append("kh.matchPageDetails=function(pagePath,currentUrl){var path=String(pagePath||'').trim();var href=String(currentUrl||window.location.href||'');if(!path)return {matched:true,mode:'empty',expected:'',actual:href};if(/^https?:\\/\\//i.test(path))return {matched:href.indexOf(path)===0,mode:'url-prefix',expected:path,actual:href};var url;try{url=new URL(href);}catch(e){url=window.location;}var currentPath=url.pathname||'/';var expected=path.charAt(0)==='/'?path:('/'+path);return {matched:currentPath.indexOf(expected)===0,mode:'pathname-prefix',expected:expected,actual:currentPath};};");
-        script.append("kh.resolveActionFieldDiagnosis=function(action,name,scanValue){var options=action&&action.options||{};var raw=action&&action.raw||{};var direct=options[name];if((direct===undefined||direct===null||String(direct).trim()==='')&&raw[name]!==undefined)direct=raw[name];if(direct!==undefined&&direct!==null&&String(direct).trim()!==''){var rawValue=String(direct);return {field:name,source:(rawValue.indexOf('{{')>=0||rawValue.indexOf('{')>=0)?'template':'direct',rawValue:rawValue,finalValue:kh.applyTemplate(rawValue,scanValue,action),selector:'',matchCount:0};}var selector=options[name+'_selector']||options[name+'Selector']||raw[name+'_selector']||raw[name+'Selector']||'';if(selector){var selected=kh.checkSelector(String(selector),false,true);var value=kh.readSelector(String(selector));return {field:name,source:value?'selector':'empty',rawValue:value,finalValue:kh.applyTemplate(String(value||''),scanValue,action),selector:String(selector),matchCount:selected.matchCount,check:selected};}if(name==='barcode_value'&&scanValue)return {field:name,source:'fallback',rawValue:String(scanValue||''),finalValue:String(scanValue||'').trim(),selector:'',matchCount:0};if(name==='barcode_value'&&action&&action.value)return {field:name,source:'fallback',rawValue:String(action.value||''),finalValue:kh.applyTemplate(String(action.value||''),scanValue,action),selector:'',matchCount:0};return {field:name,source:'empty',rawValue:'',finalValue:'',selector:'',matchCount:0};};");
-        script.append("kh.resolvePrintDiagnosis=function(action,scanValue){var sourceType=kh.resolvePrintSourceType(action);if(sourceType==='table'){var options=action&&action.options||{};var raw=action&&action.raw||{};var selector=String(options.table_selector||options.tableSelector||raw.table_selector||raw.tableSelector||'').trim();var rows=selector?kh.safeQueryAll(selector).items:[];return {sourceType:'table',printable:rows.length>0,table:{tableSelector:selector,rowMatchCount:rows.length,validRowCount:rows.length,skippedRowCount:0,previewRows:rows.slice(0,3).map(function(row,rowIndex){return {rowIndex:rowIndex+1,barcodeValue:kh.readIndexedCell(row,options.barcode_index!==undefined?options.barcode_index:raw.barcode_index),qrcodeValue:'',textValue:kh.readIndexedCell(row,options.text_index!==undefined?options.text_index:raw.text_index),valid:true,issues:[]};})}};}var barcodeValue=kh.resolveActionFieldDiagnosis(action,'barcode_value',scanValue);var qrcodeValue=kh.resolveActionFieldDiagnosis(action,'qrcode_value',scanValue);var textValue=kh.resolveActionFieldDiagnosis(action,'text_value',scanValue);var printConfig=kh.resolvePrintConfig(action,{});return {sourceType:'single',printable:!!(barcodeValue.finalValue||qrcodeValue.finalValue||textValue.finalValue),single:{barcodeValue:barcodeValue,qrcodeValue:qrcodeValue,textValue:textValue,paperType:printConfig.paperType,layoutPreset:printConfig.layoutPreset}};};");
-        script.append("kh.diagnoseAction=function(action,context){var reasons=[];var warnings=[];var page=kh.matchPageDetails(action&&action.pagePath,context&&context.href);var diagnosis={id:String(action&&action.id||''),name:String(action&&action.name||action&&action.actionType||''),enabled:!!(action&&action.enabled),triggerType:String(action&&action.triggerType||''),actionType:String(action&&action.actionType||''),pagePath:String(action&&action.pagePath||''),sortOrder:Number(action&&action.sortOrder||0),status:'available',participatesInCurrentPage:!!page.matched,match:{page:page},resolution:{},reasons:reasons,warnings:warnings};if(!diagnosis.enabled){diagnosis.status='unavailable';reasons.push({code:'ACTION_DISABLED',message:'动作未启用'});}if(!page.matched){diagnosis.status='unavailable';reasons.push({code:'PAGE_MISMATCH',message:'当前页面路径未命中该动作'});return diagnosis;}if(diagnosis.triggerType==='button'){diagnosis.match.trigger=kh.checkSelector(action.triggerSelector,false,false);if(!action.triggerSelector){diagnosis.status='unavailable';reasons.push({code:'TRIGGER_SELECTOR_MISSING',message:'button 动作缺少 trigger_selector'});}else if(diagnosis.match.trigger.error){diagnosis.status='unavailable';reasons.push({code:'OPTIONS_INVALID',message:'trigger_selector 不是合法选择器'});}else if(!diagnosis.match.trigger.matchCount){diagnosis.status=document.readyState==='complete'?'unavailable':'waiting';reasons.push({code:'TRIGGER_SELECTOR_NO_MATCH',message:'当前页面未命中 trigger_selector'});}else if(diagnosis.match.trigger.matchCount>1){warnings.push({code:'MULTIPLE_TARGETS_FOUND',message:'trigger_selector 命中了多个节点'});}}if(['fill_input','fill','scan_fill','input'].indexOf(diagnosis.actionType)>=0){diagnosis.match.target=kh.checkSelector(action.targetSelector,true,true);diagnosis.resolution.value={source:action.value?'direct':'empty',rawValue:String(action.value||''),finalValue:String(action.value||''),selector:'',matchCount:0};if(!action.targetSelector){diagnosis.status='unavailable';reasons.push({code:'TARGET_SELECTOR_MISSING',message:'填充动作缺少 target_selector'});}else if(diagnosis.match.target.error){diagnosis.status='unavailable';reasons.push({code:'OPTIONS_INVALID',message:'target_selector 不是合法选择器'});}else if(!diagnosis.match.target.matchCount){diagnosis.status=document.readyState==='complete'?'unavailable':'waiting';reasons.push({code:'TARGET_SELECTOR_NO_MATCH',message:'当前页面未命中 target_selector'});}else if(!diagnosis.match.target.interactableCount){diagnosis.status='unavailable';reasons.push({code:'TARGET_NOT_INTERACTABLE',message:'目标输入框存在但不可写或不可见'});}else if(diagnosis.match.target.matchCount>1){warnings.push({code:'MULTIPLE_TARGETS_FOUND',message:'target_selector 命中了多个目标'});}}else if(['click','tap'].indexOf(diagnosis.actionType)>=0){diagnosis.match.target=kh.checkSelector(action.targetSelector,true,false);if(!action.targetSelector){diagnosis.status='unavailable';reasons.push({code:'TARGET_SELECTOR_MISSING',message:'点击动作缺少 target_selector'});}else if(!diagnosis.match.target.matchCount){diagnosis.status=document.readyState==='complete'?'unavailable':'waiting';reasons.push({code:'TARGET_SELECTOR_NO_MATCH',message:'当前页面未命中 target_selector'});}else if(!diagnosis.match.target.interactableCount){diagnosis.status='unavailable';reasons.push({code:'TARGET_NOT_INTERACTABLE',message:'目标按钮存在但当前不可交互'});}}else if(['print_label','print_batch_label'].indexOf(diagnosis.actionType)>=0){diagnosis.resolution.print=kh.resolvePrintDiagnosis(action,context&&context.scanValue||'');diagnosis.status='unsupported';reasons.push({code:'ACTION_TYPE_UNSUPPORTED',message:'当前核对只验证字段和 selector，不直接执行打印'});if(diagnosis.resolution.print&&diagnosis.resolution.print.single){diagnosis.resolution.fields={barcode_value:diagnosis.resolution.print.single.barcodeValue,qrcode_value:diagnosis.resolution.print.single.qrcodeValue,text_value:diagnosis.resolution.print.single.textValue};['barcodeValue','qrcodeValue','textValue'].forEach(function(key){var field=diagnosis.resolution.print.single[key];if(field&&field.finalValue)return;reasons.push({code:field&&field.selector?'FIELD_SELECTOR_NO_MATCH':'FIELD_VALUE_EMPTY',message:(field&&field.field||key)+' 当前未解析出值'});});}}else if(['noop','none'].indexOf(diagnosis.actionType)>=0){warnings.push({code:'NOOP',message:'该动作是 noop，只用于占位'});}else if(['scan','start_scan','device_scan'].indexOf(diagnosis.actionType)<0){diagnosis.status='unsupported';reasons.push({code:'ACTION_TYPE_UNSUPPORTED',message:'当前 Android 客户端未支持该动作类型核对'});}return diagnosis;};");
-        script.append("kh.buildDiagnosticReport=function(items,context){var href=String(window.location.href||'');var report={version:'v1',generatedAt:new Date().toISOString(),page:{href:href,origin:window.location.origin||'',pathname:window.location.pathname||'',search:window.location.search||'',hash:window.location.hash||'',readyState:document.readyState},catalog:{total:0,enabled:0,disabled:0,pageMatched:0,pageRunnable:0},summary:{available:0,waiting:0,unavailable:0,unsupported:0,warnings:0},errors:kh._lastCatalogError?[String(kh._lastCatalogError)]:[],actions:[]};(Array.isArray(items)?items:[]).forEach(function(item,index){var action=kh.normalizeAction(item,index+1);report.catalog.total+=1;if(action&&action.enabled)report.catalog.enabled+=1;else report.catalog.disabled+=1;if(!action)return;var diagnosed=kh.diagnoseAction(action,{href:href,scanValue:context&&context.scanValue||''});report.actions.push(diagnosed);if(diagnosed.participatesInCurrentPage)report.catalog.pageMatched+=1;if(diagnosed.participatesInCurrentPage&&diagnosed.status==='available')report.catalog.pageRunnable+=1;if(diagnosed.participatesInCurrentPage){report.summary[diagnosed.status]=(report.summary[diagnosed.status]||0)+1;report.summary.warnings+=Array.isArray(diagnosed.warnings)?diagnosed.warnings.length:0;}});return report;};");
-        script.append("kh.renderSettingsDiagnostics=function(report){if(!kh._settingsDiagnostics)return;var body=kh._settingsDiagnostics;var pageActions=(report&&report.actions||[]).filter(function(item){return item.participatesInCurrentPage;});var nonPageCount=Math.max((report&&report.catalog&&report.catalog.total||0)-(report&&report.catalog&&report.catalog.pageMatched||0),0);if(!pageActions.length){body.innerHTML='<div class=\"kh-settings-diag-empty\">当前页面没有命中的页面动作。<br>全局动作数: '+kh.escapeHtml(String(report&&report.catalog&&report.catalog.total||0))+'；未参与本页: '+kh.escapeHtml(String(nonPageCount))+'</div>';return;}pageActions.sort(function(a,b){var weight={unavailable:0,waiting:1,unsupported:2,available:3};return (weight[a.status]||99)-(weight[b.status]||99);});var cards=pageActions.map(function(item){var reasons=(item.reasons||[]).map(function(reason){return '<div class=\"kh-settings-diag-reason\">- '+kh.escapeHtml(reason.message||reason.code||'unknown')+'</div>';}).join('');var warnings=(item.warnings||[]).map(function(reason){return '<div class=\"kh-settings-diag-warn\">- '+kh.escapeHtml(reason.message||reason.code||'warning')+'</div>';}).join('');var triggerLine=item.match&&item.match.trigger?('触发器: '+String(item.match.trigger.matchCount||0)+' 命中 / 可见 '+String(item.match.trigger.visibleCount||0)):'';var targetLine=item.match&&item.match.target?('目标: '+String(item.match.target.matchCount||0)+' 命中 / 可交互 '+String(item.match.target.interactableCount||0)):'';var valueLine='';if(item.resolution&&item.resolution.print&&item.resolution.print.single){var single=item.resolution.print.single;valueLine='打印字段: barcode='+kh.escapeHtml(single.barcodeValue&&single.barcodeValue.finalValue||'')+' | qrcode='+kh.escapeHtml(single.qrcodeValue&&single.qrcodeValue.finalValue||'')+' | text='+kh.escapeHtml(single.textValue&&single.textValue.finalValue||'');}else if(item.resolution&&item.resolution.value){valueLine='固定值: '+kh.escapeHtml(item.resolution.value.finalValue||'');}return '<div class=\"kh-settings-diag-card\"><div class=\"kh-settings-diag-head\"><div><div class=\"kh-settings-diag-name\">'+kh.escapeHtml(item.name||item.id||item.actionType)+'</div><div class=\"kh-settings-diag-meta\">'+kh.escapeHtml(item.triggerType+' -> '+item.actionType)+' | page='+kh.escapeHtml(item.pagePath||'(all)')+'</div></div><span class=\"kh-settings-diag-badge '+kh.escapeHtml(item.status)+'\">'+kh.escapeHtml(item.status)+'</span></div>'+(triggerLine?'<div class=\"kh-settings-diag-line\">'+kh.escapeHtml(triggerLine)+'</div>':'')+(targetLine?'<div class=\"kh-settings-diag-line\">'+kh.escapeHtml(targetLine)+'</div>':'')+(valueLine?'<div class=\"kh-settings-diag-line\">'+valueLine+'</div>':'')+reasons+warnings+'</div>';}).join('');body.innerHTML='<div class=\"kh-settings-diag-summary\"><div class=\"kh-settings-diag-chip\"><strong>'+kh.escapeHtml(String(report.catalog.pageMatched||0))+'</strong><span>当前页命中</span></div><div class=\"kh-settings-diag-chip\"><strong>'+kh.escapeHtml(String(report.catalog.pageRunnable||0))+'</strong><span>当前可执行</span></div><div class=\"kh-settings-diag-chip\"><strong>'+kh.escapeHtml(String(report.catalog.total||0))+'</strong><span>全局动作</span></div><div class=\"kh-settings-diag-chip\"><strong>'+kh.escapeHtml(String(nonPageCount))+'</strong><span>未参与本页</span></div></div><div class=\"kh-settings-diag-line\">页面: '+kh.escapeHtml(report.page&&report.page.pathname||'/')+' | 生成时间: '+kh.escapeHtml(new Date(report.generatedAt||Date.now()).toLocaleString('zh-CN'))+'</div><div class=\"kh-settings-diag-line\">状态汇总: available='+kh.escapeHtml(String(report.summary.available||0))+'，waiting='+kh.escapeHtml(String(report.summary.waiting||0))+'，unavailable='+kh.escapeHtml(String(report.summary.unavailable||0))+'，unsupported='+kh.escapeHtml(String(report.summary.unsupported||0))+'，warnings='+kh.escapeHtml(String(report.summary.warnings||0))+'</div>'+cards;};");
-        script.append("kh.runSettingsDiagnostics=function(force,options){return kh.fetchActionCatalog(!!force).then(function(items){var report=kh.buildDiagnosticReport(items||[],options||{});kh._lastSettingsDiagnosticReport=report;kh.renderSettingsDiagnostics(report);kh.setSettingsStatus('动作核对已完成：当前页 '+String(report.catalog.pageMatched||0)+' 条，直接可执行 '+String(report.catalog.pageRunnable||0)+' 条','info');return report;}).catch(function(err){kh.setSettingsStatus('动作核对失败: '+String(err&&err.message||err||'unknown'),'err');throw err;});};");
-        script.append("kh.copySettingsDiagnostics=function(){var report=kh._lastSettingsDiagnosticReport;if(!report)return Promise.resolve({ok:false,error:'尚未生成核对结果'});var text=JSON.stringify(report,null,2);var fallback=function(){try{var area=document.createElement('textarea');area.value=text;document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();return {ok:true,method:'execCommand'};}catch(err){return {ok:false,error:String(err&&err.message||err||'copy failed')};}};if(navigator.clipboard&&typeof navigator.clipboard.writeText==='function'){return navigator.clipboard.writeText(text).then(function(){return {ok:true,method:'clipboard'};}).catch(function(){return fallback();});}return Promise.resolve(fallback());};");
-        script.append("kh.refreshCurrentPage=function(force){if(kh._pageRefreshPromise&&!force)return kh._pageRefreshPromise;kh._pageRefreshPromise=kh.loadPageActions(!!force).finally(function(){kh._pageRefreshPromise=null;});return kh._pageRefreshPromise;};");
-        script.append("kh.schedulePageActionRefresh=function(force){if(kh._pageActionRefreshScheduled)return;kh._pageActionRefreshScheduled=true;setTimeout(function(){kh._pageActionRefreshScheduled=false;kh.refreshCurrentPage(!!force).catch(function(){return null;});},120);};");
-        script.append("kh.patchHistory=function(){if(kh._historyPatched)return;if(!kh.isFeatureEnabled('enableHistoryPatch',true)){kh.pushLog('history patch 已关闭','warn');return;}kh._historyPatched=true;['pushState','replaceState'].forEach(function(name){var original=history[name];if(typeof original!=='function')return;history[name]=function(){var result=original.apply(this,arguments);window.dispatchEvent(new CustomEvent('kh:routeChanged',{detail:{type:name}}));kh.schedulePageActionRefresh(false);return result;};});};");
-        script.append("kh.patchStorage=function(){if(kh._storagePatched)return;if(!kh.isFeatureEnabled('enableStoragePatch',true)){kh.pushLog('storage patch 已关闭','warn');return;}kh._storagePatched=true;var proto=window.Storage&&window.Storage.prototype;if(!proto||proto.__khPatched)return;var originalSet=proto.setItem;var originalRemove=proto.removeItem;proto.setItem=function(key,value){var storageType='unknown';try{storageType=this===window.localStorage?'localStorage':(this===window.sessionStorage?'sessionStorage':'unknown');}catch(e){}var prev=null;try{prev=this.getItem(key);}catch(e){}var result=originalSet.apply(this,arguments);var next=String(value||'');if(prev!==next){window.dispatchEvent(new CustomEvent('kh:storageChanged',{detail:{storage:storageType,key:String(key||''),value:next}}));}return result;};proto.removeItem=function(key){var storageType='unknown';try{storageType=this===window.localStorage?'localStorage':(this===window.sessionStorage?'sessionStorage':'unknown');}catch(e){}var prev=null;try{prev=this.getItem(key);}catch(e){}var result=originalRemove.apply(this,arguments);if(prev!==null){window.dispatchEvent(new CustomEvent('kh:storageChanged',{detail:{storage:storageType,key:String(key||''),value:null}}));}return result;};proto.__khPatched=true;};");
-        script.append("kh.installActionObserver=function(){if(kh._actionObserverInstalled)return;kh._actionObserverInstalled=true;if(!kh.isFeatureEnabled('enableActionObserver',true)){kh.pushLog('页面动作 observer 已关闭','warn');return;}kh.pushLog('开始安装页面动作 observer','info');var observer=null;var observerHost=null;var refreshTimer=null;var scheduleRefresh=function(force){if(refreshTimer)clearTimeout(refreshTimer);refreshTimer=setTimeout(function(){refreshTimer=null;kh.schedulePageActionRefresh(!!force);},180);};var resubscribe=function(){observerHost=kh.findActionRefreshHost();if(observer)try{observer.disconnect();}catch(e){}observer=null;if(!window.MutationObserver||!observerHost)return;observer=new MutationObserver(function(mutations){if(!kh._pageRefreshPromise&&kh.hasMeaningfulActionMutation(mutations,observerHost))scheduleRefresh(false);});observer.observe(observerHost,{childList:true,subtree:true,attributes:false});kh.pushLog('页面动作 observer 已启动: host='+kh.describeReadyHost(observerHost),'info');};if(document.documentElement)resubscribe();else window.addEventListener('DOMContentLoaded',resubscribe,{once:true});window.addEventListener('kh:routeChanged',function(){resubscribe();scheduleRefresh(false);});window.addEventListener('kh:storageChanged',function(evt){var key=String(evt&&evt.detail&&evt.detail.key||'');if(/NOCOBASE_(MAIN_)?(TOKEN|AUTH|ROLE)$/i.test(key)){scheduleRefresh(true);}});window.addEventListener('kh:actionHostRefresh',function(){resubscribe();scheduleRefresh(false);});};");
-        script.append("if(kh.isFeatureEnabled('enableNetworkHeaderPatch',true)){patchFetch();patchXhr();}else{kh.pushLog('网络请求头 patch 已关闭','warn');}");
-        if (shouldBootstrap) {
-            script.append("try{");
-            script.append("var storages=[window.localStorage,window.sessionStorage].filter(Boolean);");
-            script.append("var setValue=function(storage,key,val){if(val===null||val===undefined||val===''){storage.removeItem(key);}else{storage.setItem(key,val);}};");
-            script.append("var token=").append(js(khToken)).append(";");
-            script.append("var auth=").append(js(khAuth.isEmpty() ? "basic" : khAuth)).append(";");
-            script.append("var role=").append(js(khRole)).append(";");
-            script.append("var app=").append(js(khApp)).append(";");
-            script.append("var paper=").append(js(khPaper)).append(";");
-            script.append("var layout=").append(js(khLayout)).append(";");
-            script.append("var redirect=").append(js(redirect)).append(";");
-            script.append("var prefixes=['").append(NOCOBASE_STORAGE_PREFIX).append("'];");
-            script.append("if(app){prefixes.push('").append(NOCOBASE_STORAGE_PREFIX).append("' + app.toUpperCase() + '_');}");
-            script.append("kh.pushLog('注入登录态并跳转到业务页: '+redirect,'info');");
-            script.append("prefixes.forEach(function(prefix){storages.forEach(function(storage){setValue(storage,prefix+'TOKEN',token);setValue(storage,prefix+'AUTH',auth);setValue(storage,prefix+'ROLE',role);});});");
-            script.append("storages.forEach(function(storage){setValue(storage,kh.paperTypeStorageKey,paper);setValue(storage,kh.layoutPresetStorageKey,layout);});");
-            script.append("window.location.replace(redirect);");
-            script.append("return;");
-            script.append("}catch(e){console.error('kh bootstrap failed',e);}");
-        }
-        script.append("kh.bootOnce().then(function(){return kh.refreshCurrentPage(false);}).catch(function(){return null;});window.addEventListener('DOMContentLoaded',function(){kh.schedulePageActionRefresh(false);},{once:true});window.addEventListener('pageshow',function(){kh.schedulePageActionRefresh(false);});window.addEventListener('hashchange',function(){window.dispatchEvent(new CustomEvent('kh:routeChanged',{detail:{type:'hashchange'}}));kh.schedulePageActionRefresh(false);});window.addEventListener('popstate',function(){window.dispatchEvent(new CustomEvent('kh:routeChanged',{detail:{type:'popstate'}}));kh.schedulePageActionRefresh(false);});");
-        script.append("})();");
-        return script.toString();
+        return ClientRuntimeScriptBuilder.build(
+            this,
+            currentUrl,
+            BuildConfig.BUILD_TIME,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE,
+            DEFAULT_PAGE_ACTIONS_API_PATH,
+            DEFAULT_SERVER_BASE,
+            DEFAULT_UPDATE_BASE,
+            NOCOBASE_STORAGE_PREFIX,
+            DEFAULT_STORAGE_APP_NAME
+        );
     }
 
     private static String safe(String value) {
