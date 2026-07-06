@@ -214,6 +214,7 @@ public class MainActivity extends BridgeActivity {
         mainHandler.postDelayed(() -> {
             appendNativeLog("页面恢复，检查打印连接");
             PrintPlugin.connectNative(MainActivity.this);
+            refreshRuntimeAfterResume();
         }, 200L);
     }
 
@@ -713,6 +714,38 @@ public class MainActivity extends BridgeActivity {
             script = "(function(){window.dispatchEvent(new CustomEvent('kh:printStatus',{detail:{status:" + js(value) + ",flag:" + js(flag == null ? "" : flag) + "}}));})();";
         }
         bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(script, null));
+    }
+
+    private void refreshRuntimeAfterResume() {
+        if (bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+        WebView webView = bridge.getWebView();
+        String currentUrl = safe(webView.getUrl());
+        setNativePageReadyState("loading", currentUrl.isEmpty() ? "activity resume" : currentUrl);
+        String script =
+            "(function(){"
+                + "var kh=window.__khClientRuntime;"
+                + "if(!kh){return 'missing-runtime';}"
+                + "if(document&&document.visibilityState&&document.visibilityState!=='visible'){return 'hidden';}"
+                + "if(kh.pageApplyState==='ready'&&kh.reportPageReadyState){"
+                    + "kh.reportPageReadyState('ready','activity resume');"
+                    + "if(kh.schedulePageActionRefresh){kh.schedulePageActionRefresh(false);}"
+                    + "return 'reported-ready';"
+                + "}"
+                + "if(window.KaihangAppReady&&window.KaihangAppReady.refresh){"
+                    + "window.KaihangAppReady.refresh(false);"
+                    + "return 'refresh-requested';"
+                + "}"
+                + "if(kh.refreshCurrentPage){"
+                    + "kh.refreshCurrentPage(false);"
+                    + "return 'refresh-current-page';"
+                + "}"
+                + "return 'noop';"
+            + "})();";
+        webView.post(() -> webView.evaluateJavascript(script, value ->
+            appendVerboseNativeLog("前台恢复 runtime 检查结果: " + safe(value))
+        ));
     }
 
     private void attachNativeWebBridge(WebView webView) {

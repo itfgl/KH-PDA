@@ -1,0 +1,14 @@
+{
+  "versionCode": 28,
+  "versionName": "1.2.19",
+  "apkFileName": "kaihang-scanner-v1.2.19-28.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.19-28.apk",
+  "changelog": "收紧 Android 页面动作目标选择与扫码兜底策略，并完成 Windows 业务页 runtime 独立文件拆分",
+  "releasedAt": "2026-07-06",
+  "notes": [
+    "Android 版本提升到 1.2.19 (28)",
+    "扫码未命中页面动作时不再全页面兜底找输入框，只允许写入当前焦点",
+    "页面动作的填充、点击、读值与诊断统一采用同一套目标选择策略，降低切页后写错框风险",
+    "Windows 页面动作 runtime 从 main_webview.py 抽成独立 JS 文件，后续继续排查会更稳"
+  ]
+}

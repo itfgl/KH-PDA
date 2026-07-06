@@ -536,11 +536,11 @@ public class PrintPlugin extends Plugin {
     private static GenericLabelLayout getGenericLabelLayout(String preset) {
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new GenericLabelLayout(346, 96, 118, 118, 8, 138, 24, 26, 32, 228, 24);
+                return new GenericLabelLayout(346, 96, 118, 118, 20, 138, 24, 26, 32, 240, 24);
             case "large":
-                return new GenericLabelLayout(346, 122, 144, 144, 8, 162, 24, 30, 38, 276, 22);
+                return new GenericLabelLayout(346, 122, 144, 144, 20, 162, 24, 30, 38, 288, 22);
             default:
-                return new GenericLabelLayout(346, 108, 132, 132, 8, 148, 24, 28, 36, 252, 24);
+                return new GenericLabelLayout(346, 108, 132, 132, 20, 148, 24, 28, 36, 264, 24);
         }
     }
 
