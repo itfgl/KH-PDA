@@ -24,9 +24,15 @@ public class MainActivity extends BridgeActivity {
     private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
     private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
     private static final long SCAN_RELEASE_TIMEOUT_MS = 8000L;
+    private static final int NATIVE_CONTROL_MARGIN_END_DP = 18;
+    private static final int NATIVE_CONTROL_MARGIN_BOTTOM_DP = 24;
+    private static final int NATIVE_STATUS_DOT_OFFSET_END_DP = 2;
+    private static final int NATIVE_STATUS_DOT_OFFSET_BOTTOM_DP = 46;
+    private static final int NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP = 68;
     private android.widget.ImageButton nativeControlButton;
     private android.widget.Button nativeScanButton;
     private android.view.View nativeStatusDot;
+    private android.widget.FrameLayout nativeControlOverlay;
     private final java.util.List<String> nativeLogLines = new java.util.ArrayList<>();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable pendingScanRelease;
@@ -35,6 +41,14 @@ public class MainActivity extends BridgeActivity {
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
     private int nativePrintBridgeCallCount = 0;
+    private int nativeControlMarginEndPx = -1;
+    private int nativeControlMarginBottomPx = -1;
+    private float nativeControlDragDownRawX = 0f;
+    private float nativeControlDragDownRawY = 0f;
+    private int nativeControlDragStartEndPx = 0;
+    private int nativeControlDragStartBottomPx = 0;
+    private boolean nativeControlDragging = false;
+    private int nativeControlTouchSlopPx = 0;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -481,6 +495,8 @@ public class MainActivity extends BridgeActivity {
         container.setLayoutParams(containerParams);
         container.setClickable(false);
         container.setFocusable(false);
+        nativeControlOverlay = container;
+        nativeControlTouchSlopPx = android.view.ViewConfiguration.get(this).getScaledTouchSlop();
 
         nativeControlButton = new android.widget.ImageButton(this);
         nativeControlButton.setImageResource(android.R.drawable.ic_menu_manage);
@@ -490,8 +506,6 @@ public class MainActivity extends BridgeActivity {
         nativeControlButton.setContentDescription("客户端工具");
         int size = dp(56);
         android.widget.FrameLayout.LayoutParams fabParams = new android.widget.FrameLayout.LayoutParams(size, size);
-        fabParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
-        fabParams.setMargins(dp(16), dp(16), dp(18), dp(24));
         nativeControlButton.setLayoutParams(fabParams);
         nativeControlButton.setElevation(dp(10));
         nativeControlButton.setOnClickListener(v -> {
@@ -502,11 +516,44 @@ public class MainActivity extends BridgeActivity {
             }
             showNativeControlMenu(v);
         });
+        nativeControlButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    nativeControlDragDownRawX = event.getRawX();
+                    nativeControlDragDownRawY = event.getRawY();
+                    nativeControlDragStartEndPx = getNativeControlMarginEndPx();
+                    nativeControlDragStartBottomPx = getNativeControlMarginBottomPx();
+                    nativeControlDragging = false;
+                    return true;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    float deltaX = event.getRawX() - nativeControlDragDownRawX;
+                    float deltaY = event.getRawY() - nativeControlDragDownRawY;
+                    if (!nativeControlDragging) {
+                        nativeControlDragging = Math.hypot(deltaX, deltaY) > nativeControlTouchSlopPx;
+                    }
+                    if (nativeControlDragging) {
+                        int nextEnd = Math.round(nativeControlDragStartEndPx - deltaX);
+                        int nextBottom = Math.round(nativeControlDragStartBottomPx - deltaY);
+                        updateNativeControlAnchor(nextEnd, nextBottom);
+                    }
+                    return true;
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    nativeControlDragging = false;
+                    return true;
+                case android.view.MotionEvent.ACTION_UP:
+                    boolean handledAsClick = !nativeControlDragging;
+                    nativeControlDragging = false;
+                    if (handledAsClick) {
+                        v.performClick();
+                    }
+                    return true;
+                default:
+                    return false;
+            }
+        });
 
         nativeStatusDot = new android.view.View(this);
         android.widget.FrameLayout.LayoutParams dotParams = new android.widget.FrameLayout.LayoutParams(dp(12), dp(12));
-        dotParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
-        dotParams.setMargins(dp(16), dp(16), dp(20), dp(70));
         nativeStatusDot.setLayoutParams(dotParams);
         nativeStatusDot.setElevation(dp(12));
         nativeStatusDot.setBackground(buildStatusDotBackground("#98A2B3"));
@@ -523,8 +570,6 @@ public class MainActivity extends BridgeActivity {
             android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
             dp(44)
         );
-        scanParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
-        scanParams.setMargins(dp(16), dp(16), dp(18), dp(92));
         nativeScanButton.setLayoutParams(scanParams);
         nativeScanButton.setPadding(dp(18), 0, dp(18), 0);
         nativeScanButton.setOnClickListener(v -> {
@@ -545,7 +590,80 @@ public class MainActivity extends BridgeActivity {
         nativeStatusDot.bringToFront();
         nativeScanButton.bringToFront();
         nativeControlButton.bringToFront();
+        updateNativeControlPositions();
         updateNativeStatusDot();
+    }
+
+    private int getNativeControlMarginEndPx() {
+        if (nativeControlMarginEndPx < 0) {
+            nativeControlMarginEndPx = dp(NATIVE_CONTROL_MARGIN_END_DP);
+        }
+        return nativeControlMarginEndPx;
+    }
+
+    private int getNativeControlMarginBottomPx() {
+        if (nativeControlMarginBottomPx < 0) {
+            nativeControlMarginBottomPx = dp(NATIVE_CONTROL_MARGIN_BOTTOM_DP);
+        }
+        return nativeControlMarginBottomPx;
+    }
+
+    private void updateNativeControlAnchor(int marginEndPx, int marginBottomPx) {
+        nativeControlMarginEndPx = clampNativeControlHorizontalMargin(marginEndPx);
+        nativeControlMarginBottomPx = clampNativeControlVerticalMargin(marginBottomPx);
+        updateNativeControlPositions();
+    }
+
+    private int clampNativeControlHorizontalMargin(int requestedPx) {
+        int overlayWidth = nativeControlOverlay != null ? nativeControlOverlay.getWidth() : 0;
+        int buttonWidth = nativeControlButton != null ? nativeControlButton.getWidth() : 0;
+        if (overlayWidth <= 0) {
+            overlayWidth = getResources().getDisplayMetrics().widthPixels;
+        }
+        if (buttonWidth <= 0) {
+            buttonWidth = dp(56);
+        }
+        int maxMargin = Math.max(0, overlayWidth - buttonWidth);
+        return Math.max(0, Math.min(requestedPx, maxMargin));
+    }
+
+    private int clampNativeControlVerticalMargin(int requestedPx) {
+        int overlayHeight = nativeControlOverlay != null ? nativeControlOverlay.getHeight() : 0;
+        int buttonHeight = nativeControlButton != null ? nativeControlButton.getHeight() : 0;
+        if (overlayHeight <= 0) {
+            overlayHeight = getResources().getDisplayMetrics().heightPixels;
+        }
+        if (buttonHeight <= 0) {
+            buttonHeight = dp(56);
+        }
+        int maxMargin = Math.max(0, overlayHeight - buttonHeight);
+        return Math.max(0, Math.min(requestedPx, maxMargin));
+    }
+
+    private void updateNativeControlPositions() {
+        if (nativeControlButton == null || nativeScanButton == null || nativeStatusDot == null) {
+            return;
+        }
+        int end = getNativeControlMarginEndPx();
+        int bottom = getNativeControlMarginBottomPx();
+
+        android.widget.FrameLayout.LayoutParams fabParams =
+            (android.widget.FrameLayout.LayoutParams) nativeControlButton.getLayoutParams();
+        fabParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
+        fabParams.setMargins(0, 0, end, bottom);
+        nativeControlButton.setLayoutParams(fabParams);
+
+        android.widget.FrameLayout.LayoutParams scanParams =
+            (android.widget.FrameLayout.LayoutParams) nativeScanButton.getLayoutParams();
+        scanParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
+        scanParams.setMargins(0, 0, end, bottom + dp(NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP));
+        nativeScanButton.setLayoutParams(scanParams);
+
+        android.widget.FrameLayout.LayoutParams dotParams =
+            (android.widget.FrameLayout.LayoutParams) nativeStatusDot.getLayoutParams();
+        dotParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
+        dotParams.setMargins(0, 0, end + dp(NATIVE_STATUS_DOT_OFFSET_END_DP), bottom + dp(NATIVE_STATUS_DOT_OFFSET_BOTTOM_DP));
+        nativeStatusDot.setLayoutParams(dotParams);
     }
 
     private android.graphics.drawable.Drawable buildNativeFabBackground() {
@@ -792,13 +910,10 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void setNativeScanActionVisible(boolean visible) {
-        if (nativeScanButton == null) {
-            return;
+        if (nativeScanButton != null) {
+            nativeScanButton.setVisibility(android.view.View.GONE);
         }
-        nativeScanButton.setVisibility(visible ? android.view.View.VISIBLE : android.view.View.GONE);
-        if (!visible) {
-            setNativeScanActive(false);
-        }
+        setNativeScanActive(false);
     }
 
     private void setNativeScanActive(boolean active) {

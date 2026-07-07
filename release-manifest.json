@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 29,
+  "currentVersionCode": 30,
   "releases": [
+    {
+      "versionCode": 30,
+      "versionName": "1.2.21",
+      "apkFileName": "kaihang-scanner-v1.2.21-30.apk",
+      "changelog": "支持拖动原生设置按钮，隐藏独立扫码按钮，并让状态点跟随联动移动",
+      "releasedAt": "2026-07-07",
+      "notes": [
+        "Android 版本提升到 1.2.21 (30)",
+        "原生悬浮设置按钮支持手势拖动，可按设备使用习惯调整位置",
+        "独立原生扫码悬浮按钮已隐藏，不再响应网页侧显示控制",
+        "页面状态点改为与设置按钮共享同一锚点，拖动设置按钮时会一起移动",
+        "保留原有设置入口、菜单扫码能力和状态指示能力，只调整悬浮控件呈现方式"
+      ]
+    },
     {
       "versionCode": 29,
       "versionName": "1.2.20",
