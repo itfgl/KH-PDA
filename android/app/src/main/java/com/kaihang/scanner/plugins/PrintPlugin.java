@@ -587,11 +587,11 @@ public class PrintPlugin extends Plugin {
     private static LegacyGenericLayout getLegacyGenericLayout(String preset) {
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new LegacyGenericLayout(208, 84, 104, 104, 264, 124, 22, 28, 168, 8, 24);
+                return new LegacyGenericLayout(346, 96, 104, 104, 264, 124, 22, 28, 168, 8, 24);
             case "large":
-                return new LegacyGenericLayout(240, 104, 128, 128, 248, 152, 26, 34, 196, 8, 22);
+                return new LegacyGenericLayout(346, 122, 128, 128, 248, 152, 26, 34, 196, 8, 22);
             default:
-                return new LegacyGenericLayout(228, 96, 120, 120, 256, 140, 24, 32, 180, 8, 24);
+                return new LegacyGenericLayout(346, 108, 120, 120, 256, 140, 24, 32, 180, 8, 24);
         }
     }
 

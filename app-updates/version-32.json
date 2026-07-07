@@ -1,0 +1,14 @@
+{
+  "versionCode": 32,
+  "versionName": "1.2.23",
+  "apkFileName": "kaihang-scanner-v1.2.23-32.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.23-32.apk",
+  "changelog": "放大通用标签一维码尺寸，修复试模页恢复打印后条码再次偏小的问题",
+  "releasedAt": "2026-07-07",
+  "notes": [
+    "Android 版本提升到 1.2.23 (32)",
+    "仅调整 generic printLabel 通用标签路径的一维码宽高，不改生产批次标签 printBatchLabel",
+    "compact、standard、large 三套通用标签的一维码宽度统一恢复到 346 点",
+    "保留上一版为避免空白打印而回退的通用标签文字落点逻辑，只修正条码过小的副作用"
+  ]
+}
