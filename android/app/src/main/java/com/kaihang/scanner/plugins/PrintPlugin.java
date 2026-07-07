@@ -323,13 +323,13 @@ public class PrintPlugin extends Plugin {
                     return;
                 }
                 String normalizedPaperType = normalizePaperType(paperType);
-                BuiltLabel builtLabel = buildUnifiedLabel(
+                BuiltLabel builtLabel = buildLegacyGenericLabel(
                     context,
                     barcodeValue,
                     qrCodeValue,
                     textValue,
                     layoutPreset,
-                    "printLabelNative"
+                    "printLabelNativeLegacy"
                 );
                 emitPrintDiagnostic(
                     "printLabelNative",
@@ -525,6 +525,46 @@ public class PrintPlugin extends Plugin {
         }
     }
 
+    private static final class LegacyGenericLayout {
+        final int barcodeWidth;
+        final int barcodeHeight;
+        final int qrWidth;
+        final int qrHeight;
+        final int qrLeft;
+        final int bodyTop;
+        final int textSize;
+        final int lineHeight;
+        final int minHeight;
+        final int textLeft;
+        final int wrapUnits;
+
+        LegacyGenericLayout(
+            int barcodeWidth,
+            int barcodeHeight,
+            int qrWidth,
+            int qrHeight,
+            int qrLeft,
+            int bodyTop,
+            int textSize,
+            int lineHeight,
+            int minHeight,
+            int textLeft,
+            int wrapUnits
+        ) {
+            this.barcodeWidth = barcodeWidth;
+            this.barcodeHeight = barcodeHeight;
+            this.qrWidth = qrWidth;
+            this.qrHeight = qrHeight;
+            this.qrLeft = qrLeft;
+            this.bodyTop = bodyTop;
+            this.textSize = textSize;
+            this.lineHeight = lineHeight;
+            this.minHeight = minHeight;
+            this.textLeft = textLeft;
+            this.wrapUnits = wrapUnits;
+        }
+    }
+
     private static int resolveCenteredMediaLeft(int mediaWidth) {
         return Math.max(0, (GenericLabelLayout.LABEL_WIDTH - mediaWidth) / 2);
     }
@@ -542,6 +582,81 @@ public class PrintPlugin extends Plugin {
             default:
                 return new GenericLabelLayout(346, 108, 132, 132, 20, 148, 24, 28, 36, 264, 24);
         }
+    }
+
+    private static LegacyGenericLayout getLegacyGenericLayout(String preset) {
+        switch (normalizeLayoutPreset(preset)) {
+            case "compact":
+                return new LegacyGenericLayout(208, 84, 104, 104, 264, 124, 22, 28, 168, 8, 24);
+            case "large":
+                return new LegacyGenericLayout(240, 104, 128, 128, 248, 152, 26, 34, 196, 8, 22);
+            default:
+                return new LegacyGenericLayout(228, 96, 120, 120, 256, 140, 24, 32, 180, 8, 24);
+        }
+    }
+
+    private static BuiltLabel buildLegacyGenericLabel(
+        Context context,
+        String barcodeValue,
+        String qrCodeValue,
+        String textValue,
+        String layoutPreset,
+        String diagnosticSource
+    ) {
+        if (context == null) throw new IllegalArgumentException("context is required");
+        String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
+        String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
+        String safeTextValue = textValue == null ? "" : textValue.trim();
+        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.isEmpty()) {
+            throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
+        }
+
+        LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset);
+        Bitmap barcode = null;
+        Bitmap qr = null;
+        String rawBarcodeSize = "null";
+        if (!safeBarcodeValue.isEmpty()) {
+            barcode = BarcodeCreater.createBarcode(context, safeBarcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
+            if (barcode == null) throw new IllegalStateException("barcode bitmap null");
+            rawBarcodeSize = bitmapSize(barcode);
+            barcode = normalizeBarcodeBitmap(barcode, layout.barcodeWidth, layout.barcodeHeight);
+        }
+        if (!safeQrCodeValue.isEmpty()) {
+            qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
+            if (qr == null) throw new IllegalStateException("qr bitmap null");
+        }
+
+        List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
+        int y = (barcode != null || qr != null) ? layout.bodyTop : 16;
+        int labelHeight = Math.max(y + (Math.max(1, textLines.size()) * layout.lineHeight) + 16, layout.minHeight);
+
+        AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
+        if (barcode != null) {
+            builder.addBmp(barcode, 8, 8);
+        }
+        if (qr != null) {
+            builder.addBmp(qr, layout.qrLeft, 8);
+        }
+        for (String line : textLines) {
+            builder.addText(line, layout.textSize, layout.textLeft, y);
+            y += layout.lineHeight;
+        }
+
+        Bitmap label = builder.getBitmap();
+        if (label == null) throw new IllegalStateException("label bitmap null");
+        String diagnostic =
+            "legacyGeneric=true"
+                + ", layoutPreset=" + normalizeLayoutPreset(layoutPreset)
+                + ", requestBarcode=" + layout.barcodeWidth + "x" + layout.barcodeHeight
+                + ", rawBarcode=" + rawBarcodeSize
+                + ", actualBarcode=" + bitmapSize(barcode)
+                + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
+                + ", actualQr=" + bitmapSize(qr)
+                + ", label=" + bitmapSize(label)
+                + ", bodyTop=" + ((barcode != null || qr != null) ? layout.bodyTop : 16)
+                + ", lines=" + textLines.size()
+                + ", source=" + diagnosticSource;
+        return new BuiltLabel(label, diagnostic);
     }
 
     private static int estimateTextWidth(String text, int textSize) {
@@ -704,13 +819,13 @@ public class PrintPlugin extends Plugin {
         printExecutor.execute(() -> {
             if (destroyed) { call.reject("printer destroyed"); return; }
             try {
-                BuiltLabel builtLabel = buildUnifiedLabel(
+                BuiltLabel builtLabel = buildLegacyGenericLabel(
                     getContext(),
                     barcodeValue,
                     qrCodeValue,
                     textValue,
                     layoutPreset,
-                    "printLabelPlugin"
+                    "printLabelPluginLegacy"
                 );
                 emitPrintDiagnostic(
                     "printLabelPlugin",

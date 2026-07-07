@@ -1,0 +1,14 @@
+{
+  "versionCode": 31,
+  "versionName": "1.2.22",
+  "apkFileName": "kaihang-scanner-v1.2.22-31.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.22-31.apk",
+  "changelog": "通用标签打印回退到稳定布局，修复试模页已取到值但实际空白打印的问题",
+  "releasedAt": "2026-07-07",
+  "notes": [
+    "Android 版本提升到 1.2.22 (31)",
+    "只调整 generic printLabel 通用标签路径，生产批次标签 printBatchLabel 保持不变",
+    "原生通用标签打印回退到此前稳定的布局坐标与尺寸，避免条码和文本被新统一布局误裁掉或落到不可见区域",
+    "试模页这类走通用标签入口的页面，在日志已能解析 barcode/text 的情况下，不再继续空白走纸"
+  ]
+}
