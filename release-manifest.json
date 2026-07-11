@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 32,
+  "currentVersionCode": 33,
   "releases": [
+    {
+      "versionCode": 33,
+      "versionName": "1.2.24",
+      "apkFileName": "kaihang-scanner-v1.2.24-33.apk",
+      "changelog": "页面动作等待目标控件就绪后再进入可执行状态，提升扫码和打印切页稳定性",
+      "releasedAt": "2026-07-11",
+      "notes": [
+        "Android 版本提升到 1.2.24 (33)",
+        "页面动作初始化增加目标控件就绪门控，避免页面尚未渲染完成时提前接收扫码或打印",
+        "路由切换后等待当前页动作锚点挂载，再报告 ready 并处理待执行扫码",
+        "减少左侧菜单和无关 DOM 变化造成的重复动作刷新"
+      ]
+    },
     {
       "versionCode": 32,
       "versionName": "1.2.23",
