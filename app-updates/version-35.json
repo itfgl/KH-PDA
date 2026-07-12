@@ -1,0 +1,14 @@
+{
+  "versionCode": 35,
+  "versionName": "1.2.26",
+  "apkFileName": "kaihang-scanner-v1.2.26-35.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.26-35.apk",
+  "changelog": "统一跨平台扫码动作并修复 Android 重复加载 Windows 动作",
+  "releasedAt": "2026-07-12",
+  "notes": [
+    "Android 版本提升到 1.2.26 (35)",
+    "未配置 platform 的历史和公共动作继续正常加载",
+    "明确配置 platform 的设备专属动作只在对应客户端加载",
+    "测试页扫码改为单条跨平台动作，避免 Android 重复处理同一次扫码"
+  ]
+}
