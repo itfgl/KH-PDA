@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 33,
+  "currentVersionCode": 34,
   "releases": [
+    {
+      "versionCode": 34,
+      "versionName": "1.2.25",
+      "apkFileName": "kaihang-scanner-v1.2.25-34.apk",
+      "changelog": "页面动作支持按业务字段 name 定位扫码输入和单表打印取值",
+      "releasedAt": "2026-07-12",
+      "notes": [
+        "Android 版本提升到 1.2.25 (34)",
+        "扫码填入支持 target_field_name，无需配置 CSS selector",
+        "单表打印支持 barcode_value_field_name、qrcode_value_field_name 和 text_value_field_name",
+        "按钮动作支持 trigger_field_name，同时保留既有 selector 配置兼容"
+      ]
+    },
     {
       "versionCode": 33,
       "versionName": "1.2.24",
