@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 36,
+  "currentVersionCode": 37,
   "releases": [
+    {
+      "versionCode": 37,
+      "versionName": "1.2.28",
+      "apkFileName": "kaihang-scanner-v1.2.28-37.apk",
+      "changelog": "页面动作业务字段名支持按 DOM name 定位并回退 id，兼容 NocoBase 不输出 name 的输入组件",
+      "releasedAt": "2026-07-13",
+      "notes": [
+        "Android 版本提升到 1.2.28 (37)",
+        "扫码 target_field_name 继续填写 NocoBase 业务字段名，不再要求 DOM 必须存在 name 属性",
+        "字段定位优先匹配 name，找不到时回退同名 id，兼容 mold_name 等旧页面输入组件",
+        "保留显式 selector 兼容，并继续使用客户端事件运行时统一页面生命周期"
+      ]
+    },
     {
       "versionCode": 36,
       "versionName": "1.2.27",
