@@ -1,0 +1,14 @@
+{
+  "versionCode": 36,
+  "versionName": "1.2.27",
+  "apkFileName": "kaihang-scanner-v1.2.27-36.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.27-36.apk",
+  "changelog": "接入 NocoBase 客户端事件运行时，统一页面生命周期并保留旧环境回退",
+  "releasedAt": "2026-07-13",
+  "notes": [
+    "Android 版本提升到 1.2.27 (36)",
+    "优先订阅 kh:nocobase:route-change 和 kh:nocobase:page-ready",
+    "插件可用时不再重复 patch history，减少多重页面监听",
+    "未安装插件的环境在 1.5 秒后自动启用原 history 兼容回退"
+  ]
+}
