@@ -1,0 +1,15 @@
+{
+  "versionCode": 38,
+  "versionName": "1.2.29",
+  "apkFileName": "kaihang-scanner-v1.2.29-38.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.29-38.apk",
+  "changelog": "放大二维码打印尺寸，并修复打印模板备注误取动作表备注",
+  "releasedAt": "2026-07-13",
+  "notes": [
+    "Android 版本提升到 1.2.29 (38)",
+    "large 模板二维码由 144×144 点放大为 232×232 点，约占 384 点纸宽的 60%",
+    "二维码单独打印时从标签顶部开始排版，不再预留不存在的一维码区域",
+    "compact、standard 和兼容打印桥同步放大并水平居中二维码",
+    "模板变量禁止读取动作记录自身的 remark/name 等元数据；业务字段为空时保持为空"
+  ]
+}

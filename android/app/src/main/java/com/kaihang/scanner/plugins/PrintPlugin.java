@@ -261,11 +261,17 @@ public class PrintPlugin extends Plugin {
 
         List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
         int bodyTop = 16;
+        int qrTop = -1;
         if (barcode != null) {
             bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
         }
         if (qr != null) {
-            bodyTop = Math.max(bodyTop, layout.qrTop + layout.qrHeight + layout.mediaGap);
+            // 二维码单独打印时直接从标签顶部排版；同时存在一维码时再接在其后。
+            // 旧逻辑无条件使用 qrTop，导致机器二维码上方保留了一整块不存在的一维码区域。
+            qrTop = barcode == null
+                ? layout.barcodeTop
+                : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
+            bodyTop = Math.max(bodyTop, qrTop + layout.qrHeight + layout.mediaGap);
         }
         int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
         int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
@@ -277,7 +283,7 @@ public class PrintPlugin extends Plugin {
             builder.addBmp(barcode, barcodeLeft, layout.barcodeTop);
         }
         if (qr != null) {
-            builder.addBmp(qr, qrLeft, layout.qrTop);
+            builder.addBmp(qr, qrLeft, qrTop);
         }
 
         int y = bodyTop;
@@ -297,6 +303,7 @@ public class PrintPlugin extends Plugin {
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", qrLeft=" + qrLeft
+                + ", qrTop=" + qrTop
                 + ", label=" + bitmapSize(label)
                 + ", bodyTop=" + bodyTop
                 + ", lines=" + textLines.size()
@@ -576,22 +583,22 @@ public class PrintPlugin extends Plugin {
     private static GenericLabelLayout getGenericLabelLayout(String preset) {
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new GenericLabelLayout(346, 96, 118, 118, 20, 138, 24, 26, 32, 240, 24);
+                return new GenericLabelLayout(346, 96, 184, 184, 20, 138, 24, 26, 32, 240, 24);
             case "large":
-                return new GenericLabelLayout(346, 122, 144, 144, 20, 162, 24, 30, 38, 288, 22);
+                return new GenericLabelLayout(346, 122, 232, 232, 20, 162, 24, 30, 38, 288, 22);
             default:
-                return new GenericLabelLayout(346, 108, 132, 132, 20, 148, 24, 28, 36, 264, 24);
+                return new GenericLabelLayout(346, 108, 208, 208, 20, 148, 24, 28, 36, 264, 24);
         }
     }
 
     private static LegacyGenericLayout getLegacyGenericLayout(String preset) {
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new LegacyGenericLayout(346, 96, 104, 104, 264, 124, 22, 28, 168, 8, 24);
+                return new LegacyGenericLayout(346, 96, 184, 184, 100, 216, 22, 28, 244, 8, 24);
             case "large":
-                return new LegacyGenericLayout(346, 122, 128, 128, 248, 152, 26, 34, 196, 8, 22);
+                return new LegacyGenericLayout(346, 122, 232, 232, 76, 264, 26, 34, 308, 8, 22);
             default:
-                return new LegacyGenericLayout(346, 108, 120, 120, 256, 140, 24, 32, 180, 8, 24);
+                return new LegacyGenericLayout(346, 108, 208, 208, 88, 240, 24, 32, 280, 8, 24);
         }
     }
 
@@ -627,7 +634,10 @@ public class PrintPlugin extends Plugin {
         }
 
         List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
-        int y = (barcode != null || qr != null) ? layout.bodyTop : 16;
+        int mediaBottom = 0;
+        if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
+        if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
+        int y = mediaBottom > 0 ? mediaBottom + 24 : 16;
         int labelHeight = Math.max(y + (Math.max(1, textLines.size()) * layout.lineHeight) + 16, layout.minHeight);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
@@ -653,7 +663,7 @@ public class PrintPlugin extends Plugin {
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
-                + ", bodyTop=" + ((barcode != null || qr != null) ? layout.bodyTop : 16)
+                + ", bodyTop=" + y
                 + ", lines=" + textLines.size()
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
@@ -764,7 +774,7 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 机器二维码标签
-     * 布局 384×270：大二维码居中，下方机器编号 + 打印时间
+     * 二维码约占 384 点纸宽的 60%，居中显示，下方打印机器编号和时间。
      * QR 内容格式：machineId（仅机器编号）
      */
     @PluginMethod

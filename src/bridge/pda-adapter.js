@@ -185,18 +185,18 @@ export const PrintPlugin = {
   /**
    * 机器标签（二维码）
    * 与 PrintPlugin.java 的 printMachineQR 布局一致：
-   *   384×300  QR(92,8 200×200)  机器/品类/日期三行
+   *   384×344  QR(76,8 232×232)  机器/品类/日期三行
    */
   async printMachineQR({ machineId = '', productType = '', date = '' }) {
     _send({
       name: 'printBmpLabel',
-      width: 384, height: 300, top: 8, concentration: 15,
+      width: 384, height: 344, top: 8, concentration: 15,
       data: [
         { printType: 2, text: machineId,
-          desiredWidth: 200, desiredHeight: 200, displayCode: false, left: 92, top: 8 },
-        { printType: 0, text: `机 器：${machineId}`,   textSize: 24, x: 16, y: 224 },
-        { printType: 0, text: `品 类：${productType}`, textSize: 22, x: 16, y: 252 },
-        { printType: 0, text: `日 期：${date}`,        textSize: 22, x: 16, y: 278 },
+          desiredWidth: 232, desiredHeight: 232, displayCode: false, left: 76, top: 8 },
+        { printType: 0, text: `机 器：${machineId}`,   textSize: 24, x: 16, y: 264 },
+        { printType: 0, text: `品 类：${productType}`, textSize: 22, x: 16, y: 292 },
+        { printType: 0, text: `日 期：${date}`,        textSize: 22, x: 16, y: 318 },
       ],
     });
   },
@@ -211,10 +211,10 @@ export const PrintPlugin = {
     const preset = String(layoutPreset || '').trim().toLowerCase();
     const isBlackMark = String(paperType || '').trim().toLowerCase() === 'black_mark';
     const layout = preset === 'compact'
-      ? { barcodeWidth: 208, barcodeHeight: 84, qrWidth: 104, qrHeight: 104, qrLeft: 264, bodyTop: 124, textSize: 22, lineHeight: 28, minHeight: 168, textLeft: 8 }
+      ? { barcodeWidth: 208, barcodeHeight: 84, qrWidth: 184, qrHeight: 184, qrLeft: 100, textSize: 22, lineHeight: 28, minHeight: 244, textLeft: 8 }
       : preset === 'large'
-        ? { barcodeWidth: 240, barcodeHeight: 104, qrWidth: 128, qrHeight: 128, qrLeft: 248, bodyTop: 152, textSize: 26, lineHeight: 34, minHeight: 196, textLeft: 8 }
-        : { barcodeWidth: 228, barcodeHeight: 96, qrWidth: 120, qrHeight: 120, qrLeft: 256, bodyTop: 140, textSize: 24, lineHeight: 32, minHeight: 180, textLeft: 8 };
+        ? { barcodeWidth: 240, barcodeHeight: 104, qrWidth: 232, qrHeight: 232, qrLeft: 76, textSize: 26, lineHeight: 34, minHeight: 308, textLeft: 8 }
+        : { barcodeWidth: 228, barcodeHeight: 96, qrWidth: 208, qrHeight: 208, qrLeft: 88, textSize: 24, lineHeight: 32, minHeight: 280, textLeft: 8 };
     const lines = String(textValue || '').replace(/\r/g, '').split('\n');
     const data = [];
     if (barcodeValue) {
@@ -239,7 +239,11 @@ export const PrintPlugin = {
         top: 8,
       });
     }
-    let y = (barcodeValue || qrCodeValue) ? layout.bodyTop : 16;
+    const mediaBottom = Math.max(
+      barcodeValue ? 8 + layout.barcodeHeight : 0,
+      qrCodeValue ? 8 + layout.qrHeight : 0,
+    );
+    let y = mediaBottom > 0 ? mediaBottom + 24 : 16;
     for (const line of lines) {
       data.push({ printType: 0, text: String(line || ''), textSize: layout.textSize, x: layout.textLeft, y });
       y += layout.lineHeight;
