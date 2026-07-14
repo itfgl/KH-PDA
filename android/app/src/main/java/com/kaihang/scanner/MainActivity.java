@@ -29,6 +29,7 @@ public class MainActivity extends BridgeActivity {
     private static final int NATIVE_STATUS_DOT_OFFSET_END_DP = 2;
     private static final int NATIVE_STATUS_DOT_OFFSET_BOTTOM_DP = 46;
     private static final int NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP = 68;
+    private static final int REQUEST_EXPORT_LOGS = 8421;
     private android.widget.ImageButton nativeControlButton;
     private android.widget.Button nativeScanButton;
     private android.view.View nativeStatusDot;
@@ -49,6 +50,11 @@ public class MainActivity extends BridgeActivity {
     private int nativeControlDragStartBottomPx = 0;
     private boolean nativeControlDragging = false;
     private int nativeControlTouchSlopPx = 0;
+    private String pendingLogExportText;
+
+    private interface CombinedLogCallback {
+        void onReady(String text);
+    }
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -338,6 +344,34 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         bridge.onNewIntent(intent);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_EXPORT_LOGS) {
+            return;
+        }
+        if (resultCode != RESULT_OK || data == null || data.getData() == null) {
+            pendingLogExportText = null;
+            appendNativeLog("已取消导出运行日志");
+            return;
+        }
+        Uri targetUri = data.getData();
+        String exportText = pendingLogExportText == null ? "" : pendingLogExportText;
+        pendingLogExportText = null;
+        try (java.io.OutputStream output = getContentResolver().openOutputStream(targetUri, "w")) {
+            if (output == null) {
+                throw new java.io.IOException("无法打开目标文件");
+            }
+            output.write(exportText.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.flush();
+            appendNativeLog("运行日志已导出到本地 TXT");
+            toast("运行日志已导出");
+        } catch (Exception e) {
+            appendNativeLog("导出运行日志失败: " + e.getMessage());
+            toast("导出失败: " + safe(e.getMessage()));
+        }
     }
 
     private void handleRuntimeInjection(WebView view, String targetUrl, InjectionTrigger trigger) {
@@ -1149,20 +1183,25 @@ public class MainActivity extends BridgeActivity {
             .setTitle("运行日志")
             .setView(scrollView)
             .setPositiveButton("关闭", null)
+            .setNegativeButton("导出 TXT", null)
             .setNeutralButton("清空", null)
             .create();
-        dialog.setOnShowListener(d -> dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
-            nativeLogLines.clear();
-            content.setText("本地日志已清空");
-        }));
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> clearCombinedLogs(content));
+            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> exportCombinedLogs());
+        });
         dialog.show();
         loadCombinedLogs(content);
     }
 
     private void loadCombinedLogs(android.widget.TextView targetView) {
+        collectCombinedLogs(text -> runOnUiThread(() -> targetView.setText(text)));
+    }
+
+    private void collectCombinedLogs(CombinedLogCallback callback) {
         String nativeLogs = nativeLogLines.isEmpty() ? "(暂无原生日志)" : android.text.TextUtils.join("\n", nativeLogLines);
         if (bridge == null || bridge.getWebView() == null) {
-            targetView.setText(nativeLogs);
+            callback.onReady("== 原生日志 ==\n" + nativeLogs + "\n\n== 网页日志 ==\n(网页不可用)");
             return;
         }
         String script = "(function(){try{var raw=(window.localStorage&&window.localStorage.getItem('KH_FLOATING_LOGS'))||'[]';window.__khLastLogRaw=raw;return raw;}catch(e){return JSON.stringify([{text:'读取网页日志失败: '+String(e&&e.message||e||'unknown'),type:'err'}]);}})();";
@@ -1184,8 +1223,40 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception e) {
                 text.append("读取网页日志失败: ").append(e.getMessage());
             }
-            runOnUiThread(() -> targetView.setText(text.toString()));
+            callback.onReady(text.toString());
         });
+    }
+
+    private void clearCombinedLogs(android.widget.TextView targetView) {
+        nativeLogLines.clear();
+        if (bridge == null || bridge.getWebView() == null) {
+            targetView.setText("原生日志已清空；网页当前不可用，网页日志未清理");
+            return;
+        }
+        String script = "(function(){try{var kh=window.__khClientRuntime;if(kh&&kh.clearFloatingLogs){kh.clearFloatingLogs();}else if(window.localStorage){window.localStorage.removeItem('KH_FLOATING_LOGS');}window.__khLastLogRaw='[]';window.__khLastLogSnapshot=[];return true;}catch(e){return false;}})();";
+        bridge.getWebView().evaluateJavascript(script, value -> runOnUiThread(() -> {
+            boolean webCleared = "true".equalsIgnoreCase(safe(value).replace("\"", "").trim());
+            targetView.setText(webCleared ? "原生和网页日志已清空" : "原生日志已清空，网页日志清理失败");
+        }));
+    }
+
+    private void exportCombinedLogs() {
+        appendNativeLog("准备导出运行日志");
+        collectCombinedLogs(text -> runOnUiThread(() -> {
+            pendingLogExportText = text;
+            String timestamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(new java.util.Date());
+            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("text/plain");
+            intent.putExtra(Intent.EXTRA_TITLE, "kaihang-runtime-logs-" + timestamp + ".txt");
+            try {
+                startActivityForResult(intent, REQUEST_EXPORT_LOGS);
+            } catch (Exception e) {
+                pendingLogExportText = null;
+                appendNativeLog("打开日志保存界面失败: " + e.getMessage());
+                toast("无法打开文件保存界面");
+            }
+        }));
     }
 
     private String decodeJsString(String value) {
