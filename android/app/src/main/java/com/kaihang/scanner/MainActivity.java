@@ -382,6 +382,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CAMERA_SCAN) {
+            if (resultCode != RESULT_OK || data == null) {
+                return;
+            }
+            String value = safe(data.getStringExtra(CameraScanActivity.EXTRA_SCAN_VALUE)).trim();
+            if (value.isEmpty()) return;
+            appendNativeLog("收到相机扫码: " + value);
+            emitCameraScanToPage(value);
+            return;
+        }
         if (requestCode != REQUEST_EXPORT_LOGS) {
             return;
         }
@@ -983,18 +993,6 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("打开相机扫码失败: " + error.getMessage());
             toast("打开相机失败: " + error.getMessage());
         }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode != REQUEST_CAMERA_SCAN || resultCode != RESULT_OK || data == null) {
-            return;
-        }
-        String value = safe(data.getStringExtra(CameraScanActivity.EXTRA_SCAN_VALUE)).trim();
-        if (value.isEmpty()) return;
-        appendNativeLog("收到相机扫码: " + value);
-        emitCameraScanToPage(value);
     }
 
     private void emitCameraScanToPage(String value) {

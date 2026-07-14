@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 42,
+  "currentVersionCode": 43,
   "releases": [
+    {
+      "versionCode": 43,
+      "versionName": "1.2.34",
+      "apkFileName": "kaihang-scanner-v1.2.34-43.apk",
+      "changelog": "新增普通 Android 相机扫码和无打印机标签预览，并修复 release 构建回调冲突",
+      "releasedAt": "2026-07-14",
+      "notes": [
+        "Android 版本提升到 1.2.34 (43)",
+        "普通 Android 设备在必要页面支持默认后置摄像头扫码，并复用现有 kh:scan 页面动作链路",
+        "无原生打印能力时按真实打印排版生成标签位图，并按队列打开原生图片预览",
+        "检测到 PDA 扫码或打印能力时继续保留硬件扫码和物理打印路径",
+        "合并相机扫码与日志导出的 onActivityResult 回调，修复 release Java 编译重复方法错误"
+      ]
+    },
     {
       "versionCode": 42,
       "versionName": "1.2.33",
