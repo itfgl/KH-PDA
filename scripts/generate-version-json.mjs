@@ -65,3 +65,17 @@ for (const item of normalizedReleases) {
 const indexPath = path.join(outputPath, 'versions.json');
 fs.writeFileSync(indexPath, `${JSON.stringify(indexPayload, null, 2)}\n`, 'utf8');
 console.log(`Wrote ${indexPath}`);
+
+const currentNormalizedEntry = normalizedReleases.find((item) => item.versionCode === currentVersionCode);
+const legacyCurrentPayload = {
+  versionCode: currentNormalizedEntry.versionCode,
+  versionName: currentNormalizedEntry.versionName,
+  apkFileName: currentNormalizedEntry.apkFileName,
+  apkUrl: `/app-updates/${currentNormalizedEntry.apkFileName || 'app-release.apk'}`,
+  changelog: currentNormalizedEntry.changelog,
+  releasedAt: currentNormalizedEntry.releasedAt,
+  notes: currentNormalizedEntry.notes,
+};
+const legacyCurrentPath = path.join(outputPath, 'version.json');
+fs.writeFileSync(legacyCurrentPath, `${JSON.stringify(legacyCurrentPayload, null, 2)}\n`, 'utf8');
+console.log(`Wrote ${legacyCurrentPath}`);

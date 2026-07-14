@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 38,
+  "currentVersionCode": 39,
   "releases": [
+    {
+      "versionCode": 39,
+      "versionName": "1.2.30",
+      "apkFileName": "kaihang-scanner-v1.2.30-39.apk",
+      "changelog": "二维码扩大到打印画布总宽度的 80%",
+      "releasedAt": "2026-07-14",
+      "notes": [
+        "Android 版本提升到 1.2.30 (39)",
+        "通用标签二维码统一调整为 307×307 点，约占 384 点打印画布的 80%",
+        "compact、standard、large 及兼容打印桥使用相同二维码尺寸并保持水平居中",
+        "203 dpi 下二维码边长约 38.4 mm，左右各保留约 4.8 mm 打印画布空白"
+      ]
+    },
     {
       "versionCode": 38,
       "versionName": "1.2.29",

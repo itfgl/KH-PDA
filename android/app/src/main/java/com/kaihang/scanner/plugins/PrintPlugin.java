@@ -504,6 +504,7 @@ public class PrintPlugin extends Plugin {
     private static final class GenericLabelLayout {
         static final int LABEL_WIDTH = 384;
         static final double BARCODE_WIDTH_RATIO = 0.90d;
+        static final double QR_WIDTH_RATIO = 0.80d;
         final int barcodeWidth;
         final int barcodeHeight;
         final int qrWidth;
@@ -580,25 +581,32 @@ public class PrintPlugin extends Plugin {
         return (int) Math.round(GenericLabelLayout.LABEL_WIDTH * GenericLabelLayout.BARCODE_WIDTH_RATIO);
     }
 
+    private static int resolveEightyPercentQrSize() {
+        return (int) Math.round(GenericLabelLayout.LABEL_WIDTH * GenericLabelLayout.QR_WIDTH_RATIO);
+    }
+
     private static GenericLabelLayout getGenericLabelLayout(String preset) {
+        int qrSize = resolveEightyPercentQrSize();
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new GenericLabelLayout(346, 96, 184, 184, 20, 138, 24, 26, 32, 240, 24);
+                return new GenericLabelLayout(346, 96, qrSize, qrSize, 20, 138, 24, 26, 32, 240, 24);
             case "large":
-                return new GenericLabelLayout(346, 122, 232, 232, 20, 162, 24, 30, 38, 288, 22);
+                return new GenericLabelLayout(346, 122, qrSize, qrSize, 20, 162, 24, 30, 38, 288, 22);
             default:
-                return new GenericLabelLayout(346, 108, 208, 208, 20, 148, 24, 28, 36, 264, 24);
+                return new GenericLabelLayout(346, 108, qrSize, qrSize, 20, 148, 24, 28, 36, 264, 24);
         }
     }
 
     private static LegacyGenericLayout getLegacyGenericLayout(String preset) {
+        int qrSize = resolveEightyPercentQrSize();
+        int qrLeft = resolveCenteredMediaLeft(qrSize);
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new LegacyGenericLayout(346, 96, 184, 184, 100, 216, 22, 28, 244, 8, 24);
+                return new LegacyGenericLayout(346, 96, qrSize, qrSize, qrLeft, 216, 22, 28, 244, 8, 24);
             case "large":
-                return new LegacyGenericLayout(346, 122, 232, 232, 76, 264, 26, 34, 308, 8, 22);
+                return new LegacyGenericLayout(346, 122, qrSize, qrSize, qrLeft, 264, 26, 34, 308, 8, 22);
             default:
-                return new LegacyGenericLayout(346, 108, 208, 208, 88, 240, 24, 32, 280, 8, 24);
+                return new LegacyGenericLayout(346, 108, qrSize, qrSize, qrLeft, 240, 24, 32, 280, 8, 24);
         }
     }
 
