@@ -21,6 +21,7 @@ import com.uc.pdasdk.utils.AbsoluteLayoutBitmap;
 import com.uc.pdasdk.utils.BarcodeCreater;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -44,6 +45,8 @@ public class PrintPlugin extends Plugin {
     private static boolean nativeConnecting = false;
     private static final ExecutorService nativePrintExecutor = Executors.newSingleThreadExecutor();
     private static PrintEventSink nativeEventSink;
+    private static final ArrayDeque<PreviewRequest> nativePreviewQueue = new ArrayDeque<>();
+    private static boolean nativePreviewShowing = false;
     private boolean isConnected           = false;
     private boolean isConnecting          = false;
     private volatile boolean destroyed    = false;
@@ -62,6 +65,10 @@ public class PrintPlugin extends Plugin {
 
     public static synchronized void setNativeEventSink(PrintEventSink sink) {
         nativeEventSink = sink;
+    }
+
+    public static synchronized boolean isNativeConnected() {
+        return nativeConnected;
     }
 
     private static void emitNativeConnection(String connection) {
@@ -142,6 +149,18 @@ public class PrintPlugin extends Plugin {
 
         BuiltLabel(Bitmap label, String diagnostic) {
             this.label = label;
+            this.diagnostic = diagnostic;
+        }
+    }
+
+    private static final class PreviewRequest {
+        final Activity activity;
+        final Bitmap bitmap;
+        final String diagnostic;
+
+        PreviewRequest(Activity activity, Bitmap bitmap, String diagnostic) {
+            this.activity = activity;
+            this.bitmap = bitmap;
             this.diagnostic = diagnostic;
         }
     }
@@ -347,6 +366,110 @@ public class PrintPlugin extends Plugin {
                 emitNativeStatus("PRINT_BRIDGE_ERROR", e.getMessage());
             }
         });
+    }
+
+    public static void previewLabelNative(
+        Context context,
+        Activity activity,
+        String barcodeValue,
+        String qrCodeValue,
+        String textValue,
+        String layoutPreset
+    ) {
+        if (context == null || activity == null) return;
+        nativePrintExecutor.execute(() -> {
+            try {
+                BuiltLabel builtLabel = buildLegacyGenericLabel(
+                    context,
+                    barcodeValue,
+                    qrCodeValue,
+                    textValue,
+                    layoutPreset,
+                    "previewLabelNativeLegacy"
+                );
+                emitPrintDiagnostic("previewLabelNative", builtLabel.diagnostic);
+                activity.runOnUiThread(() -> enqueueNativePreview(activity, builtLabel));
+            } catch (Exception error) {
+                emitNativeStatus("PRINT_BRIDGE_ERROR", "preview failed: " + error.getMessage());
+            }
+        });
+    }
+
+    private static void enqueueNativePreview(Activity activity, BuiltLabel builtLabel) {
+        nativePreviewQueue.addLast(new PreviewRequest(activity, builtLabel.label, builtLabel.diagnostic));
+        showNextNativePreview();
+    }
+
+    private static void showNextNativePreview() {
+        if (nativePreviewShowing) return;
+        PreviewRequest request = nativePreviewQueue.pollFirst();
+        if (request == null) return;
+        Activity activity = request.activity;
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) {
+            if (request.bitmap != null && !request.bitmap.isRecycled()) request.bitmap.recycle();
+            showNextNativePreview();
+            return;
+        }
+        nativePreviewShowing = true;
+
+        android.widget.LinearLayout content = new android.widget.LinearLayout(activity);
+        content.setOrientation(android.widget.LinearLayout.VERTICAL);
+        int padding = Math.round(16 * activity.getResources().getDisplayMetrics().density);
+        content.setPadding(padding, padding, padding, padding);
+
+        android.widget.TextView sizeText = new android.widget.TextView(activity);
+        sizeText.setText(
+            "标签图片 " + request.bitmap.getWidth() + " × " + request.bitmap.getHeight() + " px"
+                + "\n当前设备未连接打印机，仅生成预览"
+        );
+        sizeText.setTextColor(android.graphics.Color.parseColor("#344054"));
+        sizeText.setTextSize(13);
+        sizeText.setPadding(0, 0, 0, padding);
+        content.addView(sizeText, new android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        ));
+
+        android.widget.ImageView imageView = new android.widget.ImageView(activity);
+        imageView.setImageBitmap(request.bitmap);
+        imageView.setAdjustViewBounds(true);
+        imageView.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        imageView.setBackgroundColor(android.graphics.Color.WHITE);
+
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(activity);
+        scrollView.setFillViewport(true);
+        scrollView.addView(imageView, new android.widget.ScrollView.LayoutParams(
+            android.widget.ScrollView.LayoutParams.MATCH_PARENT,
+            android.widget.ScrollView.LayoutParams.WRAP_CONTENT
+        ));
+        android.util.DisplayMetrics metrics = activity.getResources().getDisplayMetrics();
+        int availableWidth = Math.max(1, metrics.widthPixels - (padding * 4));
+        float previewScale = availableWidth / (float) Math.max(1, request.bitmap.getWidth());
+        int desiredPreviewHeight = Math.round(request.bitmap.getHeight() * previewScale);
+        int minimumPreviewHeight = Math.round(180 * metrics.density);
+        int maximumPreviewHeight = Math.round(metrics.heightPixels * 0.62f);
+        int previewHeight = Math.max(
+            minimumPreviewHeight,
+            Math.min(desiredPreviewHeight, maximumPreviewHeight)
+        );
+        content.addView(scrollView, new android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            previewHeight
+        ));
+
+        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(activity)
+            .setTitle("标签预览")
+            .setView(content)
+            .setPositiveButton("关闭", null)
+            .create();
+        dialog.setOnShowListener(ignored -> emitNativeStatus("PRINT_PREVIEW_READY", request.diagnostic));
+        dialog.setOnDismissListener(ignored -> {
+            imageView.setImageDrawable(null);
+            if (request.bitmap != null && !request.bitmap.isRecycled()) request.bitmap.recycle();
+            nativePreviewShowing = false;
+            showNextNativePreview();
+        });
+        dialog.show();
     }
 
     // ── 连接 ──────────────────────────────────────────────────────────────────

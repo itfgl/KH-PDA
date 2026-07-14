@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 41,
+  "currentVersionCode": 42,
   "releases": [
+    {
+      "versionCode": 42,
+      "versionName": "1.2.33",
+      "apkFileName": "kaihang-scanner-v1.2.33-42.apk",
+      "changelog": "普通 Android 设备支持后置摄像头扫码，并在无打印机时生成标签图片预览",
+      "releasedAt": "2026-07-14",
+      "notes": [
+        "Android 版本提升到 1.2.33 (42)",
+        "新增 CameraX 与本地 ML Kit 条码识别，默认使用后置摄像头并支持闪光灯",
+        "仅在当前 NocoBase 页面配置了扫码动作且设备不支持 PDA 扫码和原生打印时显示相机扫码按钮",
+        "相机识别结果复用现有 kh:scan 页面动作、字段回填、队列及日志链路",
+        "无原生打印能力时复用打印排版生成标签位图，并按队列打开原生图片预览",
+        "保留 PDA 硬件扫码和原生打印行为，不改变工业手持设备的默认操作"
+      ]
+    },
     {
       "versionCode": 41,
       "versionName": "1.2.32",

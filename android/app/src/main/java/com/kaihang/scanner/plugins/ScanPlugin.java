@@ -4,6 +4,8 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Build;
 
 import com.getcapacitor.JSObject;
@@ -11,6 +13,8 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+
+import java.util.List;
 
 /**
  * 扫码 Plugin
@@ -32,6 +36,26 @@ public class ScanPlugin extends Plugin {
 
     private BroadcastReceiver scanReceiver;
     private boolean receiverRegistered = false;
+
+    public static boolean isHardwareScannerAvailable(Context context) {
+        if (context == null) return false;
+        Intent intent = new Intent(ACTION_START);
+        try {
+            PackageManager packageManager = context.getPackageManager();
+            List<ResolveInfo> receivers;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                receivers = packageManager.queryBroadcastReceivers(
+                    intent,
+                    PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL)
+                );
+            } else {
+                receivers = packageManager.queryBroadcastReceivers(intent, PackageManager.MATCH_ALL);
+            }
+            return receivers != null && !receivers.isEmpty();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
 
     public static void triggerStartScan(Context context) {
         if (context == null) return;

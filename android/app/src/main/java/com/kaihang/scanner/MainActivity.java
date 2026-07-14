@@ -30,6 +30,7 @@ public class MainActivity extends BridgeActivity {
     private static final int NATIVE_STATUS_DOT_OFFSET_BOTTOM_DP = 46;
     private static final int NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP = 68;
     private static final int REQUEST_EXPORT_LOGS = 8421;
+    private static final int REQUEST_CAMERA_SCAN = 8422;
     private android.widget.ImageButton nativeControlButton;
     private android.widget.Button nativeScanButton;
     private android.view.View nativeStatusDot;
@@ -38,6 +39,11 @@ public class MainActivity extends BridgeActivity {
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable pendingScanRelease;
     private boolean nativeScanActive = false;
+    private boolean pageHasScanAction = false;
+    private boolean pdaScannerAvailable = false;
+    private boolean pdaPrinterAvailable = false;
+    private boolean deviceCapabilitiesResolved = false;
+    private boolean cameraAvailable = false;
     private String nativePageReadyState = "loading";
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
@@ -71,10 +77,27 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(UpdatePlugin.class);
         registerPlugin(ClientConfigPlugin.class);
         super.onCreate(savedInstanceState);
+        pdaScannerAvailable = ScanPlugin.isHardwareScannerAvailable(this);
+        pdaPrinterAvailable = PrintPlugin.isNativeConnected();
+        deviceCapabilitiesResolved = pdaScannerAvailable || pdaPrinterAvailable;
+        cameraAvailable = getPackageManager().hasSystemFeature(android.content.pm.PackageManager.FEATURE_CAMERA_ANY);
         appendNativeLog("应用启动: version=" + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + "), buildTime=" + BuildConfig.BUILD_TIME);
+        appendNativeLog(
+            "设备能力初检: pdaScan=" + pdaScannerAvailable
+                + ", pdaPrint=" + pdaPrinterAvailable
+                + ", camera=" + cameraAvailable
+        );
         PrintPlugin.setNativeEventSink(new PrintPlugin.PrintEventSink() {
             @Override
             public void onConnection(String connection) {
+                if ("connected".equals(connection)) {
+                    pdaPrinterAvailable = true;
+                    deviceCapabilitiesResolved = true;
+                } else if ("failed".equals(connection) || "closed".equals(connection)) {
+                    pdaPrinterAvailable = false;
+                    deviceCapabilitiesResolved = true;
+                }
+                runOnUiThread(() -> updateNativeScanActionVisibility());
                 appendNativeLog("打印连接状态: " + connection);
                 emitPrintStatusToPage(connection, null, true);
             }
@@ -89,6 +112,16 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("预热原生打印连接");
             PrintPlugin.connectNative(MainActivity.this);
         }, 300L);
+        mainHandler.postDelayed(() -> {
+            if (deviceCapabilitiesResolved) return;
+            pdaPrinterAvailable = PrintPlugin.isNativeConnected();
+            deviceCapabilitiesResolved = true;
+            appendNativeLog(
+                "设备能力探测超时，采用当前结果: pdaScan=" + pdaScannerAvailable
+                    + ", pdaPrint=" + pdaPrinterAvailable
+            );
+            updateNativeScanActionVisibility();
+        }, 8500L);
 
         // 全局崩溃拦截：将异常信息转发到 JS 日志
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
@@ -607,12 +640,12 @@ public class MainActivity extends BridgeActivity {
         nativeScanButton.setLayoutParams(scanParams);
         nativeScanButton.setPadding(dp(18), 0, dp(18), 0);
         nativeScanButton.setOnClickListener(v -> {
-            if (nativeScanActive) {
+            if (nativeScanActive && !isCameraFallbackMode()) {
                 appendNativeLog("点击原生扫码按钮: 停扫");
                 stopNativeScan();
             } else {
                 appendNativeLog("点击原生扫码按钮: 扫码");
-                triggerNativeScan();
+                triggerPreferredScan();
             }
         });
 
@@ -760,7 +793,7 @@ public class MainActivity extends BridgeActivity {
     private void showNativeControlMenu(android.view.View anchor) {
         android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
         menu.getMenu().add(0, 1, 0, "重新初始化");
-        menu.getMenu().add(0, 2, 1, "扫码");
+        menu.getMenu().add(0, 2, 1, isCameraFallbackMode() ? "相机扫码" : "扫码");
         menu.getMenu().add(0, 3, 2, "客户端设置");
         menu.getMenu().add(0, 4, 3, "原生配置");
         menu.getMenu().add(0, 5, 4, "检查更新");
@@ -775,7 +808,7 @@ public class MainActivity extends BridgeActivity {
             }
             if (id == 2) {
                 appendNativeLog("触发原生菜单: 扫码");
-                triggerNativeScan();
+                triggerPreferredScan();
                 return true;
             }
             if (id == 3) {
@@ -929,6 +962,52 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private void triggerPreferredScan() {
+        if (isCameraFallbackMode()) {
+            startCameraScan();
+            return;
+        }
+        triggerNativeScan();
+    }
+
+    private void startCameraScan() {
+        if (!cameraAvailable) {
+            appendNativeLog("相机扫码不可用: 设备未检测到摄像头");
+            toast("当前设备没有可用摄像头");
+            return;
+        }
+        try {
+            appendNativeLog("打开后置摄像头扫码");
+            startActivityForResult(new Intent(this, CameraScanActivity.class), REQUEST_CAMERA_SCAN);
+        } catch (Exception error) {
+            appendNativeLog("打开相机扫码失败: " + error.getMessage());
+            toast("打开相机失败: " + error.getMessage());
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_CAMERA_SCAN || resultCode != RESULT_OK || data == null) {
+            return;
+        }
+        String value = safe(data.getStringExtra(CameraScanActivity.EXTRA_SCAN_VALUE)).trim();
+        if (value.isEmpty()) return;
+        appendNativeLog("收到相机扫码: " + value);
+        emitCameraScanToPage(value);
+    }
+
+    private void emitCameraScanToPage(String value) {
+        if (bridge == null || bridge.getWebView() == null) return;
+        String script =
+            "(function(){"
+                + "var val=" + js(value) + ";"
+                + "if(!val)return;"
+                + "window.dispatchEvent(new CustomEvent('kh:scan',{detail:{value:val,source:'native-camera'}}));"
+            + "})();";
+        bridge.getWebView().post(() -> bridge.getWebView().evaluateJavascript(script, null));
+    }
+
     private void stopNativeScan() {
         try {
             if (pendingScanRelease != null) {
@@ -944,10 +1023,31 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void setNativeScanActionVisible(boolean visible) {
-        if (nativeScanButton != null) {
-            nativeScanButton.setVisibility(android.view.View.GONE);
+        pageHasScanAction = visible;
+        updateNativeScanActionVisibility();
+    }
+
+    private boolean isCameraFallbackMode() {
+        return DeviceCapabilityPolicy.shouldShowCameraScanButton(
+            pageHasScanAction,
+            deviceCapabilitiesResolved,
+            pdaScannerAvailable,
+            pdaPrinterAvailable,
+            cameraAvailable
+        );
+    }
+
+    private void updateNativeScanActionVisibility() {
+        if (nativeScanButton == null) return;
+        boolean showCameraButton = isCameraFallbackMode();
+        nativeScanButton.setVisibility(showCameraButton ? android.view.View.VISIBLE : android.view.View.GONE);
+        if (showCameraButton) {
+            nativeScanButton.setText("相机扫码");
+            nativeScanButton.setBackground(buildNativeCapsuleBackground(false));
+            nativeScanButton.bringToFront();
+        } else {
+            setNativeScanActive(false);
         }
-        setNativeScanActive(false);
     }
 
     private void setNativeScanActive(boolean active) {
@@ -955,7 +1055,7 @@ public class MainActivity extends BridgeActivity {
         if (nativeScanButton == null) {
             return;
         }
-        nativeScanButton.setText(active ? "停扫" : "扫码");
+        nativeScanButton.setText(isCameraFallbackMode() ? "相机扫码" : (active ? "停扫" : "扫码"));
         nativeScanButton.setBackground(buildNativeCapsuleBackground(active));
     }
 
@@ -1054,6 +1154,11 @@ public class MainActivity extends BridgeActivity {
         }
 
         @JavascriptInterface
+        public boolean shouldPreviewPrint() {
+            return deviceCapabilitiesResolved && !pdaPrinterAvailable;
+        }
+
+        @JavascriptInterface
         public boolean prepareToPrintLabel() {
             runOnUiThread(PrintPlugin::prepareToPrintLabelNative);
             return true;
@@ -1091,6 +1196,34 @@ public class MainActivity extends BridgeActivity {
                 return true;
             } catch (Exception e) {
                 appendNativeLog("原生打印桥参数解析失败: " + e.getMessage());
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean previewLabel(String payloadJson) {
+            try {
+                org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
+                String barcodeValue = payload.optString("barcodeValue", "");
+                String qrCodeValue = payload.optString("qrCodeValue", "");
+                String textValue = payload.optString("textValue", "");
+                String layoutPreset = payload.optString("layoutPreset", "standard");
+                appendNativeLog(
+                    "无打印机，生成标签预览: barcode=" + safe(barcodeValue)
+                        + ", qrcode=" + safe(qrCodeValue)
+                        + ", layout=" + safe(layoutPreset)
+                );
+                PrintPlugin.previewLabelNative(
+                    MainActivity.this,
+                    MainActivity.this,
+                    barcodeValue,
+                    qrCodeValue,
+                    textValue,
+                    layoutPreset
+                );
+                return true;
+            } catch (Exception error) {
+                appendNativeLog("标签预览参数解析失败: " + error.getMessage());
                 return false;
             }
         }
