@@ -873,7 +873,6 @@ public class PrintPlugin extends Plugin {
         int height
     ) throws Exception {
         EnumMap<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
-        hints.put(EncodeHintType.MARGIN, 0);
         hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
         BitMatrix matrix = new MultiFormatWriter().encode(value, format, width, height, hints);
         int matrixWidth = matrix.getWidth();

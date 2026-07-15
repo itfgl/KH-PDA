@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 44,
+  "currentVersionCode": 45,
   "releases": [
+    {
+      "versionCode": 45,
+      "versionName": "1.2.36",
+      "apkFileName": "kaihang-scanner-v1.2.36-45.apk",
+      "changelog": "修复标签预览引入外部 ZXing 后与 PDA SDK 重复类导致的 release 构建失败",
+      "releasedAt": "2026-07-15",
+      "notes": [
+        "Android 版本提升到 1.2.36 (45)",
+        "移除外部 com.google.zxing:core 依赖，消除 checkReleaseDuplicateClasses 冲突",
+        "标签图片预览继续复用 PDA AAR 内置的 ZXing 编码类，不改变 Canvas 合成逻辑",
+        "兼容 AAR 内置旧版 ZXing hints API，不引用缺失的 EncodeHintType.MARGIN",
+        "保留无打印机预览、后置摄像头扫码、PDA 硬件扫码和物理打印行为"
+      ]
+    },
     {
       "versionCode": 44,
       "versionName": "1.2.35",
