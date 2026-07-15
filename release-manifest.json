@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 43,
+  "currentVersionCode": 44,
   "releases": [
+    {
+      "versionCode": 44,
+      "versionName": "1.2.35",
+      "apkFileName": "kaihang-scanner-v1.2.35-44.apk",
+      "changelog": "修复普通 Android 无打印机时标签预览未弹出的问题",
+      "releasedAt": "2026-07-14",
+      "notes": [
+        "Android 版本提升到 1.2.35 (44)",
+        "原生 printLabel 桥增加无打印机二次判断，兼容新旧网页打印调用路径",
+        "无打印能力时使用独立 Android Canvas + ZXing 生成标签图片，不再依赖 PDA 打印 SDK",
+        "开始生成预览时显示提示，位图生成异常时直接弹出错误详情",
+        "保留普通 Android 后置摄像头扫码、PDA 硬件扫码和物理打印行为"
+      ]
+    },
     {
       "versionCode": 43,
       "versionName": "1.2.34",

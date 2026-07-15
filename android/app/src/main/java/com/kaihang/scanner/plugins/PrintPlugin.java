@@ -15,6 +15,11 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.common.BitMatrix;
+
 import com.uc.pdasdk.print.BitmapData;
 import com.uc.pdasdk.print.Printer;
 import com.uc.pdasdk.utils.AbsoluteLayoutBitmap;
@@ -25,6 +30,7 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.EnumMap;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -379,8 +385,7 @@ public class PrintPlugin extends Plugin {
         if (context == null || activity == null) return;
         nativePrintExecutor.execute(() -> {
             try {
-                BuiltLabel builtLabel = buildLegacyGenericLabel(
-                    context,
+                BuiltLabel builtLabel = buildPortablePreviewLabel(
                     barcodeValue,
                     qrCodeValue,
                     textValue,
@@ -391,6 +396,11 @@ public class PrintPlugin extends Plugin {
                 activity.runOnUiThread(() -> enqueueNativePreview(activity, builtLabel));
             } catch (Exception error) {
                 emitNativeStatus("PRINT_BRIDGE_ERROR", "preview failed: " + error.getMessage());
+                activity.runOnUiThread(() -> new androidx.appcompat.app.AlertDialog.Builder(activity)
+                    .setTitle("标签预览生成失败")
+                    .setMessage(error.getMessage() == null ? "未知错误" : error.getMessage())
+                    .setPositiveButton("关闭", null)
+                    .show());
             }
         });
     }
@@ -798,6 +808,88 @@ public class PrintPlugin extends Plugin {
                 + ", lines=" + textLines.size()
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
+    }
+
+    private static BuiltLabel buildPortablePreviewLabel(
+        String barcodeValue,
+        String qrCodeValue,
+        String textValue,
+        String layoutPreset,
+        String diagnosticSource
+    ) throws Exception {
+        String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
+        String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
+        String safeTextValue = textValue == null ? "" : textValue.trim();
+        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.isEmpty()) {
+            throw new IllegalArgumentException("preview requires barcodeValue, qrCodeValue or textValue");
+        }
+
+        LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset);
+        Bitmap barcode = safeBarcodeValue.isEmpty()
+            ? null
+            : createPortableCode(safeBarcodeValue, BarcodeFormat.CODE_128, layout.barcodeWidth, layout.barcodeHeight);
+        Bitmap qr = safeQrCodeValue.isEmpty()
+            ? null
+            : createPortableCode(safeQrCodeValue, BarcodeFormat.QR_CODE, layout.qrWidth, layout.qrHeight);
+
+        List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
+        int mediaBottom = 0;
+        if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
+        if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
+        int y = mediaBottom > 0 ? mediaBottom + 24 : 16;
+        int labelHeight = Math.max(y + (Math.max(1, textLines.size()) * layout.lineHeight) + 16, layout.minHeight);
+
+        Bitmap label = Bitmap.createBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight, Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(label);
+        canvas.drawColor(android.graphics.Color.WHITE);
+        if (barcode != null) canvas.drawBitmap(barcode, 8, 8, null);
+        if (qr != null) canvas.drawBitmap(qr, layout.qrLeft, 8, null);
+
+        android.graphics.Paint textPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        textPaint.setColor(android.graphics.Color.BLACK);
+        textPaint.setTextSize(layout.textSize);
+        textPaint.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.NORMAL));
+        android.graphics.Paint.FontMetrics fontMetrics = textPaint.getFontMetrics();
+        for (String line : textLines) {
+            canvas.drawText(line, layout.textLeft, y - fontMetrics.top, textPaint);
+            y += layout.lineHeight;
+        }
+
+        String diagnostic =
+            "portablePreview=true"
+                + ", layoutPreset=" + normalizeLayoutPreset(layoutPreset)
+                + ", barcode=" + bitmapSize(barcode)
+                + ", qr=" + bitmapSize(qr)
+                + ", label=" + bitmapSize(label)
+                + ", lines=" + textLines.size()
+                + ", source=" + diagnosticSource;
+        return new BuiltLabel(label, diagnostic);
+    }
+
+    private static Bitmap createPortableCode(
+        String value,
+        BarcodeFormat format,
+        int width,
+        int height
+    ) throws Exception {
+        EnumMap<EncodeHintType, Object> hints = new EnumMap<>(EncodeHintType.class);
+        hints.put(EncodeHintType.MARGIN, 0);
+        hints.put(EncodeHintType.CHARACTER_SET, "UTF-8");
+        BitMatrix matrix = new MultiFormatWriter().encode(value, format, width, height, hints);
+        int matrixWidth = matrix.getWidth();
+        int matrixHeight = matrix.getHeight();
+        int[] pixels = new int[matrixWidth * matrixHeight];
+        for (int y = 0; y < matrixHeight; y++) {
+            int offset = y * matrixWidth;
+            for (int x = 0; x < matrixWidth; x++) {
+                pixels[offset + x] = matrix.get(x, y)
+                    ? android.graphics.Color.BLACK
+                    : android.graphics.Color.WHITE;
+            }
+        }
+        Bitmap bitmap = Bitmap.createBitmap(matrixWidth, matrixHeight, Bitmap.Config.ARGB_8888);
+        bitmap.setPixels(pixels, 0, matrixWidth, 0, 0, matrixWidth, matrixHeight);
+        return bitmap;
     }
 
     private static int estimateTextWidth(String text, int textSize) {

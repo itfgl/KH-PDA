@@ -1182,6 +1182,21 @@ public class MainActivity extends BridgeActivity {
                         + ", paperType=" + safe(paperType)
                         + ", layout=" + safe(layoutPreset)
                 );
+                if (shouldPreviewPrint()) {
+                    appendNativeLog("原生打印桥检测到无打印机，强制转为标签预览");
+                    runOnUiThread(() -> {
+                        toast("正在生成标签预览…");
+                        PrintPlugin.previewLabelNative(
+                            MainActivity.this,
+                            MainActivity.this,
+                            barcodeValue,
+                            qrCodeValue,
+                            textValue,
+                            layoutPreset
+                        );
+                    });
+                    return true;
+                }
                 runOnUiThread(() -> PrintPlugin.printLabelNative(
                     MainActivity.this,
                     MainActivity.this,
@@ -1211,14 +1226,17 @@ public class MainActivity extends BridgeActivity {
                         + ", qrcode=" + safe(qrCodeValue)
                         + ", layout=" + safe(layoutPreset)
                 );
-                PrintPlugin.previewLabelNative(
-                    MainActivity.this,
-                    MainActivity.this,
-                    barcodeValue,
-                    qrCodeValue,
-                    textValue,
-                    layoutPreset
-                );
+                runOnUiThread(() -> {
+                    toast("正在生成标签预览…");
+                    PrintPlugin.previewLabelNative(
+                        MainActivity.this,
+                        MainActivity.this,
+                        barcodeValue,
+                        qrCodeValue,
+                        textValue,
+                        layoutPreset
+                    );
+                });
                 return true;
             } catch (Exception error) {
                 appendNativeLog("标签预览参数解析失败: " + error.getMessage());
