@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 45,
+  "currentVersionCode": 46,
   "releases": [
+    {
+      "versionCode": 46,
+      "versionName": "1.2.37",
+      "apkFileName": "kaihang-scanner-v1.2.37-46.apk",
+      "changelog": "Android 附件控件支持后置相机拍照并自动进入 NocoBase 上传流程",
+      "releasedAt": "2026-07-16",
+      "notes": [
+        "Android 版本提升到 1.2.37 (46)",
+        "新增 attachment + capture_photo_upload 页面动作，使用 attachment_field_name 定位附件字段",
+        "在目标 NocoBase Upload 控件旁添加拍照按钮并默认调用后置相机",
+        "拍照结果通过 WebView 原生文件选择回调交回原附件控件，由 NocoBase 完成上传和附件写回",
+        "保留普通文件选择、Windows 剪贴板上传、相机扫码、PDA 扫码和打印行为"
+      ]
+    },
     {
       "versionCode": 45,
       "versionName": "1.2.36",

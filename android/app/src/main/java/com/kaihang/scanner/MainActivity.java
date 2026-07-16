@@ -31,6 +31,8 @@ public class MainActivity extends BridgeActivity {
     private static final int NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP = 68;
     private static final int REQUEST_EXPORT_LOGS = 8421;
     private static final int REQUEST_CAMERA_SCAN = 8422;
+    private static final int REQUEST_CAMERA_UPLOAD = 8423;
+    private static final int REQUEST_FILE_CHOOSER = 8424;
     private android.widget.ImageButton nativeControlButton;
     private android.widget.Button nativeScanButton;
     private android.view.View nativeStatusDot;
@@ -57,6 +59,8 @@ public class MainActivity extends BridgeActivity {
     private boolean nativeControlDragging = false;
     private int nativeControlTouchSlopPx = 0;
     private String pendingLogExportText;
+    private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
+    private Uri pendingCameraUploadUri;
 
     private interface CombinedLogCallback {
         void onReady(String text);
@@ -217,6 +221,33 @@ public class MainActivity extends BridgeActivity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(
+                WebView webView,
+                android.webkit.ValueCallback<Uri[]> filePathCallback,
+                FileChooserParams fileChooserParams
+            ) {
+                if (pendingFileChooserCallback != null) {
+                    pendingFileChooserCallback.onReceiveValue(null);
+                }
+                pendingFileChooserCallback = filePathCallback;
+                boolean capturePhoto = fileChooserParams != null && fileChooserParams.isCaptureEnabled();
+                if (capturePhoto) {
+                    return launchCameraUpload();
+                }
+                try {
+                    Intent chooserIntent = fileChooserParams == null
+                        ? new Intent(Intent.ACTION_GET_CONTENT).setType("*/*")
+                        : fileChooserParams.createIntent();
+                    startActivityForResult(chooserIntent, REQUEST_FILE_CHOOSER);
+                    return true;
+                } catch (Exception error) {
+                    appendNativeLog("打开文件选择器失败: " + error.getMessage());
+                    finishFileChooser(null);
+                    return true;
+                }
+            }
+
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
                 String url = null;
@@ -382,6 +413,25 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_CAMERA_UPLOAD) {
+            Uri[] result = null;
+            if (resultCode == RESULT_OK && pendingCameraUploadUri != null) {
+                result = new Uri[]{pendingCameraUploadUri};
+                appendNativeLog("拍照完成，交给网页附件控件上传: " + pendingCameraUploadUri);
+            } else {
+                appendNativeLog("已取消附件拍照");
+            }
+            pendingCameraUploadUri = null;
+            finishFileChooser(result);
+            return;
+        }
+        if (requestCode == REQUEST_FILE_CHOOSER) {
+            Uri[] result = resultCode == RESULT_OK
+                ? WebChromeClient.FileChooserParams.parseResult(resultCode, data)
+                : null;
+            finishFileChooser(result);
+            return;
+        }
         if (requestCode == REQUEST_CAMERA_SCAN) {
             if (resultCode != RESULT_OK || data == null) {
                 return;
@@ -414,6 +464,43 @@ public class MainActivity extends BridgeActivity {
         } catch (Exception e) {
             appendNativeLog("导出运行日志失败: " + e.getMessage());
             toast("导出失败: " + safe(e.getMessage()));
+        }
+    }
+
+    private boolean launchCameraUpload() {
+        try {
+            java.io.File captureDir = new java.io.File(getCacheDir(), "photo-uploads");
+            if (!captureDir.exists() && !captureDir.mkdirs()) {
+                throw new java.io.IOException("无法创建拍照缓存目录");
+            }
+            java.io.File photoFile = java.io.File.createTempFile("photo_", ".jpg", captureDir);
+            Uri photoUri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                getPackageName() + ".fileprovider",
+                photoFile
+            );
+            Intent cameraIntent = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+            cameraIntent.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, photoUri);
+            cameraIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            cameraIntent.setClipData(android.content.ClipData.newRawUri("photo", photoUri));
+            pendingCameraUploadUri = photoUri;
+            appendNativeLog("打开相机拍摄附件");
+            startActivityForResult(cameraIntent, REQUEST_CAMERA_UPLOAD);
+            return true;
+        } catch (Exception error) {
+            appendNativeLog("打开附件拍照失败: " + error.getMessage());
+            toast("打开相机失败: " + safe(error.getMessage()));
+            pendingCameraUploadUri = null;
+            finishFileChooser(null);
+            return true;
+        }
+    }
+
+    private void finishFileChooser(Uri[] result) {
+        android.webkit.ValueCallback<Uri[]> callback = pendingFileChooserCallback;
+        pendingFileChooserCallback = null;
+        if (callback != null) {
+            callback.onReceiveValue(result);
         }
     }
 
