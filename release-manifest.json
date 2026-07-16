@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 47,
+  "currentVersionCode": 48,
   "releases": [
+    {
+      "versionCode": 48,
+      "versionName": "1.2.39",
+      "apkFileName": "kaihang-scanner-v1.2.39-48.apk",
+      "changelog": "适配 v4.4 业务页面 Tab，按具体 Tab 加载扫码、拍照上传和打印动作",
+      "releasedAt": "2026-07-16",
+      "notes": [
+        "Android 版本提升到 1.2.39 (48)",
+        "页面动作路径改为完整路径段匹配，避免相似页面路径误命中",
+        "支持 /admin/<page>/tab/<tab> 级别的动作隔离",
+        "研磨测试、模具配对、检修模具和做线检测动作收紧到实际业务 Tab",
+        "做线检测的生产图片和试模图片附件增加 Android 拍照上传动作",
+        "保留页面恢复 ready 状态修复、相机扫码、PDA 扫码和打印行为"
+      ]
+    },
     {
       "versionCode": 47,
       "versionName": "1.2.38",
