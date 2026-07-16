@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 46,
+  "currentVersionCode": 47,
   "releases": [
+    {
+      "versionCode": 47,
+      "versionName": "1.2.38",
+      "apkFileName": "kaihang-scanner-v1.2.38-47.apk",
+      "changelog": "修复应用恢复后页面状态可能卡在 loading 并影响页面动作的问题",
+      "releasedAt": "2026-07-16",
+      "notes": [
+        "Android 版本提升到 1.2.38 (47)",
+        "绿色状态灯统一表示页面动作运行时已就绪",
+        "无扫码动作但支持拍照、打印或按钮动作的页面，初始化完成后同样显示绿色",
+        "扫码动作数量只控制扫码入口，不控制状态灯及其他页面动作",
+        "pageshow 恢复时复用已就绪状态，不再无条件重置为 loading",
+        "保留附件拍照上传、相机扫码、PDA 扫码和打印行为"
+      ]
+    },
     {
       "versionCode": 46,
       "versionName": "1.2.37",
