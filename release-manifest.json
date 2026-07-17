@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 48,
+  "currentVersionCode": 49,
   "releases": [
+    {
+      "versionCode": 49,
+      "versionName": "1.2.40",
+      "apkFileName": "kaihang-scanner-v1.2.40-49.apk",
+      "changelog": "修复首次加载时条件隐藏按钮导致整页长期停在未就绪状态的问题",
+      "releasedAt": "2026-07-17",
+      "notes": [
+        "Android 版本提升到 1.2.40 (49)",
+        "委托点击动作只要求目标按钮节点已挂载，不再要求初始化时必须可见",
+        "隐藏插件将业务区块设为 display:none 时不再拖住整页 ready 状态",
+        "诊断面板将条件隐藏按钮标记为等待业务条件显示，而不是动作不可用",
+        "按钮显示后继续使用原有事件委托执行扫码后提交",
+        "保留 v4.4 Tab 路由、拍照上传、页面恢复和打印行为"
+      ]
+    },
     {
       "versionCode": 48,
       "versionName": "1.2.39",
