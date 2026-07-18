@@ -75,7 +75,7 @@ public class ScanPlugin extends Plugin {
         scanReceiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
-                String value = intent.getStringExtra("string");
+                String value = ScanValueNormalizer.normalize(intent.getStringExtra("string"));
                 if (value == null || value.isEmpty()) return;
 
                 // 收到扫码结果后，立即发送 STOP 广播关闭扫描状态并复位扫码助手，否则可能导致下一次触发失效

@@ -722,11 +722,11 @@ public class PrintPlugin extends Plugin {
         int qrSize = resolveEightyPercentQrSize();
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new GenericLabelLayout(346, 96, qrSize, qrSize, 20, 138, 24, 26, 32, 240, 24);
+                return new GenericLabelLayout(346, 96, qrSize, qrSize, 20, 138, 24, 26, 32, 240, 32);
             case "large":
-                return new GenericLabelLayout(346, 122, qrSize, qrSize, 20, 162, 24, 30, 38, 288, 22);
+                return new GenericLabelLayout(346, 122, qrSize, qrSize, 20, 162, 24, 30, 38, 288, 28);
             default:
-                return new GenericLabelLayout(346, 108, qrSize, qrSize, 20, 148, 24, 28, 36, 264, 24);
+                return new GenericLabelLayout(346, 108, qrSize, qrSize, 20, 148, 24, 28, 36, 264, 30);
         }
     }
 
@@ -735,11 +735,11 @@ public class PrintPlugin extends Plugin {
         int qrLeft = resolveCenteredMediaLeft(qrSize);
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new LegacyGenericLayout(346, 96, qrSize, qrSize, qrLeft, 216, 22, 28, 244, 8, 24);
+                return new LegacyGenericLayout(346, 96, qrSize, qrSize, qrLeft, 216, 22, 28, 244, 8, 32);
             case "large":
-                return new LegacyGenericLayout(346, 122, qrSize, qrSize, qrLeft, 264, 26, 34, 308, 8, 22);
+                return new LegacyGenericLayout(346, 122, qrSize, qrSize, qrLeft, 264, 26, 34, 308, 8, 28);
             default:
-                return new LegacyGenericLayout(346, 108, qrSize, qrSize, qrLeft, 240, 24, 32, 280, 8, 24);
+                return new LegacyGenericLayout(346, 108, qrSize, qrSize, qrLeft, 240, 24, 32, 280, 8, 30);
         }
     }
 

@@ -22,6 +22,11 @@ kh.emitActionRuntimeEvent=function(name,detail){
   return payload;
 };
 
+kh.installPhotoActions=function(actions){
+  Array.from(document.querySelectorAll('[data-kh-photo-action]')).forEach(function(button){button.remove();});
+};
+kh.installPhotoActions.__khUsesNativeUploadChooser=true;
+
 kh.deactivateActionContext=function(reason){
   var previous=kh.actionContext||null;
   kh.cancelAllPendingActionWaits&&kh.cancelAllPendingActionWaits('context-deactivated');

@@ -1,6 +1,41 @@
 {
-  "currentVersionCode": 53,
+  "currentVersionCode": 55,
   "releases": [
+    {
+      "versionCode": 55,
+      "versionName": "1.2.46",
+      "apkFileName": "kaihang-scanner-v1.2.46-55.apk",
+      "changelog": "图片上传改为拦截原上传控件并选择拍照或文件，不再生成独立拍照按钮",
+      "releasedAt": "2026-07-18",
+      "notes": [
+        "Android 版本提升到 1.2.46 (55)",
+        "移除网页中额外生成的拍照按钮及其显隐观察器",
+        "点击原有图片上传控件时弹出拍照或选择文件",
+        "拍照结果通过当前 Upload 控件的文件选择回调交给 NocoBase 上传",
+        "非图片附件仍直接打开文件选择器",
+        "PDA 继续隐藏相机扫码入口，硬件扫码与附件拍照互不影响",
+        "保留 capture_photo_upload 动作解析以兼容现有动作表",
+        "清理含中文扫码结果前的反斜杠加六位数字设备协议头，不改动普通业务码",
+        "扩大标签正文换行宽度，利用 384 点纸张右侧空间并减少过早换行"
+      ]
+    },
+    {
+      "versionCode": 54,
+      "versionName": "1.2.45",
+      "apkFileName": "kaihang-scanner-v1.2.45-54.apk",
+      "changelog": "区分相机扫码与附件拍照上传，PDA 隐藏相机扫码但保留相机上传",
+      "releasedAt": "2026-07-18",
+      "notes": [
+        "Android 版本提升到 1.2.45 (54)",
+        "检测到 PDA 硬件扫码器时不显示相机扫码入口，继续使用物理扫码键",
+        "没有 PDA 扫码器但设备有相机时，扫码动作页面显示相机扫码入口",
+        "打印机能力不参与相机扫码显示判断，打印设备没有扫码头时仍可使用相机扫码",
+        "附件 capture_photo_upload 动作与扫码策略完全独立，PDA 上传控件旁始终可挂载拍照按钮",
+        "附件动作使用局部 IntersectionObserver 感知上传控件显示/隐藏，并同步拍照按钮，不扫描整页 DOM",
+        "拍照完成后继续通过原生文件选择回调交给 NocoBase 附件控件上传",
+        "保留事件驱动页面动作、条件提交和打印行为"
+      ]
+    },
     {
       "versionCode": 53,
       "versionName": "1.2.44",

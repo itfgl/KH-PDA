@@ -1,0 +1,18 @@
+{
+  "versionCode": 54,
+  "versionName": "1.2.45",
+  "apkFileName": "kaihang-scanner-v1.2.45-54.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.45-54.apk",
+  "changelog": "区分相机扫码与附件拍照上传，PDA 隐藏相机扫码但保留相机上传",
+  "releasedAt": "2026-07-18",
+  "notes": [
+    "Android 版本提升到 1.2.45 (54)",
+    "检测到 PDA 硬件扫码器时不显示相机扫码入口，继续使用物理扫码键",
+    "没有 PDA 扫码器但设备有相机时，扫码动作页面显示相机扫码入口",
+    "打印机能力不参与相机扫码显示判断，打印设备没有扫码头时仍可使用相机扫码",
+    "附件 capture_photo_upload 动作与扫码策略完全独立，PDA 上传控件旁始终可挂载拍照按钮",
+    "附件动作使用局部 IntersectionObserver 感知上传控件显示/隐藏，并同步拍照按钮，不扫描整页 DOM",
+    "拍照完成后继续通过原生文件选择回调交给 NocoBase 附件控件上传",
+    "保留事件驱动页面动作、条件提交和打印行为"
+  ]
+}

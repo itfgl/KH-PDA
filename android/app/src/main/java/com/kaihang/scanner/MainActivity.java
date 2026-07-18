@@ -232,20 +232,14 @@ public class MainActivity extends BridgeActivity {
                 }
                 pendingFileChooserCallback = filePathCallback;
                 boolean capturePhoto = fileChooserParams != null && fileChooserParams.isCaptureEnabled();
-                if (capturePhoto) {
+                if (capturePhoto && cameraAvailable) {
                     return launchCameraUpload();
                 }
-                try {
-                    Intent chooserIntent = fileChooserParams == null
-                        ? new Intent(Intent.ACTION_GET_CONTENT).setType("*/*")
-                        : fileChooserParams.createIntent();
-                    startActivityForResult(chooserIntent, REQUEST_FILE_CHOOSER);
-                    return true;
-                } catch (Exception error) {
-                    appendNativeLog("打开文件选择器失败: " + error.getMessage());
-                    finishFileChooser(null);
+                if (shouldOfferCameraUpload(fileChooserParams)) {
+                    showUploadSourceChooser(fileChooserParams);
                     return true;
                 }
+                return launchFileUploadChooser(fileChooserParams);
             }
 
             @Override
@@ -491,6 +485,51 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("打开附件拍照失败: " + error.getMessage());
             toast("打开相机失败: " + safe(error.getMessage()));
             pendingCameraUploadUri = null;
+            finishFileChooser(null);
+            return true;
+        }
+    }
+
+    private boolean shouldOfferCameraUpload(WebChromeClient.FileChooserParams params) {
+        if (!cameraAvailable) return false;
+        if (params == null) return true;
+        String[] acceptTypes = params.getAcceptTypes();
+        if (acceptTypes == null || acceptTypes.length == 0) return true;
+        for (String acceptType : acceptTypes) {
+            String normalized = safe(acceptType).trim().toLowerCase(java.util.Locale.ROOT);
+            if (normalized.isEmpty() || "*/*".equals(normalized) || normalized.startsWith("image/")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void showUploadSourceChooser(WebChromeClient.FileChooserParams params) {
+        appendNativeLog("图片上传请求，等待选择拍照或文件");
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("上传图片")
+            .setItems(new String[]{"拍照", "选择文件"}, (dialog, which) -> {
+                if (which == 0) {
+                    launchCameraUpload();
+                } else {
+                    launchFileUploadChooser(params);
+                }
+            })
+            .setNegativeButton("取消", (dialog, which) -> finishFileChooser(null))
+            .setOnCancelListener(dialog -> finishFileChooser(null))
+            .show();
+    }
+
+    private boolean launchFileUploadChooser(WebChromeClient.FileChooserParams params) {
+        try {
+            Intent chooserIntent = params == null
+                ? new Intent(Intent.ACTION_GET_CONTENT).setType("*/*")
+                : params.createIntent();
+            appendNativeLog("打开文件选择器");
+            startActivityForResult(chooserIntent, REQUEST_FILE_CHOOSER);
+            return true;
+        } catch (Exception error) {
+            appendNativeLog("打开文件选择器失败: " + error.getMessage());
             finishFileChooser(null);
             return true;
         }
