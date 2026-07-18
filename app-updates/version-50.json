@@ -1,0 +1,16 @@
+{
+  "versionCode": 50,
+  "versionName": "1.2.41",
+  "apkFileName": "kaihang-scanner-v1.2.41-50.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.41-50.apk",
+  "changelog": "多个 Tab 动作并存时只让当前可执行扫码动作参与就绪和扫码填充",
+  "releasedAt": "2026-07-18",
+  "notes": [
+    "Android 版本提升到 1.2.41 (50)",
+    "同页存在多个扫码动作时，只要至少一个当前目标可交互就立即进入 ready，不再等待隐藏 Tab 动作超时",
+    "收到扫码结果后跳过当前不可写的填充目标，避免向隐藏 Tab 重复注入并触发额外 DOM 工作",
+    "条件隐藏的扫码后点击动作继续保留，按钮显示后仍按原动作执行",
+    "打印动作在核对面板中标记为 Android 已支持，不再误显示 unsupported",
+    "动作表仍应优先使用具体 /admin/<page>/tab/<tab> 路径隔离各 Tab 业务动作"
+  ]
+}

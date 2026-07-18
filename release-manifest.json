@@ -1,6 +1,55 @@
 {
-  "currentVersionCode": 49,
+  "currentVersionCode": 52,
   "releases": [
+    {
+      "versionCode": 52,
+      "versionName": "1.2.43",
+      "apkFileName": "kaihang-scanner-v1.2.43-52.apk",
+      "changelog": "发布事件驱动页面动作监听，动作目标改为事件执行时解析",
+      "releasedAt": "2026-07-18",
+      "notes": [
+        "Android 版本提升到 1.2.43 (52)",
+        "页面动作配置装载后直接 ready，不在页面加载阶段检查隐藏或未挂载控件",
+        "PDA 与相机扫码统一通过 CustomEvent 投递到当前路由/Tab 动作上下文",
+        "扫码执行时才检查输入目标，隐藏 Tab 动作休眠且不使用任意输入框 fallback",
+        "条件提交按钮只在成功写入当前表单后建立本次扫码专属短时观察器",
+        "连续扫码、Tab 切换或上下文重载会取消旧等待，防止旧动作延迟执行",
+        "重复基础页面与具体 Tab 动作按配置去重，优先保留路径更具体的动作",
+        "打印、Android 拍照上传与 Windows 剪贴板上传兼容测试保持通过"
+      ]
+    },
+    {
+      "versionCode": 51,
+      "versionName": "1.2.42",
+      "apkFileName": "kaihang-scanner-v1.2.42-51.apk",
+      "changelog": "页面动作改为事件驱动，加载时不检查控件，事件执行时才解析当前目标",
+      "releasedAt": "2026-07-18",
+      "notes": [
+        "Android 版本提升到 1.2.42 (51)",
+        "新增独立动作事件运行时，页面上下文激活后立即 ready，不再调用全局动作目标等待",
+        "扫码事件只由当前路由/Tab 上下文消费，执行时才检查输入框或按钮是否可交互",
+        "隐藏或未挂载的输入动作本次直接休眠，不影响状态灯，也不使用任意输入框 fallback",
+        "扫码后条件显示的点击动作仅在本次扫码已写入可见输入或显式允许时使用专属短时观察器；隐藏 Tab 不创建观察器，切换 Tab 或连续扫码会取消旧等待",
+        "基础页面和具体 Tab 重复指向同一目标时，仅保留路径更具体的动作",
+        "NocoBase dom-settled 事件只用于附件按钮等增量挂载，不重新核对整页动作",
+        "重复注入 runtime 时不再重复注册 bootstrap、扫码和路由全局监听"
+      ]
+    },
+    {
+      "versionCode": 50,
+      "versionName": "1.2.41",
+      "apkFileName": "kaihang-scanner-v1.2.41-50.apk",
+      "changelog": "多个 Tab 动作并存时只让当前可执行扫码动作参与就绪和扫码填充",
+      "releasedAt": "2026-07-18",
+      "notes": [
+        "Android 版本提升到 1.2.41 (50)",
+        "同页存在多个扫码动作时，只要至少一个当前目标可交互就立即进入 ready，不再等待隐藏 Tab 动作超时",
+        "收到扫码结果后跳过当前不可写的填充目标，避免向隐藏 Tab 重复注入并触发额外 DOM 工作",
+        "条件隐藏的扫码后点击动作继续保留，按钮显示后仍按原动作执行",
+        "打印动作在核对面板中标记为 Android 已支持，不再误显示 unsupported",
+        "动作表仍应优先使用具体 /admin/<page>/tab/<tab> 路径隔离各 Tab 业务动作"
+      ]
+    },
     {
       "versionCode": 49,
       "versionName": "1.2.40",
