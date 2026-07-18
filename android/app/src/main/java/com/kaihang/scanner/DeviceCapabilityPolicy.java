@@ -11,9 +11,6 @@ final class DeviceCapabilityPolicy {
         boolean cameraAvailable
     ) {
         return pageHasScanAction
-            && capabilitiesResolved
-            && !pdaScannerAvailable
-            && !pdaPrinterAvailable
             && cameraAvailable;
     }
 }

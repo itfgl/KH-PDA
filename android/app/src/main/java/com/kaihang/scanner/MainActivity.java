@@ -737,7 +737,7 @@ public class MainActivity extends BridgeActivity {
         nativeScanButton.setLayoutParams(scanParams);
         nativeScanButton.setPadding(dp(18), 0, dp(18), 0);
         nativeScanButton.setOnClickListener(v -> {
-            if (nativeScanActive && !isCameraFallbackMode()) {
+            if (nativeScanActive && !isCameraScanEntryAvailable()) {
                 appendNativeLog("点击原生扫码按钮: 停扫");
                 stopNativeScan();
             } else {
@@ -890,7 +890,7 @@ public class MainActivity extends BridgeActivity {
     private void showNativeControlMenu(android.view.View anchor) {
         android.widget.PopupMenu menu = new android.widget.PopupMenu(this, anchor);
         menu.getMenu().add(0, 1, 0, "重新初始化");
-        menu.getMenu().add(0, 2, 1, isCameraFallbackMode() ? "相机扫码" : "扫码");
+        menu.getMenu().add(0, 2, 1, isCameraScanEntryAvailable() ? "相机扫码" : "扫码");
         menu.getMenu().add(0, 3, 2, "客户端设置");
         menu.getMenu().add(0, 4, 3, "原生配置");
         menu.getMenu().add(0, 5, 4, "检查更新");
@@ -1060,7 +1060,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void triggerPreferredScan() {
-        if (isCameraFallbackMode()) {
+        if (isCameraScanEntryAvailable()) {
             startCameraScan();
             return;
         }
@@ -1112,7 +1112,7 @@ public class MainActivity extends BridgeActivity {
         updateNativeScanActionVisibility();
     }
 
-    private boolean isCameraFallbackMode() {
+    private boolean isCameraScanEntryAvailable() {
         return DeviceCapabilityPolicy.shouldShowCameraScanButton(
             pageHasScanAction,
             deviceCapabilitiesResolved,
@@ -1124,7 +1124,7 @@ public class MainActivity extends BridgeActivity {
 
     private void updateNativeScanActionVisibility() {
         if (nativeScanButton == null) return;
-        boolean showCameraButton = isCameraFallbackMode();
+        boolean showCameraButton = isCameraScanEntryAvailable();
         nativeScanButton.setVisibility(showCameraButton ? android.view.View.VISIBLE : android.view.View.GONE);
         if (showCameraButton) {
             nativeScanButton.setText("相机扫码");
@@ -1140,7 +1140,7 @@ public class MainActivity extends BridgeActivity {
         if (nativeScanButton == null) {
             return;
         }
-        nativeScanButton.setText(isCameraFallbackMode() ? "相机扫码" : (active ? "停扫" : "扫码"));
+        nativeScanButton.setText(isCameraScanEntryAvailable() ? "相机扫码" : (active ? "停扫" : "扫码"));
         nativeScanButton.setBackground(buildNativeCapsuleBackground(active));
     }
 

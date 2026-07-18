@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 52,
+  "currentVersionCode": 53,
   "releases": [
+    {
+      "versionCode": 53,
+      "versionName": "1.2.44",
+      "apkFileName": "kaihang-scanner-v1.2.44-53.apk",
+      "changelog": "修复带硬件扫码和打印能力的 PDA 不显示相机扫码入口",
+      "releasedAt": "2026-07-18",
+      "notes": [
+        "Android 版本提升到 1.2.44 (53)",
+        "当前页配置扫码动作且设备存在相机时始终显示相机扫码入口",
+        "PDA 硬件扫码器、内置打印机和能力探测状态不再隐藏相机按钮",
+        "点击相机扫码入口继续打开 CameraX/ML Kit 后置相机扫码页",
+        "PDA 物理扫码广播保持启用，与相机扫码入口并存",
+        "保留 1.2.43 的事件驱动页面动作、拍照上传和打印行为"
+      ]
+    },
     {
       "versionCode": 52,
       "versionName": "1.2.43",
