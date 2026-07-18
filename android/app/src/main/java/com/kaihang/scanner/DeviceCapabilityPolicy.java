@@ -13,6 +13,7 @@ final class DeviceCapabilityPolicy {
         return pageHasScanAction
             && capabilitiesResolved
             && !pdaScannerAvailable
+            && !pdaPrinterAvailable
             && cameraAvailable;
     }
 }

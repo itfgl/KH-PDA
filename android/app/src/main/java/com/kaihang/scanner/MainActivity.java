@@ -98,7 +98,6 @@ public class MainActivity extends BridgeActivity {
                     pdaPrinterAvailable = true;
                     deviceCapabilitiesResolved = true;
                 } else if ("failed".equals(connection) || "closed".equals(connection)) {
-                    pdaPrinterAvailable = false;
                     deviceCapabilitiesResolved = true;
                 }
                 runOnUiThread(() -> updateNativeScanActionVisibility());
@@ -235,7 +234,7 @@ public class MainActivity extends BridgeActivity {
                 if (capturePhoto && cameraAvailable) {
                     return launchCameraUpload();
                 }
-                if (shouldOfferCameraUpload(fileChooserParams)) {
+                if (cameraAvailable) {
                     showUploadSourceChooser(fileChooserParams);
                     return true;
                 }
@@ -490,24 +489,10 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    private boolean shouldOfferCameraUpload(WebChromeClient.FileChooserParams params) {
-        if (!cameraAvailable) return false;
-        if (params == null) return true;
-        String[] acceptTypes = params.getAcceptTypes();
-        if (acceptTypes == null || acceptTypes.length == 0) return true;
-        for (String acceptType : acceptTypes) {
-            String normalized = safe(acceptType).trim().toLowerCase(java.util.Locale.ROOT);
-            if (normalized.isEmpty() || "*/*".equals(normalized) || normalized.startsWith("image/")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void showUploadSourceChooser(WebChromeClient.FileChooserParams params) {
-        appendNativeLog("图片上传请求，等待选择拍照或文件");
+        appendNativeLog("网页上传请求，等待选择拍照或文件");
         new android.app.AlertDialog.Builder(this)
-            .setTitle("上传图片")
+            .setTitle("上传附件")
             .setItems(new String[]{"拍照", "选择文件"}, (dialog, which) -> {
                 if (which == 0) {
                     launchCameraUpload();

@@ -11,7 +11,7 @@ public class DeviceCapabilityPolicyTest {
         assertTrue(DeviceCapabilityPolicy.shouldShowCameraScanButton(true, true, false, false, true));
         assertFalse(DeviceCapabilityPolicy.shouldShowCameraScanButton(false, true, false, false, true));
         assertFalse(DeviceCapabilityPolicy.shouldShowCameraScanButton(true, true, true, false, true));
-        assertTrue(DeviceCapabilityPolicy.shouldShowCameraScanButton(true, true, false, true, true));
+        assertFalse(DeviceCapabilityPolicy.shouldShowCameraScanButton(true, true, false, true, true));
         assertFalse(DeviceCapabilityPolicy.shouldShowCameraScanButton(true, false, false, false, true));
         assertFalse(DeviceCapabilityPolicy.shouldShowCameraScanButton(true, true, false, false, false));
     }
