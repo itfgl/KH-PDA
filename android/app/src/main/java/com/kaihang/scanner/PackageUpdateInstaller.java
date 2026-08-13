@@ -1,0 +1,156 @@
+package com.kaihang.scanner;
+
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageInstaller;
+import android.net.Uri;
+import android.os.Build;
+import android.provider.Settings;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+
+/**
+ * Streams an APK from the network into a PackageInstaller session.
+ *
+ * The APK never appears in public Downloads and is not held as one large byte
+ * array in application memory. Android still stages the package in its own
+ * private installer storage before asking the user to approve installation.
+ */
+public final class PackageUpdateInstaller {
+    public interface Listener {
+        void onProgress(int progress);
+
+        void onInstallSessionCommitted();
+
+        void onError(String message);
+    }
+
+    private static final int BUFFER_SIZE = 64 * 1024;
+
+    private PackageUpdateInstaller() {}
+
+    public static boolean canInstallPackages(Context context) {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+            || context.getPackageManager().canRequestPackageInstalls();
+    }
+
+    public static void openUnknownAppSourcesSettings(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
+        }
+        Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+        intent.setData(Uri.parse("package:" + context.getPackageName()));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        if (intent.resolveActivity(context.getPackageManager()) != null) {
+            context.startActivity(intent);
+        }
+    }
+
+    public static void downloadAndInstall(Activity activity, String url, Listener listener) {
+        new Thread(() -> streamIntoInstallSession(activity, url, listener),
+            "apk-update-installer").start();
+    }
+
+    private static void streamIntoInstallSession(
+        Activity activity,
+        String url,
+        Listener listener
+    ) {
+        PackageInstaller installer = activity.getPackageManager().getPackageInstaller();
+        PackageInstaller.Session session = null;
+        int sessionId = -1;
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(15_000);
+            connection.setReadTimeout(60_000);
+            connection.setRequestProperty("X-Client-Type", "capacitor");
+            connection.connect();
+
+            int status = connection.getResponseCode();
+            if (status < 200 || status >= 300) {
+                throw new IOException("APK 下载失败: HTTP " + status);
+            }
+
+            long totalBytes = connection.getContentLengthLong();
+            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            params.setAppPackageName(activity.getPackageName());
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+            }
+
+            sessionId = installer.createSession(params);
+            session = installer.openSession(sessionId);
+            try (InputStream input = connection.getInputStream();
+                 OutputStream output = session.openWrite("base.apk", 0, totalBytes)) {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                long downloadedBytes = 0;
+                int lastProgress = -1;
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                    downloadedBytes += read;
+                    if (totalBytes > 0) {
+                        int progress = (int) Math.min(99, downloadedBytes * 100 / totalBytes);
+                        if (progress != lastProgress) {
+                            lastProgress = progress;
+                            dispatchProgress(activity, listener, progress);
+                        }
+                    }
+                }
+                session.fsync(output);
+            }
+
+            dispatchProgress(activity, listener, 100);
+            Intent resultIntent = new Intent(activity, PackageInstallStatusReceiver.class);
+            resultIntent.setAction(PackageInstallStatusReceiver.ACTION_INSTALL_STATUS);
+            resultIntent.putExtra(PackageInstallStatusReceiver.EXTRA_SESSION_ID, sessionId);
+            int pendingIntentFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                pendingIntentFlags |= PendingIntent.FLAG_MUTABLE;
+            }
+            PendingIntent pendingIntent = PendingIntent.getBroadcast(
+                activity,
+                sessionId,
+                resultIntent,
+                pendingIntentFlags
+            );
+            session.commit(pendingIntent.getIntentSender());
+            session.close();
+            session = null;
+            activity.runOnUiThread(listener::onInstallSessionCommitted);
+        } catch (Exception e) {
+            if (session != null) {
+                try {
+                    session.abandon();
+                } catch (Exception ignored) {}
+                session.close();
+            } else if (sessionId >= 0) {
+                try {
+                    installer.abandonSession(sessionId);
+                } catch (Exception ignored) {}
+            }
+            String message = e.getMessage();
+            String finalMessage = message == null || message.trim().isEmpty()
+                ? e.getClass().getSimpleName()
+                : message;
+            activity.runOnUiThread(() -> listener.onError(finalMessage));
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+    }
+
+    private static void dispatchProgress(Activity activity, Listener listener, int progress) {
+        activity.runOnUiThread(() -> listener.onProgress(progress));
+    }
+}

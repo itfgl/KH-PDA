@@ -1,11 +1,7 @@
 package com.kaihang.scanner;
 
 import android.app.Activity;
-import android.app.DownloadManager;
-import android.content.Context;
-import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
 import android.text.TextUtils;
 
 import androidx.appcompat.app.AlertDialog;
@@ -57,8 +53,37 @@ final class NativeUpdateHelper {
                             .setTitle("发现新版本")
                             .setMessage(message.toString())
                             .setPositiveButton("下载更新", (dialog, which) -> {
+                                if (!PackageUpdateInstaller.canInstallPackages(activity)) {
+                                    callbacks.appendLog("未授予安装未知应用权限");
+                                    callbacks.toast("请先允许本应用安装未知应用，然后再次检查更新");
+                                    PackageUpdateInstaller.openUnknownAppSourcesSettings(activity);
+                                    return;
+                                }
                                 callbacks.appendLog("开始下载更新: " + apkUrl);
-                                downloadApkWithSystemManager(activity, apkUrl, callbacks);
+                                PackageUpdateInstaller.downloadAndInstall(activity, apkUrl,
+                                    new PackageUpdateInstaller.Listener() {
+                                        private int lastLoggedProgress = -10;
+
+                                        @Override
+                                        public void onProgress(int progress) {
+                                            if (progress >= lastLoggedProgress + 10 || progress == 100) {
+                                                lastLoggedProgress = progress;
+                                                callbacks.appendLog("更新下载进度: " + progress + "%");
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onInstallSessionCommitted() {
+                                            callbacks.appendLog("更新包已提交系统安装器");
+                                            callbacks.toast("下载完成，正在打开系统安装界面");
+                                        }
+
+                                        @Override
+                                        public void onError(String error) {
+                                            callbacks.appendLog("更新安装失败: " + error);
+                                            callbacks.toast("更新安装失败: " + error);
+                                        }
+                                    });
                             })
                             .setNegativeButton("取消", null)
                             .show();
@@ -83,27 +108,6 @@ final class NativeUpdateHelper {
                 });
             }
         }).start();
-    }
-
-    private static void downloadApkWithSystemManager(Activity activity, String url, Callbacks callbacks) {
-        try {
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-            request.setTitle("凯航扫码 更新");
-            request.setDescription("正在下载新版本...");
-            request.setMimeType("application/vnd.android.package-archive");
-            request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "kaihang_update.apk");
-            request.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-            DownloadManager manager = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
-            if (manager == null) {
-                throw new IllegalStateException("DownloadManager unavailable");
-            }
-            manager.enqueue(request);
-            callbacks.toast("已开始下载更新，请查看系统通知");
-        } catch (Exception e) {
-            callbacks.appendLog("启动下载失败: " + e.getMessage());
-            callbacks.toast("启动下载失败: " + e.getMessage());
-        }
     }
 
     private static JSONObject fetchUpdateInfo(String updateBase) throws Exception {

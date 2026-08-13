@@ -1,19 +1,14 @@
 package com.kaihang.scanner.plugins;
 
-import android.app.DownloadManager;
-import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Environment;
-import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import java.io.File;
+import com.kaihang.scanner.PackageUpdateInstaller;
 
 @CapacitorPlugin(name = "UpdatePlugin")
 public class UpdatePlugin extends Plugin {
@@ -42,9 +37,7 @@ public class UpdatePlugin extends Plugin {
         }
     }
 
-    /**
-     * 用系统 DownloadManager 下载 APK，下载完自动触发系统安装器。
-     */
+    /** 流式写入系统安装会话，不在公共 Downloads 中创建 APK 文件。 */
     @PluginMethod
     public void downloadAndInstallApk(PluginCall call) {
         String urlString = call.getString("url");
@@ -61,81 +54,25 @@ public class UpdatePlugin extends Plugin {
                 return;
             }
 
-            // 清理旧文件
-            File dest = new File(
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "kaihang_update.apk"
-            );
-            if (dest.exists()) dest.delete();
-
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(urlString));
-            request.setTitle("凯航扫码 更新");
-            request.setDescription("正在下载新版本...");
-            request.setMimeType("application/vnd.android.package-archive");
-            request.setNotificationVisibility(
-                DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-            request.setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS, "kaihang_update.apk");
-            // 允许 Wi-Fi 和移动网络
-            request.setAllowedNetworkTypes(
-                DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
-
-            DownloadManager dm = (DownloadManager)
-                getContext().getSystemService(Context.DOWNLOAD_SERVICE);
-            long downloadId = dm.enqueue(request);
-
-            // 在后台轮询进度上报给 JS
-            new Thread(() -> {
-                DownloadManager.Query query = new DownloadManager.Query();
-                query.setFilterById(downloadId);
-                int lastProgress = -1;
-                while (true) {
-                    android.database.Cursor c = dm.query(query);
-                    if (c == null) break;
-                    if (!c.moveToFirst()) { c.close(); break; }
-                    int status = c.getInt(c.getColumnIndex(DownloadManager.COLUMN_STATUS));
-                    if (status == DownloadManager.STATUS_FAILED) {
-                        c.close();
-                        call.reject("DownloadManager 下载失败");
-                        return;
+            PackageUpdateInstaller.downloadAndInstall(getActivity(), urlString,
+                new PackageUpdateInstaller.Listener() {
+                    @Override
+                    public void onProgress(int progress) {
+                        JSObject obj = new JSObject();
+                        obj.put("progress", progress);
+                        notifyListeners("downloadProgress", obj);
                     }
-                    if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                        String localUriString = c.getString(c.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI));
-                        c.close();
-                        Uri apkUri = null;
-                        if (localUriString != null && !localUriString.isEmpty()) {
-                            try {
-                                apkUri = Uri.parse(localUriString);
-                            } catch (Exception ignored) {}
-                        }
-                        Uri finalApkUri = apkUri;
-                        getActivity().runOnUiThread(() -> {
-                            try {
-                                installApk(finalApkUri, dest);
-                                call.resolve();
-                            } catch (Exception e) {
-                                call.reject("拉起系统安装界面失败: " + e.getMessage());
-                            }
-                        });
-                        break;
+
+                    @Override
+                    public void onInstallSessionCommitted() {
+                        call.resolve();
                     }
-                    long downloaded = c.getLong(
-                        c.getColumnIndex(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                    long total = c.getLong(
-                        c.getColumnIndex(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
-                    c.close();
-                    if (total > 0) {
-                        int progress = (int) (downloaded * 100 / total);
-                        if (progress != lastProgress) {
-                            lastProgress = progress;
-                            JSObject obj = new JSObject();
-                            obj.put("progress", progress);
-                            notifyListeners("downloadProgress", obj);
-                        }
+
+                    @Override
+                    public void onError(String message) {
+                        call.reject("更新安装失败: " + message);
                     }
-                    try { Thread.sleep(300); } catch (InterruptedException e) { break; }
-                }
-            }).start();
+                });
 
         } catch (Exception e) {
             call.reject("启动下载失败: " + e.getMessage());
@@ -170,49 +107,8 @@ public class UpdatePlugin extends Plugin {
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
-    private void installApk(Uri downloadedUri, File fallbackFile) {
-        Intent intent = new Intent(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
-            ? Intent.ACTION_INSTALL_PACKAGE
-            : Intent.ACTION_VIEW);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        Uri installUri = null;
-        if (downloadedUri != null) {
-            String scheme = downloadedUri.getScheme();
-            if ("content".equalsIgnoreCase(scheme) || "file".equalsIgnoreCase(scheme)) {
-                installUri = downloadedUri;
-            }
-        }
-        if (installUri == null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                installUri = FileProvider.getUriForFile(
-                    getContext(),
-                    getContext().getPackageName() + ".fileprovider",
-                    fallbackFile
-                );
-            } else {
-                installUri = Uri.fromFile(fallbackFile);
-            }
-        }
-
-        intent.setDataAndType(installUri, "application/vnd.android.package-archive");
-        intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-        intent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
-
-        Activity activity = getActivity();
-        if (activity != null) {
-            activity.startActivity(intent);
-            return;
-        }
-        getContext().startActivity(intent);
-    }
-
     private boolean canInstallPackages() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return true;
-        }
-        return getContext().getPackageManager().canRequestPackageInstalls();
+        return PackageUpdateInstaller.canInstallPackages(getContext());
     }
 
     private void notifyInstallPermissionRequired() {
@@ -222,14 +118,6 @@ public class UpdatePlugin extends Plugin {
     }
 
     private void openUnknownAppSourcesSettings() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return;
-        }
-        Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-        intent.setData(Uri.parse("package:" + getContext().getPackageName()));
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        if (intent.resolveActivity(getContext().getPackageManager()) != null) {
-            getContext().startActivity(intent);
-        }
+        PackageUpdateInstaller.openUnknownAppSourcesSettings(getContext());
     }
 }
