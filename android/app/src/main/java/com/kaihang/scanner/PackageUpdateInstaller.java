@@ -28,24 +28,39 @@ public final class PackageUpdateInstaller {
 
         void onInstallSessionCommitted();
 
+        void onInstallStatus(String status, String message);
+
         void onError(String message);
     }
 
     private static final int BUFFER_SIZE = 64 * 1024;
+    private static volatile Listener activeListener;
 
     private PackageUpdateInstaller() {}
 
     public static boolean canInstallPackages(Context context) {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.O
-            || context.getPackageManager().canRequestPackageInstalls();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            return context.getPackageManager().canRequestPackageInstalls();
+        }
+        try {
+            return Settings.Global.getInt(
+                context.getContentResolver(),
+                Settings.Global.INSTALL_NON_MARKET_APPS,
+                0
+            ) == 1;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     public static void openUnknownAppSourcesSettings(Context context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return;
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+            intent.setData(Uri.parse("package:" + context.getPackageName()));
+        } else {
+            intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
         }
-        Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-        intent.setData(Uri.parse("package:" + context.getPackageName()));
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         if (intent.resolveActivity(context.getPackageManager()) != null) {
             context.startActivity(intent);
@@ -53,8 +68,24 @@ public final class PackageUpdateInstaller {
     }
 
     public static void downloadAndInstall(Activity activity, String url, Listener listener) {
+        activeListener = listener;
         new Thread(() -> streamIntoInstallSession(activity, url, listener),
             "apk-update-installer").start();
+    }
+
+    static void reportInstallStatus(Context context, String status, String message) {
+        context.getSharedPreferences("kh_update_installer", Context.MODE_PRIVATE)
+            .edit()
+            .putString("last_status", status)
+            .putString("last_message", message == null ? "" : message)
+            .apply();
+        Listener listener = activeListener;
+        if (listener != null) {
+            listener.onInstallStatus(status, message == null ? "" : message);
+        }
+        if (!"pending_user_action".equals(status)) {
+            activeListener = null;
+        }
     }
 
     private static void streamIntoInstallSession(
@@ -110,6 +141,10 @@ public final class PackageUpdateInstaller {
             }
 
             dispatchProgress(activity, listener, 100);
+            if (!canInstallPackages(activity)) {
+                activity.runOnUiThread(() -> openUnknownAppSourcesSettings(activity));
+                throw new SecurityException("安装未知应用权限未开启，请允许后重新点击更新");
+            }
             Intent resultIntent = new Intent(activity, PackageInstallStatusReceiver.class);
             resultIntent.setAction(PackageInstallStatusReceiver.ACTION_INSTALL_STATUS);
             resultIntent.putExtra(PackageInstallStatusReceiver.EXTRA_SESSION_ID, sessionId);
@@ -142,6 +177,7 @@ public final class PackageUpdateInstaller {
             String finalMessage = message == null || message.trim().isEmpty()
                 ? e.getClass().getSimpleName()
                 : message;
+            activeListener = null;
             activity.runOnUiThread(() -> listener.onError(finalMessage));
         } finally {
             if (connection != null) {

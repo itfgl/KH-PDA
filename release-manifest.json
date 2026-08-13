@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 58,
+  "currentVersionCode": 59,
   "releases": [
+    {
+      "versionCode": 59,
+      "versionName": "1.2.50",
+      "apkFileName": "kaihang-scanner-v1.2.50-59.apk",
+      "changelog": "更新前检查未知来源权限，并显示明确下载进度与系统安装状态",
+      "releasedAt": "2026-08-14",
+      "notes": [
+        "Android 版本提升到 1.2.50 (59)",
+        "Android 7 及以下检查系统未知来源总开关，未开启时跳转安全设置",
+        "Android 8 及以上继续检查本应用安装未知应用权限",
+        "下载前和提交系统安装会话前进行双重权限校验",
+        "原生更新入口显示下载百分比进度弹窗",
+        "记录等待用户确认、安装成功与安装失败的系统回调状态"
+      ]
+    },
     {
       "versionCode": 58,
       "versionName": "1.2.49",

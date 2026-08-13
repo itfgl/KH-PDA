@@ -69,6 +69,14 @@ public class UpdatePlugin extends Plugin {
                     }
 
                     @Override
+                    public void onInstallStatus(String status, String message) {
+                        JSObject obj = new JSObject();
+                        obj.put("status", status);
+                        obj.put("message", message);
+                        notifyListeners("installStatus", obj);
+                    }
+
+                    @Override
                     public void onError(String message) {
                         call.reject("更新安装失败: " + message);
                     }
@@ -113,7 +121,7 @@ public class UpdatePlugin extends Plugin {
 
     private void notifyInstallPermissionRequired() {
         JSObject data = new JSObject();
-        data.put("reason", "请先允许此应用安装未知来源应用，然后再次点击检查更新");
+        data.put("reason", "请先在系统设置中开启安装未知应用/未知来源，然后返回并再次点击检查更新");
         notifyListeners("installPermissionRequired", data);
     }
 

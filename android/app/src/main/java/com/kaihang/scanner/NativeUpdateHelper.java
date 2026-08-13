@@ -1,8 +1,13 @@
 package com.kaihang.scanner;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.os.Build;
 import android.text.TextUtils;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AlertDialog;
 
@@ -55,17 +60,20 @@ final class NativeUpdateHelper {
                             .setPositiveButton("下载更新", (dialog, which) -> {
                                 if (!PackageUpdateInstaller.canInstallPackages(activity)) {
                                     callbacks.appendLog("未授予安装未知应用权限");
-                                    callbacks.toast("请先允许本应用安装未知应用，然后再次检查更新");
+                                    callbacks.toast("请先开启安装未知应用/未知来源，然后返回再次检查更新");
                                     PackageUpdateInstaller.openUnknownAppSourcesSettings(activity);
                                     return;
                                 }
                                 callbacks.appendLog("开始下载更新: " + apkUrl);
+                                DownloadProgressDialog downloadDialog =
+                                    showDownloadProgressDialog(activity, remoteVersionName);
                                 PackageUpdateInstaller.downloadAndInstall(activity, apkUrl,
                                     new PackageUpdateInstaller.Listener() {
                                         private int lastLoggedProgress = -10;
 
                                         @Override
                                         public void onProgress(int progress) {
+                                            downloadDialog.update(progress);
                                             if (progress >= lastLoggedProgress + 10 || progress == 100) {
                                                 lastLoggedProgress = progress;
                                                 callbacks.appendLog("更新下载进度: " + progress + "%");
@@ -74,12 +82,27 @@ final class NativeUpdateHelper {
 
                                         @Override
                                         public void onInstallSessionCommitted() {
+                                            downloadDialog.showInstalling();
                                             callbacks.appendLog("更新包已提交系统安装器");
                                             callbacks.toast("下载完成，正在打开系统安装界面");
                                         }
 
                                         @Override
+                                        public void onInstallStatus(String status, String statusMessage) {
+                                            callbacks.appendLog(
+                                                "系统安装状态: " + status + " - " + statusMessage
+                                            );
+                                            if ("pending_user_action".equals(status)) {
+                                                downloadDialog.dismiss();
+                                            } else if ("success".equals(status)
+                                                || "failure".equals(status)) {
+                                                downloadDialog.dismiss();
+                                            }
+                                        }
+
+                                        @Override
                                         public void onError(String error) {
+                                            downloadDialog.dismiss();
                                             callbacks.appendLog("更新安装失败: " + error);
                                             callbacks.toast("更新安装失败: " + error);
                                         }
@@ -108,6 +131,88 @@ final class NativeUpdateHelper {
                 });
             }
         }).start();
+    }
+
+    private static DownloadProgressDialog showDownloadProgressDialog(
+        Activity activity,
+        String versionName
+    ) {
+        int padding = (int) (20 * activity.getResources().getDisplayMetrics().density);
+        LinearLayout content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(padding, padding, padding, padding);
+
+        TextView message = new TextView(activity);
+        message.setText("正在下载版本 " + versionName + "，请勿关闭应用");
+        content.addView(message, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        ProgressBar progressBar = new ProgressBar(
+            activity,
+            null,
+            android.R.attr.progressBarStyleHorizontal
+        );
+        progressBar.setMax(100);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        progressParams.topMargin = padding;
+        content.addView(progressBar, progressParams);
+
+        TextView percent = new TextView(activity);
+        percent.setText("0%");
+        percent.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        content.addView(percent, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        AlertDialog dialog = new AlertDialog.Builder(activity)
+            .setTitle("下载应用更新")
+            .setView(content)
+            .setCancelable(false)
+            .create();
+        dialog.show();
+        return new DownloadProgressDialog(dialog, progressBar, message, percent);
+    }
+
+    private static final class DownloadProgressDialog {
+        private final Dialog dialog;
+        private final ProgressBar progressBar;
+        private final TextView message;
+        private final TextView percent;
+
+        DownloadProgressDialog(
+            Dialog dialog,
+            ProgressBar progressBar,
+            TextView message,
+            TextView percent
+        ) {
+            this.dialog = dialog;
+            this.progressBar = progressBar;
+            this.message = message;
+            this.percent = percent;
+        }
+
+        void update(int progress) {
+            progressBar.setProgress(progress);
+            percent.setText(progress + "%");
+        }
+
+        void showInstalling() {
+            progressBar.setProgress(100);
+            percent.setText("100%");
+            message.setText("下载完成，正在打开系统安装确认界面…");
+        }
+
+        void dismiss() {
+            if (dialog.isShowing()) {
+                dialog.dismiss();
+            }
+        }
     }
 
     private static JSONObject fetchUpdateInfo(String updateBase) throws Exception {
