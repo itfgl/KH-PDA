@@ -3,12 +3,11 @@
   "versionName": "1.2.55",
   "apkFileName": "kaihang-scanner-v1.2.55-64.apk",
   "apkUrl": "/app-updates/kaihang-scanner-v1.2.55-64.apk",
-  "changelog": "适配无标准未知来源开关的定制系统，并保持安装会话直到最终回调",
+  "changelog": "PackageInstaller 会话保持二次验证版本",
   "releasedAt": "2026-08-14",
   "notes": [
     "Android 版本提升到 1.2.55 (64)",
-    "不再主动进入未知来源权限页或根据标准权限状态阻断更新",
-    "下载完成后直接交给定制系统安装器处理",
-    "安装确认期间持续保持会话，最终回调后才关闭 PackageInstaller.Session"
+    "用于从版本 63 验证安装确认期间会话持续保持",
+    "最终安装回调后才关闭 PackageInstaller.Session"
   ]
 }
