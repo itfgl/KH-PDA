@@ -13,6 +13,7 @@ public class PackageInstallStatusReceiver extends BroadcastReceiver {
 
     @Override
     public void onReceive(Context context, Intent intent) {
+        int sessionId = intent.getIntExtra(EXTRA_SESSION_ID, -1);
         int status = intent.getIntExtra(
             PackageInstaller.EXTRA_STATUS,
             PackageInstaller.STATUS_FAILURE
@@ -20,6 +21,7 @@ public class PackageInstallStatusReceiver extends BroadcastReceiver {
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
             PackageUpdateInstaller.reportInstallStatus(
                 context,
+                sessionId,
                 "pending_user_action",
                 "等待用户确认安装"
             );
@@ -27,6 +29,7 @@ public class PackageInstallStatusReceiver extends BroadcastReceiver {
             if (confirmationIntent == null) {
                 PackageUpdateInstaller.reportInstallStatus(
                     context,
+                    sessionId,
                     "failure",
                     "系统未返回安装确认界面"
                 );
@@ -39,7 +42,12 @@ public class PackageInstallStatusReceiver extends BroadcastReceiver {
         }
 
         if (status == PackageInstaller.STATUS_SUCCESS) {
-            PackageUpdateInstaller.reportInstallStatus(context, "success", "应用更新安装完成");
+            PackageUpdateInstaller.reportInstallStatus(
+                context,
+                sessionId,
+                "success",
+                "应用更新安装完成"
+            );
             showToast(context, "应用更新安装完成");
             return;
         }
@@ -47,6 +55,7 @@ public class PackageInstallStatusReceiver extends BroadcastReceiver {
         String detail = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE);
         PackageUpdateInstaller.reportInstallStatus(
             context,
+            sessionId,
             "failure",
             detail == null ? "未知安装错误，状态码 " + status : detail
         );

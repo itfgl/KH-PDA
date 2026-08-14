@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 62,
+  "currentVersionCode": 63,
   "releases": [
+    {
+      "versionCode": 63,
+      "versionName": "1.2.54",
+      "apkFileName": "kaihang-scanner-v1.2.54-63.apk",
+      "changelog": "兼容定制 PDA 安装器，安装确认完成前持续持有 PackageInstaller 会话",
+      "releasedAt": "2026-08-14",
+      "notes": [
+        "Android 版本提升到 1.2.54 (63)",
+        "提交安装后不再立即关闭 PackageInstaller.Session",
+        "等待用户确认期间持续持有安装会话，规避定制固件 Session destroyed 错误",
+        "收到成功或失败最终回调后再释放安装会话"
+      ]
+    },
     {
       "versionCode": 62,
       "versionName": "1.2.53",

@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Streams an APK from the network into a PackageInstaller session.
@@ -40,6 +41,8 @@ public final class PackageUpdateInstaller {
 
     private static final int BUFFER_SIZE = 64 * 1024;
     private static volatile Listener activeListener;
+    private static final ConcurrentHashMap<Integer, PackageInstaller.Session> ACTIVE_SESSIONS =
+        new ConcurrentHashMap<>();
 
     private PackageUpdateInstaller() {}
 
@@ -136,7 +139,12 @@ public final class PackageUpdateInstaller {
             "apk-update-installer").start();
     }
 
-    static void reportInstallStatus(Context context, String status, String message) {
+    static void reportInstallStatus(
+        Context context,
+        int sessionId,
+        String status,
+        String message
+    ) {
         context.getSharedPreferences("kh_update_installer", Context.MODE_PRIVATE)
             .edit()
             .putString("last_status", status)
@@ -148,6 +156,12 @@ public final class PackageUpdateInstaller {
         }
         if (!"pending_user_action".equals(status)) {
             activeListener = null;
+            PackageInstaller.Session session = ACTIVE_SESSIONS.remove(sessionId);
+            if (session != null) {
+                try {
+                    session.close();
+                } catch (Exception ignored) {}
+            }
         }
     }
 
@@ -221,12 +235,16 @@ public final class PackageUpdateInstaller {
                 resultIntent,
                 pendingIntentFlags
             );
+            // Some customized PDA firmware destroys a committed session when the
+            // installer-side handle is closed before user confirmation finishes.
+            // Retain it until the final success/failure callback arrives.
+            ACTIVE_SESSIONS.put(sessionId, session);
             session.commit(pendingIntent.getIntentSender());
-            session.close();
             session = null;
             activity.runOnUiThread(listener::onInstallSessionCommitted);
         } catch (Exception e) {
             if (session != null) {
+                ACTIVE_SESSIONS.remove(sessionId);
                 try {
                     session.abandon();
                 } catch (Exception ignored) {}
