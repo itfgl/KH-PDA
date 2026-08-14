@@ -58,25 +58,12 @@ final class NativeUpdateHelper {
                             .setTitle("发现新版本")
                             .setMessage(message.toString())
                             .setPositiveButton("下载更新", (dialog, which) -> {
-                                callbacks.appendLog("安装前打开未知应用来源权限页");
-                                callbacks.toast("请确认允许此来源，然后返回自动开始下载");
-                                PackageUpdateInstaller.requestInstallPermission(
+                                callbacks.appendLog("定制系统模式：直接下载并提交系统安装器");
+                                startDownload(
                                     activity,
-                                    granted -> {
-                                        if (granted) {
-                                            callbacks.appendLog("安装来源权限确认完成，自动开始更新");
-                                            startDownload(
-                                                activity,
-                                                apkUrl,
-                                                remoteVersionName,
-                                                callbacks,
-                                                0
-                                            );
-                                        } else {
-                                            callbacks.appendLog("安装来源权限未开启，取消更新");
-                                            callbacks.toast("权限未开启，暂不下载更新");
-                                        }
-                                    }
+                                    apkUrl,
+                                    remoteVersionName,
+                                    callbacks
                                 );
                             })
                             .setNegativeButton("取消", null)
@@ -108,8 +95,7 @@ final class NativeUpdateHelper {
         Activity activity,
         String apkUrl,
         String remoteVersionName,
-        Callbacks callbacks,
-        int permissionRetryCount
+        Callbacks callbacks
     ) {
         callbacks.appendLog("开始下载更新: " + apkUrl);
         DownloadProgressDialog downloadDialog =
@@ -144,34 +130,6 @@ final class NativeUpdateHelper {
                                             } else if ("success".equals(status)
                                                 || "failure".equals(status)) {
                                                 downloadDialog.dismiss();
-                                            }
-                                            if ("failure".equals(status)
-                                                && permissionRetryCount < 1
-                                                && PackageUpdateInstaller.isPermissionRejection(
-                                                    statusMessage
-                                                )) {
-                                                callbacks.appendLog(
-                                                    "系统拒绝安装来源权限，打开设置并等待返回后自动重试"
-                                                );
-                                                callbacks.toast("请确认允许此来源；返回后自动重试一次");
-                                                PackageUpdateInstaller.requestInstallPermission(
-                                                    activity,
-                                                    granted -> {
-                                                        if (granted) {
-                                                            startDownload(
-                                                                activity,
-                                                                apkUrl,
-                                                                remoteVersionName,
-                                                                callbacks,
-                                                                permissionRetryCount + 1
-                                                            );
-                                                        } else {
-                                                            callbacks.appendLog(
-                                                                "权限返回后仍未生效，停止自动重试"
-                                                            );
-                                                        }
-                                                    }
-                                                );
                                             }
                                         }
 

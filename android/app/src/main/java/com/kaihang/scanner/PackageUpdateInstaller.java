@@ -5,10 +5,7 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
-import android.net.Uri;
 import android.os.Build;
-import android.provider.Settings;
-import android.os.Bundle;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,10 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * private installer storage before asking the user to approve installation.
  */
 public final class PackageUpdateInstaller {
-    public interface PermissionCallback {
-        void onResult(boolean granted);
-    }
-
     public interface Listener {
         void onProgress(int progress);
 
@@ -45,93 +38,6 @@ public final class PackageUpdateInstaller {
         new ConcurrentHashMap<>();
 
     private PackageUpdateInstaller() {}
-
-    public static boolean canInstallPackages(Context context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            return context.getPackageManager().canRequestPackageInstalls();
-        }
-        try {
-            return Settings.Global.getInt(
-                context.getContentResolver(),
-                Settings.Global.INSTALL_NON_MARKET_APPS,
-                0
-            ) == 1;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    public static boolean openUnknownAppSourcesSettings(Context context) {
-        Intent intent;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-            intent.setData(Uri.parse("package:" + context.getPackageName()));
-        } else {
-            intent = new Intent(Settings.ACTION_SECURITY_SETTINGS);
-        }
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        if (intent.resolveActivity(context.getPackageManager()) != null) {
-            context.startActivity(intent);
-            return true;
-        }
-        return false;
-    }
-
-    public static void requestInstallPermission(
-        Activity activity,
-        PermissionCallback callback
-    ) {
-        final boolean[] leftActivity = {false};
-        final boolean[] completed = {false};
-        android.app.Application.ActivityLifecycleCallbacks lifecycleCallbacks =
-            new android.app.Application.ActivityLifecycleCallbacks() {
-                @Override
-                public void onActivityPaused(Activity resumedActivity) {
-                    if (resumedActivity == activity) {
-                        leftActivity[0] = true;
-                    }
-                }
-
-                @Override
-                public void onActivityResumed(Activity resumedActivity) {
-                    if (resumedActivity != activity || !leftActivity[0] || completed[0]) {
-                        return;
-                    }
-                    completed[0] = true;
-                    activity.getApplication().unregisterActivityLifecycleCallbacks(this);
-                    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-                        () -> callback.onResult(canInstallPackages(activity)),
-                        500
-                    );
-                }
-
-                @Override public void onActivityCreated(Activity a, Bundle b) {}
-                @Override public void onActivityStarted(Activity a) {}
-                @Override public void onActivityStopped(Activity a) {}
-                @Override public void onActivitySaveInstanceState(Activity a, Bundle b) {}
-                @Override
-                public void onActivityDestroyed(Activity destroyedActivity) {
-                    if (destroyedActivity == activity && !completed[0]) {
-                        completed[0] = true;
-                        activity.getApplication().unregisterActivityLifecycleCallbacks(this);
-                        callback.onResult(false);
-                    }
-                }
-            };
-        activity.getApplication().registerActivityLifecycleCallbacks(lifecycleCallbacks);
-        if (!openUnknownAppSourcesSettings(activity)) {
-            completed[0] = true;
-            activity.getApplication().unregisterActivityLifecycleCallbacks(lifecycleCallbacks);
-            callback.onResult(false);
-        }
-    }
-
-    public static boolean isPermissionRejection(String message) {
-        String normalized = message == null ? "" : message.toLowerCase(java.util.Locale.ROOT);
-        return normalized.contains("rejected permissions")
-            || normalized.contains("permission")
-            || normalized.contains("not allowed to install unknown");
-    }
 
     public static void downloadAndInstall(Activity activity, String url, Listener listener) {
         activeListener = listener;
@@ -218,10 +124,6 @@ public final class PackageUpdateInstaller {
             }
 
             dispatchProgress(activity, listener, 100);
-            if (!canInstallPackages(activity)) {
-                activity.runOnUiThread(() -> openUnknownAppSourcesSettings(activity));
-                throw new SecurityException("安装未知应用权限未开启，请允许后重新点击更新");
-            }
             Intent resultIntent = new Intent(activity, PackageInstallStatusReceiver.class);
             resultIntent.setAction(PackageInstallStatusReceiver.ACTION_INSTALL_STATUS);
             resultIntent.putExtra(PackageInstallStatusReceiver.EXTRA_SESSION_ID, sessionId);

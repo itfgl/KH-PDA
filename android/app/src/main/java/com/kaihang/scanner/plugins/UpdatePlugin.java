@@ -47,16 +47,7 @@ public class UpdatePlugin extends Plugin {
         }
 
         try {
-            PackageUpdateInstaller.requestInstallPermission(
-                getActivity(),
-                granted -> {
-                    if (granted) {
-                        startDownload(call, urlString);
-                    } else {
-                        call.reject("安装未知应用权限未开启");
-                    }
-                }
-            );
+            startDownload(call, urlString);
 
         } catch (Exception e) {
             call.reject("启动下载失败: " + e.getMessage());
