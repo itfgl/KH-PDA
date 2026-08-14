@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 65,
+  "currentVersionCode": 66,
   "releases": [
+    {
+      "versionCode": 66,
+      "versionName": "1.2.57",
+      "apkFileName": "kaihang-scanner-v1.2.57-66.apk",
+      "changelog": "定制系统流式安装链路验证版本",
+      "releasedAt": "2026-08-14",
+      "notes": [
+        "Android 版本提升到 1.2.57 (66)",
+        "不进入标准未知来源权限页，直接提交定制系统安装器",
+        "安装确认期间持续保持 PackageInstaller.Session"
+      ]
+    },
     {
       "versionCode": 65,
       "versionName": "1.2.56",
