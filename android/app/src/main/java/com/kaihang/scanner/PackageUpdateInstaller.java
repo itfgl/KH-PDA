@@ -5,8 +5,13 @@ import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
+import android.net.Uri;
 import android.os.Build;
 
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -15,11 +20,11 @@ import java.net.URL;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Streams an APK from the network into a PackageInstaller session.
+ * Downloads an APK into app-private cache and opens the device installer.
  *
- * The APK never appears in public Downloads and is not held as one large byte
- * array in application memory. Android still stages the package in its own
- * private installer storage before asking the user to approve installation.
+ * The APK never appears in public Downloads and users never manage the file.
+ * App-private cache is used because this customized PDA firmware rejects
+ * PackageInstaller sessions even after reporting pending user confirmation.
  */
 public final class PackageUpdateInstaller {
     public interface Listener {
@@ -41,8 +46,100 @@ public final class PackageUpdateInstaller {
 
     public static void downloadAndInstall(Activity activity, String url, Listener listener) {
         activeListener = listener;
-        new Thread(() -> streamIntoInstallSession(activity, url, listener),
+        new Thread(() -> downloadToPrivateCacheAndInstall(activity, url, listener),
             "apk-update-installer").start();
+    }
+
+    private static void downloadToPrivateCacheAndInstall(
+        Activity activity,
+        String url,
+        Listener listener
+    ) {
+        HttpURLConnection connection = null;
+        File apkFile = null;
+        try {
+            File updateDirectory = new File(activity.getCacheDir(), "updates");
+            if (!updateDirectory.exists() && !updateDirectory.mkdirs()) {
+                throw new IOException("无法创建应用更新缓存目录");
+            }
+            apkFile = new File(updateDirectory, "kaihang_update.apk");
+
+            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(15_000);
+            connection.setReadTimeout(60_000);
+            connection.setRequestProperty("X-Client-Type", "capacitor");
+            connection.connect();
+            int responseStatus = connection.getResponseCode();
+            if (responseStatus < 200 || responseStatus >= 300) {
+                throw new IOException("APK 下载失败: HTTP " + responseStatus);
+            }
+
+            long totalBytes = connection.getContentLengthLong();
+            try (InputStream input = connection.getInputStream();
+                 FileOutputStream output = new FileOutputStream(apkFile, false)) {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                long downloadedBytes = 0;
+                int lastProgress = -1;
+                int read;
+                while ((read = input.read(buffer)) != -1) {
+                    output.write(buffer, 0, read);
+                    downloadedBytes += read;
+                    if (totalBytes > 0) {
+                        int progress = (int) Math.min(99, downloadedBytes * 100 / totalBytes);
+                        if (progress != lastProgress) {
+                            lastProgress = progress;
+                            dispatchProgress(activity, listener, progress);
+                        }
+                    }
+                }
+                output.flush();
+                output.getFD().sync();
+            }
+
+            dispatchProgress(activity, listener, 100);
+            Uri installUri = FileProvider.getUriForFile(
+                activity,
+                activity.getPackageName() + ".fileprovider",
+                apkFile
+            );
+            Intent installIntent = new Intent(Build.VERSION.SDK_INT >= Build.VERSION_CODES.N
+                ? Intent.ACTION_INSTALL_PACKAGE
+                : Intent.ACTION_VIEW);
+            installIntent.setDataAndType(
+                installUri,
+                "application/vnd.android.package-archive"
+            );
+            installIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            installIntent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+            installIntent.putExtra(Intent.EXTRA_RETURN_RESULT, true);
+            activity.runOnUiThread(() -> {
+                try {
+                    activity.startActivity(installIntent);
+                    listener.onInstallStatus(
+                        "pending_user_action",
+                        "已打开定制系统 APK 安装界面"
+                    );
+                    listener.onInstallSessionCommitted();
+                } catch (Exception error) {
+                    listener.onError("打开系统安装界面失败: " + error.getMessage());
+                }
+            });
+        } catch (Exception error) {
+            if (apkFile != null && apkFile.exists()) {
+                // A partial cache file is never exposed to the installer.
+                apkFile.delete();
+            }
+            String message = error.getMessage();
+            String finalMessage = message == null || message.trim().isEmpty()
+                ? error.getClass().getSimpleName()
+                : message;
+            activity.runOnUiThread(() -> listener.onError(finalMessage));
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
     }
 
     static void reportInstallStatus(

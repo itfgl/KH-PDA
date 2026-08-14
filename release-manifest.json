@@ -1,6 +1,19 @@
 {
-  "currentVersionCode": 66,
+  "currentVersionCode": 67,
   "releases": [
+    {
+      "versionCode": 67,
+      "versionName": "1.2.58",
+      "apkFileName": "kaihang-scanner-v1.2.58-67.apk",
+      "changelog": "改用应用私有缓存拉起定制系统 APK 安装器，绕过被固件拒绝的安装会话",
+      "releasedAt": "2026-08-14",
+      "notes": [
+        "Android 版本提升到 1.2.58 (67)",
+        "APK 下载到应用私有缓存，不出现在公共下载目录",
+        "通过 FileProvider 直接打开定制系统 APK 安装界面",
+        "保留可见下载进度，用户无需进行任何文件操作"
+      ]
+    },
     {
       "versionCode": 66,
       "versionName": "1.2.57",
