@@ -47,14 +47,24 @@ public class UpdatePlugin extends Plugin {
         }
 
         try {
-            if (!canInstallPackages()) {
-                notifyInstallPermissionRequired();
-                openUnknownAppSourcesSettings();
-                call.reject("当前设备未授予安装未知应用权限");
-                return;
-            }
+            PackageUpdateInstaller.requestInstallPermission(
+                getActivity(),
+                granted -> {
+                    if (granted) {
+                        startDownload(call, urlString);
+                    } else {
+                        call.reject("安装未知应用权限未开启");
+                    }
+                }
+            );
 
-            PackageUpdateInstaller.downloadAndInstall(getActivity(), urlString,
+        } catch (Exception e) {
+            call.reject("启动下载失败: " + e.getMessage());
+        }
+    }
+
+    private void startDownload(PluginCall call, String urlString) {
+        PackageUpdateInstaller.downloadAndInstall(getActivity(), urlString,
                 new PackageUpdateInstaller.Listener() {
                     @Override
                     public void onProgress(int progress) {
@@ -81,10 +91,6 @@ public class UpdatePlugin extends Plugin {
                         call.reject("更新安装失败: " + message);
                     }
                 });
-
-        } catch (Exception e) {
-            call.reject("启动下载失败: " + e.getMessage());
-        }
     }
 
     /** 弹出系统卸载对话框，用户确认后卸载本 App（覆盖安装签名不一致时使用） */
@@ -115,17 +121,4 @@ public class UpdatePlugin extends Plugin {
         android.os.Process.killProcess(android.os.Process.myPid());
     }
 
-    private boolean canInstallPackages() {
-        return PackageUpdateInstaller.canInstallPackages(getContext());
-    }
-
-    private void notifyInstallPermissionRequired() {
-        JSObject data = new JSObject();
-        data.put("reason", "请先在系统设置中开启安装未知应用/未知来源，然后返回并再次点击检查更新");
-        notifyListeners("installPermissionRequired", data);
-    }
-
-    private void openUnknownAppSourcesSettings() {
-        PackageUpdateInstaller.openUnknownAppSourcesSettings(getContext());
-    }
 }

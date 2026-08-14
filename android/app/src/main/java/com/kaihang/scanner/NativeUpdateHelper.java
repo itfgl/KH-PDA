@@ -58,17 +58,64 @@ final class NativeUpdateHelper {
                             .setTitle("发现新版本")
                             .setMessage(message.toString())
                             .setPositiveButton("下载更新", (dialog, which) -> {
-                                if (!PackageUpdateInstaller.canInstallPackages(activity)) {
-                                    callbacks.appendLog("未授予安装未知应用权限");
-                                    callbacks.toast("请先开启安装未知应用/未知来源，然后返回再次检查更新");
-                                    PackageUpdateInstaller.openUnknownAppSourcesSettings(activity);
-                                    return;
-                                }
-                                callbacks.appendLog("开始下载更新: " + apkUrl);
-                                DownloadProgressDialog downloadDialog =
-                                    showDownloadProgressDialog(activity, remoteVersionName);
-                                PackageUpdateInstaller.downloadAndInstall(activity, apkUrl,
-                                    new PackageUpdateInstaller.Listener() {
+                                callbacks.appendLog("安装前打开未知应用来源权限页");
+                                callbacks.toast("请确认允许此来源，然后返回自动开始下载");
+                                PackageUpdateInstaller.requestInstallPermission(
+                                    activity,
+                                    granted -> {
+                                        if (granted) {
+                                            callbacks.appendLog("安装来源权限确认完成，自动开始更新");
+                                            startDownload(
+                                                activity,
+                                                apkUrl,
+                                                remoteVersionName,
+                                                callbacks,
+                                                0
+                                            );
+                                        } else {
+                                            callbacks.appendLog("安装来源权限未开启，取消更新");
+                                            callbacks.toast("权限未开启，暂不下载更新");
+                                        }
+                                    }
+                                );
+                            })
+                            .setNegativeButton("取消", null)
+                            .show();
+                    } else {
+                        callbacks.appendLog("当前已是最新版本: " + localVersionName + " (" + localVersionCode + ")");
+                        new AlertDialog.Builder(activity)
+                            .setTitle("检查更新")
+                            .setMessage("当前已是最新版本\n版本: " + localVersionName + " (" + localVersionCode + ")")
+                            .setPositiveButton("知道了", null)
+                            .show();
+                    }
+                });
+            } catch (Exception e) {
+                callbacks.appendLog("检查更新失败: " + e.getMessage());
+                activity.runOnUiThread(() -> {
+                    progressDialog.dismiss();
+                    new AlertDialog.Builder(activity)
+                        .setTitle("检查更新失败")
+                        .setMessage(String.valueOf(e.getMessage()))
+                        .setPositiveButton("知道了", null)
+                        .show();
+                });
+            }
+        }).start();
+    }
+
+    private static void startDownload(
+        Activity activity,
+        String apkUrl,
+        String remoteVersionName,
+        Callbacks callbacks,
+        int permissionRetryCount
+    ) {
+        callbacks.appendLog("开始下载更新: " + apkUrl);
+        DownloadProgressDialog downloadDialog =
+            showDownloadProgressDialog(activity, remoteVersionName);
+        PackageUpdateInstaller.downloadAndInstall(activity, apkUrl,
+            new PackageUpdateInstaller.Listener() {
                                         private int lastLoggedProgress = -10;
 
                                         @Override
@@ -98,6 +145,34 @@ final class NativeUpdateHelper {
                                                 || "failure".equals(status)) {
                                                 downloadDialog.dismiss();
                                             }
+                                            if ("failure".equals(status)
+                                                && permissionRetryCount < 1
+                                                && PackageUpdateInstaller.isPermissionRejection(
+                                                    statusMessage
+                                                )) {
+                                                callbacks.appendLog(
+                                                    "系统拒绝安装来源权限，打开设置并等待返回后自动重试"
+                                                );
+                                                callbacks.toast("请确认允许此来源；返回后自动重试一次");
+                                                PackageUpdateInstaller.requestInstallPermission(
+                                                    activity,
+                                                    granted -> {
+                                                        if (granted) {
+                                                            startDownload(
+                                                                activity,
+                                                                apkUrl,
+                                                                remoteVersionName,
+                                                                callbacks,
+                                                                permissionRetryCount + 1
+                                                            );
+                                                        } else {
+                                                            callbacks.appendLog(
+                                                                "权限返回后仍未生效，停止自动重试"
+                                                            );
+                                                        }
+                                                    }
+                                                );
+                                            }
                                         }
 
                                         @Override
@@ -107,30 +182,6 @@ final class NativeUpdateHelper {
                                             callbacks.toast("更新安装失败: " + error);
                                         }
                                     });
-                            })
-                            .setNegativeButton("取消", null)
-                            .show();
-                    } else {
-                        callbacks.appendLog("当前已是最新版本: " + localVersionName + " (" + localVersionCode + ")");
-                        new AlertDialog.Builder(activity)
-                            .setTitle("检查更新")
-                            .setMessage("当前已是最新版本\n版本: " + localVersionName + " (" + localVersionCode + ")")
-                            .setPositiveButton("知道了", null)
-                            .show();
-                    }
-                });
-            } catch (Exception e) {
-                callbacks.appendLog("检查更新失败: " + e.getMessage());
-                activity.runOnUiThread(() -> {
-                    progressDialog.dismiss();
-                    new AlertDialog.Builder(activity)
-                        .setTitle("检查更新失败")
-                        .setMessage(String.valueOf(e.getMessage()))
-                        .setPositiveButton("知道了", null)
-                        .show();
-                });
-            }
-        }).start();
     }
 
     private static DownloadProgressDialog showDownloadProgressDialog(

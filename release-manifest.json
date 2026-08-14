@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 60,
+  "currentVersionCode": 61,
   "releases": [
+    {
+      "versionCode": 61,
+      "versionName": "1.2.52",
+      "apkFileName": "kaihang-scanner-v1.2.52-61.apk",
+      "changelog": "安装前强制确认未知来源权限，返回应用后自动开始下载并支持权限拒绝重试",
+      "releasedAt": "2026-08-14",
+      "notes": [
+        "Android 版本提升到 1.2.52 (61)",
+        "点击下载安装后先打开系统允许此来源页面，不依赖 PDA 固件缓存的权限状态",
+        "从权限设置返回且权限生效后自动开始下载，无需再次点击检查更新",
+        "系统安装器返回权限拒绝时允许自动引导并重试一次",
+        "设置页更新保持下载进度遮罩，原生入口保持百分比进度弹窗"
+      ]
+    },
     {
       "versionCode": 60,
       "versionName": "1.2.51",
