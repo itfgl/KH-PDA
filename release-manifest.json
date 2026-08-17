@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 69,
+  "currentVersionCode": 70,
   "releases": [
+    {
+      "versionCode": 70,
+      "versionName": "1.2.61",
+      "apkFileName": "kaihang-scanner-v1.2.61-70.apk",
+      "changelog": "修复 Android 多图选择回传，并优化大图上传体积",
+      "releasedAt": "2026-08-18",
+      "notes": [
+        "Android 版本提升到 1.2.61 (70)",
+        "文件选择器根据 WebView 多选模式显式设置 EXTRA_ALLOW_MULTIPLE",
+        "兼容从 Intent ClipData 提取全部多选 URI，避免部分 Android 14 和 WebView 组合返回空文件",
+        "大于 500 KB 的图片在上传前按最长边 2560 像素自适应优化，小图和非图片文件保持原样",
+        "真实 NocoBase 测试页已验证一次选择两张图片、上传两份附件并保存两条关系"
+      ]
+    },
     {
       "versionCode": 69,
       "versionName": "1.2.60",

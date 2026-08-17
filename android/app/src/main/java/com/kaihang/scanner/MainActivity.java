@@ -33,6 +33,9 @@ public class MainActivity extends BridgeActivity {
     private static final int REQUEST_CAMERA_SCAN = 8422;
     private static final int REQUEST_CAMERA_UPLOAD = 8423;
     private static final int REQUEST_FILE_CHOOSER = 8424;
+    private static final long IMAGE_COMPRESSION_MIN_BYTES = 500L * 1024L;
+    private static final int IMAGE_COMPRESSION_MAX_LONG_EDGE = 2560;
+    private static final int IMAGE_COMPRESSION_JPEG_QUALITY = 88;
     private android.widget.ImageButton nativeControlButton;
     private android.widget.Button nativeScanButton;
     private android.view.View nativeStatusDot;
@@ -410,19 +413,17 @@ public class MainActivity extends BridgeActivity {
             Uri[] result = null;
             if (resultCode == RESULT_OK && pendingCameraUploadUri != null) {
                 result = new Uri[]{pendingCameraUploadUri};
-                appendNativeLog("拍照完成，交给网页附件控件上传: " + pendingCameraUploadUri);
+                appendNativeLog("拍照完成，准备优化后交给网页附件控件: " + pendingCameraUploadUri);
             } else {
                 appendNativeLog("已取消附件拍照");
             }
             pendingCameraUploadUri = null;
-            finishFileChooser(result);
+            compressAndFinishFileChooser(result, "拍照");
             return;
         }
         if (requestCode == REQUEST_FILE_CHOOSER) {
-            Uri[] result = resultCode == RESULT_OK
-                ? WebChromeClient.FileChooserParams.parseResult(resultCode, data)
-                : null;
-            finishFileChooser(result);
+            Uri[] result = resultCode == RESULT_OK ? extractFileChooserUris(data) : null;
+            compressAndFinishFileChooser(result, "选择文件");
             return;
         }
         if (requestCode == REQUEST_CAMERA_SCAN) {
@@ -507,10 +508,21 @@ public class MainActivity extends BridgeActivity {
 
     private boolean launchFileUploadChooser(WebChromeClient.FileChooserParams params) {
         try {
+            boolean allowMultiple = params != null
+                && params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE;
             Intent chooserIntent = params == null
                 ? new Intent(Intent.ACTION_GET_CONTENT).setType("*/*")
                 : params.createIntent();
-            appendNativeLog("打开文件选择器");
+            // Some OEM document pickers do not honor WebView's chooser mode unless the
+            // standard Android multiple-selection extra is present on the final intent.
+            chooserIntent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple);
+            appendNativeLog(
+                "打开文件选择器: mode=" + (params == null ? "null" : params.getMode())
+                    + ", multiple=" + allowMultiple
+                    + ", accept=" + java.util.Arrays.toString(
+                        params == null ? new String[0] : params.getAcceptTypes()
+                    )
+            );
             startActivityForResult(chooserIntent, REQUEST_FILE_CHOOSER);
             return true;
         } catch (Exception error) {
@@ -526,6 +538,232 @@ public class MainActivity extends BridgeActivity {
         if (callback != null) {
             callback.onReceiveValue(result);
         }
+    }
+
+    private Uri[] extractFileChooserUris(Intent data) {
+        java.util.ArrayList<Uri> uris = new java.util.ArrayList<>();
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        android.content.ClipData clipData = data == null ? null : data.getClipData();
+        int clipCount = clipData == null ? 0 : clipData.getItemCount();
+        for (int index = 0; index < clipCount; index++) {
+            Uri uri = clipData.getItemAt(index).getUri();
+            if (uri != null && seen.add(uri.toString())) {
+                uris.add(uri);
+            }
+        }
+        Uri dataUri = data == null ? null : data.getData();
+        if (dataUri != null && seen.add(dataUri.toString())) {
+            uris.add(dataUri);
+        }
+        if (uris.isEmpty()) {
+            Uri[] parsed = WebChromeClient.FileChooserParams.parseResult(RESULT_OK, data);
+            if (parsed != null) {
+                for (Uri uri : parsed) {
+                    if (uri != null && seen.add(uri.toString())) {
+                        uris.add(uri);
+                    }
+                }
+            }
+        }
+        appendNativeLog(
+            "文件选择结果: clipCount=" + clipCount
+                + ", dataUri=" + (dataUri != null)
+                + ", resolved=" + uris.size()
+        );
+        return uris.isEmpty() ? null : uris.toArray(new Uri[0]);
+    }
+
+    private void compressAndFinishFileChooser(Uri[] result, String sourceLabel) {
+        android.webkit.ValueCallback<Uri[]> callback = pendingFileChooserCallback;
+        pendingFileChooserCallback = null;
+        if (callback == null) {
+            return;
+        }
+        if (result == null || result.length == 0) {
+            callback.onReceiveValue(result);
+            return;
+        }
+        new Thread(() -> {
+            Uri[] prepared = new Uri[result.length];
+            for (int index = 0; index < result.length; index++) {
+                Uri original = result[index];
+                try {
+                    prepared[index] = prepareImageForUpload(original);
+                } catch (Exception error) {
+                    prepared[index] = original;
+                    appendNativeLog(sourceLabel + "图片优化失败，使用原文件: " + safe(error.getMessage()));
+                }
+            }
+            mainHandler.post(() -> callback.onReceiveValue(prepared));
+        }, "kh-image-upload-compression").start();
+    }
+
+    private Uri prepareImageForUpload(Uri sourceUri) throws java.io.IOException {
+        if (sourceUri == null) {
+            return null;
+        }
+        String mimeType = safe(getContentResolver().getType(sourceUri)).toLowerCase(java.util.Locale.ROOT);
+        String pathHint = safe(sourceUri.getLastPathSegment()).toLowerCase(java.util.Locale.ROOT);
+        boolean isJpeg = mimeType.equals("image/jpeg") || pathHint.endsWith(".jpg") || pathHint.endsWith(".jpeg");
+        boolean isPng = mimeType.equals("image/png") || pathHint.endsWith(".png");
+        boolean isCompressibleImage = isJpeg
+            || isPng
+            || mimeType.equals("image/webp")
+            || mimeType.equals("image/heic")
+            || mimeType.equals("image/heif")
+            || pathHint.endsWith(".webp")
+            || pathHint.endsWith(".heic")
+            || pathHint.endsWith(".heif");
+        if (!isCompressibleImage) {
+            return sourceUri;
+        }
+
+        long originalBytes = resolveContentLength(sourceUri);
+        if (originalBytes >= 0 && originalBytes < IMAGE_COMPRESSION_MIN_BYTES) {
+            appendVerboseNativeLog("图片小于压缩阈值，直接上传: bytes=" + originalBytes);
+            return sourceUri;
+        }
+
+        android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        try (java.io.InputStream input = getContentResolver().openInputStream(sourceUri)) {
+            if (input == null) throw new java.io.IOException("无法读取图片");
+            android.graphics.BitmapFactory.decodeStream(input, null, bounds);
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            return sourceUri;
+        }
+        int sourceLongEdge = Math.max(bounds.outWidth, bounds.outHeight);
+        if (isPng && sourceLongEdge <= IMAGE_COMPRESSION_MAX_LONG_EDGE) {
+            return sourceUri;
+        }
+
+        android.graphics.BitmapFactory.Options decodeOptions = new android.graphics.BitmapFactory.Options();
+        decodeOptions.inSampleSize = 1;
+        while (sourceLongEdge / (decodeOptions.inSampleSize * 2) > IMAGE_COMPRESSION_MAX_LONG_EDGE) {
+            decodeOptions.inSampleSize *= 2;
+        }
+        android.graphics.Bitmap bitmap;
+        try (java.io.InputStream input = getContentResolver().openInputStream(sourceUri)) {
+            if (input == null) throw new java.io.IOException("无法读取图片像素");
+            bitmap = android.graphics.BitmapFactory.decodeStream(input, null, decodeOptions);
+        }
+        if (bitmap == null) {
+            return sourceUri;
+        }
+
+        android.graphics.Bitmap transformed = applyExifOrientation(bitmap, sourceUri);
+        if (transformed != bitmap) bitmap.recycle();
+        android.graphics.Bitmap resized = resizeBitmapToLongEdge(transformed, IMAGE_COMPRESSION_MAX_LONG_EDGE);
+        if (resized != transformed) transformed.recycle();
+
+        java.io.File outputDir = new java.io.File(getCacheDir(), "photo-uploads/compressed");
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
+            resized.recycle();
+            throw new java.io.IOException("无法创建图片压缩缓存目录");
+        }
+        boolean preservePng = isPng || resized.hasAlpha();
+        java.io.File outputFile = java.io.File.createTempFile("upload_", preservePng ? ".png" : ".jpg", outputDir);
+        boolean encoded;
+        try (java.io.FileOutputStream output = new java.io.FileOutputStream(outputFile)) {
+            encoded = resized.compress(
+                preservePng ? android.graphics.Bitmap.CompressFormat.PNG : android.graphics.Bitmap.CompressFormat.JPEG,
+                preservePng ? 100 : IMAGE_COMPRESSION_JPEG_QUALITY,
+                output
+            );
+            output.flush();
+        } finally {
+            resized.recycle();
+        }
+        if (!encoded) {
+            outputFile.delete();
+            return sourceUri;
+        }
+        long compressedBytes = outputFile.length();
+        if (originalBytes >= 0 && compressedBytes >= originalBytes) {
+            outputFile.delete();
+            appendVerboseNativeLog("图片优化后未变小，继续使用原文件: before=" + originalBytes + ", after=" + compressedBytes);
+            return sourceUri;
+        }
+        Uri outputUri = androidx.core.content.FileProvider.getUriForFile(
+            this,
+            getPackageName() + ".fileprovider",
+            outputFile
+        );
+        appendNativeLog(
+            "上传图片已优化: before=" + originalBytes
+                + ", after=" + compressedBytes
+                + ", bounds=" + bounds.outWidth + "x" + bounds.outHeight
+                + ", format=" + (preservePng ? "PNG" : "JPEG")
+        );
+        return outputUri;
+    }
+
+    private long resolveContentLength(Uri uri) {
+        try (android.content.res.AssetFileDescriptor descriptor = getContentResolver().openAssetFileDescriptor(uri, "r")) {
+            return descriptor == null ? -1L : descriptor.getLength();
+        } catch (Exception ignored) {
+            return -1L;
+        }
+    }
+
+    private android.graphics.Bitmap applyExifOrientation(android.graphics.Bitmap source, Uri uri) {
+        int orientation = android.media.ExifInterface.ORIENTATION_NORMAL;
+        try (java.io.InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input != null) {
+                android.media.ExifInterface exif = new android.media.ExifInterface(input);
+                orientation = exif.getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION,
+                    android.media.ExifInterface.ORIENTATION_NORMAL
+                );
+            }
+        } catch (Exception ignored) {}
+        android.graphics.Matrix matrix = new android.graphics.Matrix();
+        switch (orientation) {
+            case android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+                matrix.setScale(-1f, 1f);
+                break;
+            case android.media.ExifInterface.ORIENTATION_ROTATE_180:
+                matrix.setRotate(180f);
+                break;
+            case android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL:
+                matrix.setScale(1f, -1f);
+                break;
+            case android.media.ExifInterface.ORIENTATION_TRANSPOSE:
+                matrix.setRotate(90f);
+                matrix.postScale(-1f, 1f);
+                break;
+            case android.media.ExifInterface.ORIENTATION_ROTATE_90:
+                matrix.setRotate(90f);
+                break;
+            case android.media.ExifInterface.ORIENTATION_TRANSVERSE:
+                matrix.setRotate(-90f);
+                matrix.postScale(-1f, 1f);
+                break;
+            case android.media.ExifInterface.ORIENTATION_ROTATE_270:
+                matrix.setRotate(-90f);
+                break;
+            default:
+                return source;
+        }
+        try {
+            return android.graphics.Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
+        } catch (Exception ignored) {
+            return source;
+        }
+    }
+
+    private android.graphics.Bitmap resizeBitmapToLongEdge(android.graphics.Bitmap source, int maxLongEdge) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        int longEdge = Math.max(width, height);
+        if (longEdge <= maxLongEdge) {
+            return source;
+        }
+        float scale = (float) maxLongEdge / (float) longEdge;
+        int targetWidth = Math.max(1, Math.round(width * scale));
+        int targetHeight = Math.max(1, Math.round(height * scale));
+        return android.graphics.Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true);
     }
 
     private void handleRuntimeInjection(WebView view, String targetUrl, InjectionTrigger trigger) {
