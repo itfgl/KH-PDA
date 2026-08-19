@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 70,
+  "currentVersionCode": 71,
   "releases": [
+    {
+      "versionCode": 71,
+      "versionName": "1.2.62",
+      "apkFileName": "kaihang-scanner-v1.2.62-71.apk",
+      "changelog": "默认服务端与更新地址切换到局域网",
+      "releasedAt": "2026-08-19",
+      "notes": [
+        "Android 版本提升到 1.2.62 (71)",
+        "默认服务端地址改为 http://192.168.2.60:8080",
+        "默认更新地址改为 http://192.168.2.138:9000"
+      ]
+    },
     {
       "versionCode": 70,
       "versionName": "1.2.61",

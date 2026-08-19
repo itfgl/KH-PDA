@@ -13,9 +13,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      REMOTE_STATIC_DIR: /root/server6/static
-      REMOTE_UPDATE_DIR: /root/server6/static/app-updates
 
     steps:
     - name: 1. 拉取代码
@@ -78,26 +75,3 @@ jobs:
         path: |
           app-updates/*.json
           app-updates/${{ env.CURRENT_APK_FILE }}
-
-    - name: 11. 配置 SSH
-      run: |
-        chmod 600 ./github_actions_apk
-        mkdir -p ~/.ssh
-        ssh-keyscan 115.29.178.34 >> ~/.ssh/known_hosts
-
-    - name: 12. 确保服务器更新目录存在
-      run: |
-        ssh -i ./github_actions_apk root@115.29.178.34 "mkdir -p ${REMOTE_UPDATE_DIR}"
-
-    - name: 13. 上传当前版本 APK 和版本元数据到服务器
-      run: |
-        scp -i ./github_actions_apk \
-          app-updates/${{ env.CURRENT_APK_FILE }} \
-          root@115.29.178.34:${REMOTE_UPDATE_DIR}/${{ env.CURRENT_APK_FILE }}
-        scp -i ./github_actions_apk \
-          app-updates/*.json \
-          root@115.29.178.34:${REMOTE_UPDATE_DIR}/
-
-    - name: 14. 校验服务器上的版本文件
-      run: |
-        ssh -i ./github_actions_apk root@115.29.178.34 "ls -l ${REMOTE_UPDATE_DIR}/versions.json ${REMOTE_UPDATE_DIR}/version-*.json ${REMOTE_UPDATE_DIR}/${{ env.CURRENT_APK_FILE }}"

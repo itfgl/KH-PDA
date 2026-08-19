@@ -2,7 +2,7 @@
  * 服务端 API 调用封装
  * 所有接口统一走 apiFetch，非 2xx 抛出含 detail 的 Error
  */
-const DEFAULT_SERVER_BASE = 'http://115.29.178.34:2974';
+const DEFAULT_SERVER_BASE = 'http://192.168.2.60:8080';
 const SERVER_BASE_KEY = 'kh_server_base_url';
 const UPDATE_BASE_KEY = 'kh_update_base_url';
 const PRINT_PAPER_TYPE_KEY = 'kh_print_paper_type';

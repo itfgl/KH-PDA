@@ -25,8 +25,8 @@ public class ClientConfigPlugin extends Plugin {
     private static final String KEY_ENABLE_UI_READY_OBSERVER = "enable_ui_ready_observer";
     private static final String KEY_ENABLE_ACTION_OBSERVER = "enable_action_observer";
     private static final String KEY_ENABLE_RUNTIME_REUSE = "enable_runtime_reuse";
-    private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
-    private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
+    private static final String DEFAULT_SERVER_BASE = "http://192.168.2.60:8080";
+    private static final String DEFAULT_UPDATE_BASE = "http://192.168.2.138:9000";
 
     public static String getSavedServerBase(Context context, String fallback) {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);

@@ -21,8 +21,8 @@ public class MainActivity extends BridgeActivity {
     private static final String NOCOBASE_STORAGE_PREFIX = "NOCOBASE_";
     private static final String DEFAULT_STORAGE_APP_NAME = "main";
     private static final String DEFAULT_PAGE_ACTIONS_API_PATH = "/api/scanner_page_binding_actions:list?pageSize=200";
-    private static final String DEFAULT_SERVER_BASE = "http://115.29.178.34:2974";
-    private static final String DEFAULT_UPDATE_BASE = "http://115.29.178.34:2973";
+    private static final String DEFAULT_SERVER_BASE = "http://192.168.2.60:8080";
+    private static final String DEFAULT_UPDATE_BASE = "http://192.168.2.138:9000";
     private static final long SCAN_RELEASE_TIMEOUT_MS = 8000L;
     private static final int NATIVE_CONTROL_MARGIN_END_DP = 18;
     private static final int NATIVE_CONTROL_MARGIN_BOTTOM_DP = 24;
