@@ -3,6 +3,10 @@ name: Build Android APK
 on:
   push:
     branches: [ "main", "master" ]
+    paths-ignore:
+      - '.github/**'
+      - 'docs/**'
+      - 'scripts/restore-release-signing.ps1'
   workflow_dispatch:
 
 jobs:

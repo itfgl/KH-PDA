@@ -1,0 +1,78 @@
+name: Export Android Release Signing (Encrypted)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-signing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 2. 核对接收证书和签名 Secrets
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_BASE64"
+          test -n "$KEYSTORE_PASSWORD"
+          test -n "$KEY_ALIAS"
+          test -n "$KEY_PASSWORD"
+          expected='4D:79:82:D1:C8:D7:61:71:57:45:A4:BA:0C:C5:7F:A0:39:5F:0D:7A:32:28:F3:41:7E:0D:B6:78:27:F7:DD:F0'
+          actual="$(openssl x509 -in .github/signing-export-recipient.pem -noout -fingerprint -sha256 | cut -d= -f2)"
+          test "$actual" = "$expected"
+
+      - name: 3. 生成并加密本地签名包
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export SIGNING_PLAIN_DIR="$RUNNER_TEMP/kaihang-signing-plain"
+          export SIGNING_ZIP="$RUNNER_TEMP/kaihang-release-signing.zip"
+          export SIGNING_ENCRYPTED="$GITHUB_WORKSPACE/kaihang-release-signing.p7m"
+          mkdir -p "$SIGNING_PLAIN_DIR"
+          python3 - <<'PY'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+
+          output = Path(os.environ['SIGNING_PLAIN_DIR'])
+          output.joinpath('release.keystore').write_bytes(
+              base64.b64decode(os.environ['KEYSTORE_BASE64'])
+          )
+          output.joinpath('signing-secrets.json').write_text(
+              json.dumps({
+                  'storePassword': os.environ['KEYSTORE_PASSWORD'],
+                  'keyAlias': os.environ['KEY_ALIAS'],
+                  'keyPassword': os.environ['KEY_PASSWORD'],
+              }, ensure_ascii=False),
+              encoding='utf-8',
+          )
+          PY
+          test -s "$SIGNING_PLAIN_DIR/release.keystore"
+          (cd "$SIGNING_PLAIN_DIR" && zip -q "$SIGNING_ZIP" release.keystore signing-secrets.json)
+          openssl cms -encrypt -binary -aes-256-cbc -outform DER \
+            -in "$SIGNING_ZIP" \
+            -out "$SIGNING_ENCRYPTED" \
+            .github/signing-export-recipient.pem
+          test -s "$SIGNING_ENCRYPTED"
+          rm -rf "$SIGNING_PLAIN_DIR" "$SIGNING_ZIP"
+
+      - name: 4. 上传仅本机可解密的产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: kaihang-release-signing-encrypted
+          path: kaihang-release-signing.p7m
+          if-no-files-found: error
+          retention-days: 1
