@@ -4,14 +4,16 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   export-signing:
     runs-on: ubuntu-latest
     steps:
       - name: 1. 拉取代码
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: 2. 核对接收证书和签名 Secrets
         env:
@@ -69,10 +71,23 @@ jobs:
           test -s "$SIGNING_ENCRYPTED"
           rm -rf "$SIGNING_PLAIN_DIR" "$SIGNING_ZIP"
 
-      - name: 4. 上传仅本机可解密的产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: kaihang-release-signing-encrypted
-          path: kaihang-release-signing.p7m
-          if-no-files-found: error
-          retention-days: 1
+      - name: 4. 上传到临时草稿 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export SIGNING_EXPORT_TAG="signing-export-${GITHUB_RUN_ID}"
+          gh release create "$SIGNING_EXPORT_TAG" \
+            "kaihang-release-signing.p7m#Encrypted Android release signing bundle" \
+            --draft \
+            --target "$GITHUB_SHA" \
+            --title "Temporary encrypted signing export ${GITHUB_RUN_ID}" \
+            --notes "Encrypted for the workstation certificate committed in .github/signing-export-recipient.pem. Delete this draft release after downloading and restoring the bundle."
+          release_url="$(gh release view "$SIGNING_EXPORT_TAG" --json url --jq '.url')"
+          {
+            echo '### Encrypted signing export ready'
+            echo
+            echo "Download **kaihang-release-signing.p7m** from the temporary draft release: ${release_url}"
+            echo
+            echo "Delete draft release **${SIGNING_EXPORT_TAG}** after local restoration."
+          } >> "$GITHUB_STEP_SUMMARY"
