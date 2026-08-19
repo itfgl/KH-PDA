@@ -1520,6 +1520,7 @@ public class MainActivity extends BridgeActivity {
                 String textValue = payload.optString("textValue", "");
                 String paperType = payload.optString("paperType", "thermal");
                 String layoutPreset = payload.optString("layoutPreset", "standard");
+                int qrSize = payload.optInt("qrSize", 0);
                 nativePrintBridgeCallCount += 1;
                 String compactText = safe(textValue).replace("\r", " ").replace("\n", "\\n");
                 if (compactText.length() > 120) compactText = compactText.substring(0, 120) + "…";
@@ -1530,6 +1531,7 @@ public class MainActivity extends BridgeActivity {
                         + ", text=" + compactText
                         + ", paperType=" + safe(paperType)
                         + ", layout=" + safe(layoutPreset)
+                        + ", qrSize=" + qrSize
                 );
                 if (shouldPreviewPrint()) {
                     appendNativeLog("原生打印桥检测到无打印机，强制转为标签预览");
@@ -1541,7 +1543,8 @@ public class MainActivity extends BridgeActivity {
                             barcodeValue,
                             qrCodeValue,
                             textValue,
-                            layoutPreset
+                            layoutPreset,
+                            qrSize
                         );
                     });
                     return true;
@@ -1553,7 +1556,8 @@ public class MainActivity extends BridgeActivity {
                     qrCodeValue,
                     textValue,
                     paperType,
-                    layoutPreset
+                    layoutPreset,
+                    qrSize
                 ));
                 return true;
             } catch (Exception e) {
@@ -1570,10 +1574,12 @@ public class MainActivity extends BridgeActivity {
                 String qrCodeValue = payload.optString("qrCodeValue", "");
                 String textValue = payload.optString("textValue", "");
                 String layoutPreset = payload.optString("layoutPreset", "standard");
+                int qrSize = payload.optInt("qrSize", 0);
                 appendNativeLog(
                     "无打印机，生成标签预览: barcode=" + safe(barcodeValue)
                         + ", qrcode=" + safe(qrCodeValue)
                         + ", layout=" + safe(layoutPreset)
+                        + ", qrSize=" + qrSize
                 );
                 runOnUiThread(() -> {
                     toast("正在生成标签预览…");
@@ -1583,7 +1589,8 @@ public class MainActivity extends BridgeActivity {
                         barcodeValue,
                         qrCodeValue,
                         textValue,
-                        layoutPreset
+                        layoutPreset,
+                        qrSize
                     );
                 });
                 return true;

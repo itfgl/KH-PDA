@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 71,
+  "currentVersionCode": 72,
   "releases": [
+    {
+      "versionCode": 72,
+      "versionName": "1.2.63",
+      "apkFileName": "kaihang-scanner-v1.2.63-72.apk",
+      "changelog": "打印二维码支持自定义大小，默认缩小为原尺寸一半",
+      "releasedAt": "2026-08-19",
+      "notes": [
+        "Android 版本提升到 1.2.63 (72)",
+        "二维码默认边长由 307 点（画布宽 80%）调整为 154 点（画布宽 40%），约为原尺寸一半",
+        "打印 payload 支持 qrSize 参数（打印点数）指定二维码边长，有效区间 60~384，非法值回退默认",
+        "页面打印动作 options 支持 qrcode_size 配置项，运行时自动随 payload 下发",
+        "机器二维码 printMachineQR 与标签预览同样支持 qrSize 自定义"
+      ]
+    },
     {
       "versionCode": 71,
       "versionName": "1.2.62",
