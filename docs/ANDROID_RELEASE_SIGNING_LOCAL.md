@@ -78,7 +78,7 @@ cfeeeac199ef37db7ecba811e3b403aed20ed57cd3cb3c0b20e028514fcf979d
 
 ## 备份与安全
 
-- 不要把 `recipient-private-key.pem`、`release.keystore` 或 `keystore.properties` 提交到 Git。
+- 不要把 `recipient-private-key.pem`、`release.keystore`、`keystore.properties` 或导出的 `.p7m` 提交到 Git；仓库已忽略后三者。
 - 不要通过聊天、邮件或网盘发送未加密的签名文件和密码。
 - 草稿 Release 中只有公钥加密后的密文，但仍应在下载并恢复成功后删除。
 - 成功恢复后，至少制作两份离线加密备份，分别保存在不同介质。

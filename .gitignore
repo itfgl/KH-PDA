@@ -8,6 +8,7 @@ www/assets/
 *.jks
 *.keystore
 keystore.properties
+*.p7m
 # Android build artifacts
 android/app/build/
 android/.gradle/

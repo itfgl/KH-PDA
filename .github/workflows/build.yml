@@ -5,6 +5,7 @@ on:
     branches: [ "main", "master" ]
     paths-ignore:
       - '.github/**'
+      - '.gitignore'
       - 'docs/**'
       - 'scripts/restore-release-signing.ps1'
   workflow_dispatch:
