@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 85,
+  "currentVersionCode": 86,
   "releases": [
+    {
+      "versionCode": 86,
+      "versionName": "1.2.77",
+      "apkFileName": "kaihang-scanner-v1.2.77-86.apk",
+      "changelog": "等工作流打印提速：等待期间提前连接打印机，成功提示一出现立即出纸",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.77 (86)",
+        "等工作流打印提速：等待期间提前连接打印机，成功提示一出现立即出纸"
+      ]
+    },
     {
       "versionCode": 85,
       "versionName": "1.2.76",
@@ -995,7 +1006,7 @@
   ],
   "pending": {
     "notes": [
-      "等工作流打印提速：等待期间提前连接打印机，成功提示一出现立即出纸"
+      "修复等工作流打印慢：点击瞬间就开始监听提示，不再错过弹窗白等15秒"
     ]
   }
 }
