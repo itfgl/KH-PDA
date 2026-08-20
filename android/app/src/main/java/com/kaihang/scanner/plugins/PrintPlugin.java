@@ -291,8 +291,8 @@ public class PrintPlugin extends Plugin {
             qr = cropBitmapToContent(qr);
         }
 
-        // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
-        boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        // 二维码靠左时右侧放字段（是否有一维码不限）；右侧空间不足时字段照常换行
+        boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
         boolean pureQrLabel = barcode == null && qr != null;
         int bodyTop = 16;
         int qrTop = -1;
@@ -907,8 +907,8 @@ public class PrintPlugin extends Plugin {
             qr = cropBitmapToContent(qr);
         }
 
-        // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
-        boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        // 二维码靠左时右侧放字段（是否有一维码不限）
+        boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
         boolean pureQrLabel = barcode == null && qr != null;
         // 二维码实际位图尺寸参与布局：SDK 生成的 QR 可能小于请求尺寸，按实际值预留
         int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
@@ -1022,8 +1022,8 @@ public class PrintPlugin extends Plugin {
         // 裁掉二维码位图四周白边（quiet zone），与实纸打印行为一致
         if (qr != null) qr = cropBitmapToContent(qr);
 
-        // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
-        boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        // 二维码靠左时右侧放字段（是否有一维码不限）
+        boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
         boolean pureQrLabel = barcode == null && qr != null;
         // 实际位图尺寸参与布局，与实纸打印保持一致
         int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
@@ -1197,7 +1197,6 @@ public class PrintPlugin extends Plugin {
     private static final int TEXT_MARGIN = 8;
     private static final int COLUMN_GAP = 16;
     private static final int BESIDE_GAP = 12;
-    private static final int MIN_BESIDE_WIDTH = 80;
 
     private static String normalizeQrAlign(String value) {
         return "left".equalsIgnoreCase(String.valueOf(value).trim()) ? "left" : "center";
@@ -1292,7 +1291,7 @@ public class PrintPlugin extends Plugin {
     /**
      * 统一规划字段文本落位：
      * - center 样式行（占位符 |center）收集为居中行，紧贴二维码下方；
-     * - besideEnabled（二维码靠左时）：右侧窄列只放默认样式字段，整列相对二维码垂直居中，放不下的字段转入下方；
+     * - besideEnabled（二维码靠左时）：右侧窄列收普通字段（含带字号），从二维码顶部依次往下排，装不下的字段转入下方；
      * - 下方区域按 columns 列排版：1 列保持原有整段换行行为；2 列时字段行序配对；带字号的行按字号加高行距；
      * - 返回每行文本的绝对坐标（含字号）及内容底部 y，center 行由 placeCenterRows 落位。
      */
@@ -1344,25 +1343,28 @@ public class PrintPlugin extends Plugin {
         List<Integer> remaining = normalIndexes;
         int belowY = belowStartY;
 
-        // 二维码右侧窄列：仅收默认样式字段；整列相对二维码垂直居中
-        if (besideEnabled && !normalIndexes.isEmpty() && besideRowCapacity > 0 && besideWidth >= MIN_BESIDE_WIDTH) {
+        // 二维码右侧窄列：字段（含带字号）从二维码顶部依次往下排，
+        // 装不下（超出二维码高度）的字段及后续转入下方
+        if (besideEnabled && !normalIndexes.isEmpty() && besideRowCapacity > 0 && besideWidth > 0) {
             int besideUnits = columnWrapUnits(baseWrapUnits, besideWidth);
-            List<int[]> besideRows = new ArrayList<>(); // {rowStart, rowCount, fieldIndex}
+            List<int[]> besideRows = new ArrayList<>(); // {rowStart, rowCount, rowUnits, styleSize}
             List<List<String>> besideWrapped = new ArrayList<>();
             int usedRows = 0;
             int position = 0;
             while (position < normalIndexes.size()) {
                 int fieldIndex = normalIndexes.get(position);
-                if (styles.get(fieldIndex).size > 0) break; // 带字号字段及后续全部转下方
+                // 带字号行按实际行高折算等效行数，占用更多右侧容量
+                int styleSize = styles.get(fieldIndex).size;
+                int rowUnits = Math.max(1, (int) Math.round((double) styledLineHeight(lineHeight, styles.get(fieldIndex)) / lineHeight));
                 List<String> wrapped = wrapPlainText(fields.get(fieldIndex), besideUnits);
                 if (wrapped.isEmpty()) {
                     wrapped = new ArrayList<>();
                     wrapped.add("");
                 }
-                if (usedRows + wrapped.size() > besideRowCapacity) break;
-                besideRows.add(new int[]{usedRows, wrapped.size()});
+                if (usedRows + wrapped.size() * rowUnits > besideRowCapacity) break;
+                besideRows.add(new int[]{usedRows, wrapped.size(), rowUnits, styleSize});
                 besideWrapped.add(wrapped);
-                usedRows += wrapped.size();
+                usedRows += wrapped.size() * rowUnits;
                 position++;
             }
             if (position > 0) {
@@ -1370,8 +1372,10 @@ public class PrintPlugin extends Plugin {
                 int startY = qrTop;
                 for (int i = 0; i < besideRows.size(); i++) {
                     int rowStart = besideRows.get(i)[0];
+                    int rowUnits = besideRows.get(i)[2];
+                    int styleSize = besideRows.get(i)[3];
                     for (int k = 0; k < besideWrapped.get(i).size(); k++) {
-                        plan.rows.add(new TextRow(besideWrapped.get(i).get(k), besideX, startY + (rowStart + k) * lineHeight));
+                        plan.rows.add(new TextRow(besideWrapped.get(i).get(k), besideX, startY + (rowStart + k * rowUnits) * lineHeight, styleSize));
                     }
                 }
                 remaining = normalIndexes.subList(position, normalIndexes.size());
