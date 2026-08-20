@@ -323,6 +323,17 @@ public class PrintPlugin extends Plugin {
             }
         }
         int barcodeLeft = barcode != null ? resolveCenteredMediaLeft(layout.barcodeWidth) : -1;
+        // 计算媒体内容底部位置（二维码或一维码底部），用于 bottom 字段紧贴
+        int mediaBottom;
+        if (qr != null && barcode != null) {
+            mediaBottom = Math.max(qrTop + qrEffHeight, layout.barcodeTop + layout.barcodeHeight);
+        } else if (qr != null) {
+            mediaBottom = qrTop + qrEffHeight;
+        } else if (barcode != null) {
+            mediaBottom = layout.barcodeTop + layout.barcodeHeight;
+        } else {
+            mediaBottom = bodyTop;
+        }
 
         FieldTextPlan plan = planFieldText(
             safeTextValue,
@@ -337,7 +348,8 @@ public class PrintPlugin extends Plugin {
             layout.lineHeight,
             layout.wrapUnits,
             resolveLeftAlignedTextLeft(),
-            textStylesJson
+            textStylesJson,
+            mediaBottom
         );
         // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
         // 其他标签：保留 minHeight 约束
@@ -925,7 +937,8 @@ public class PrintPlugin extends Plugin {
             layout.lineHeight,
             layout.wrapUnits,
             layout.textLeft,
-            textStylesJson
+            textStylesJson,
+            mediaBottom
         );
         // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
         int labelHeight;
@@ -1034,7 +1047,8 @@ public class PrintPlugin extends Plugin {
             layout.lineHeight,
             layout.wrapUnits,
             layout.textLeft,
-            textStylesJson
+            textStylesJson,
+            mediaBottom
         );
         // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
         int labelHeight;
@@ -1284,7 +1298,8 @@ public class PrintPlugin extends Plugin {
         int lineHeight,
         int baseWrapUnits,
         int textLeft,
-        String textStylesJson
+        String textStylesJson,
+        int mediaBottom
     ) {
         FieldTextPlan plan = new FieldTextPlan();
         List<String> fields = new ArrayList<>();
@@ -1392,7 +1407,8 @@ public class PrintPlugin extends Plugin {
                 y += Math.max(Math.max(left.size(), right.size()), 1) * rowHeight;
                 index += 2;
             }
-            plan.bottomY = y;
+            // 只有 bottom 字段：紧贴二维码/一维码底部
+            plan.bottomY = remaining.isEmpty() && plan.hasBottomRows() ? mediaBottom : y;
         } else {
             // 单列：逐行按样式输出（保持原有整段换行行为，字号行行距加高）
             int y = belowY;
@@ -1410,7 +1426,8 @@ public class PrintPlugin extends Plugin {
                 y += lines.size() * rowHeight;
             }
             if (remaining.isEmpty()) {
-                plan.bottomY = belowY;
+                // 只有 bottom 字段：紧贴二维码/一维码底部，无额外间距
+                plan.bottomY = plan.hasBottomRows() ? mediaBottom : belowY;
             } else {
                 plan.bottomY = y;
             }
