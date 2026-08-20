@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 83,
+  "currentVersionCode": 84,
   "releases": [
+    {
+      "versionCode": 84,
+      "versionName": "1.2.75",
+      "apkFileName": "kaihang-scanner-v1.2.75-84.apk",
+      "changelog": "表格批量打印支持勾选：勾了行只打勾选的，没勾打印全部",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.75 (84)",
+        "表格批量打印支持勾选：勾了行只打勾选的，没勾打印全部"
+      ]
+    },
     {
       "versionCode": 83,
       "versionName": "1.2.74",
@@ -973,7 +984,7 @@
   ],
   "pending": {
     "notes": [
-      "表格批量打印支持勾选：勾了行只打勾选的，没勾打印全部"
+      "打印按钮可配置等工作流完成再出纸：动作 options 加 wait_workflow 即生效，工作流失败则不打印"
     ]
   }
 }
