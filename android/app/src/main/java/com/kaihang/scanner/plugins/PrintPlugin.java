@@ -302,8 +302,8 @@ public class PrintPlugin extends Plugin {
             qrTop = barcode == null
                 ? layout.barcodeTop
                 : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-            // 靠左布局下二维码与下方字段间距减半，标签更紧凑
-            int belowGap = qrLeftAligned ? layout.mediaGap / 2 : layout.mediaGap;
+            // 二维码与下方字段间距：居中 8 点、靠左 12 点（原 24 点，收窄让标签更紧凑）
+            int belowGap = qrLeftAligned ? 12 : 8;
             bodyTop = Math.max(bodyTop, qrTop + layout.qrHeight + belowGap);
         }
         int qrLeft = -1;
@@ -888,8 +888,8 @@ public class PrintPlugin extends Plugin {
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
-        // 靠左布局下二维码与下方字段间距减半（24 → 12），标签更紧凑
-        int belowGap = qrLeftAligned ? 12 : 24;
+        // 二维码与下方字段间距：居中 8 点、靠左 12 点（原 24 点，收窄让标签更紧凑）
+        int belowGap = qrLeftAligned ? 12 : (qr != null ? 8 : 24);
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
 
         FieldTextPlan plan = planFieldText(
@@ -984,8 +984,8 @@ public class PrintPlugin extends Plugin {
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
-        // 靠左布局下二维码与下方字段间距减半（24 → 12），与实纸打印一致
-        int belowGap = qrLeftAligned ? 12 : 24;
+        // 二维码与下方字段间距：居中 8 点、靠左 12 点（原 24 点），与实纸打印一致
+        int belowGap = qrLeftAligned ? 12 : (qr != null ? 8 : 24);
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
 
         FieldTextPlan plan = planFieldText(
