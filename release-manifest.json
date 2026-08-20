@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 77,
+  "currentVersionCode": 78,
   "releases": [
+    {
+      "versionCode": 78,
+      "versionName": "1.2.69",
+      "apkFileName": "kaihang-scanner-v1.2.69-78.apk",
+      "changelog": "修复索引",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.69 (78)",
+        "修复索引"
+      ]
+    },
     {
       "versionCode": 77,
       "versionName": "1.2.68",
@@ -901,5 +912,10 @@
         "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
       ]
     }
-  ]
+  ],
+  "pending": {
+    "notes": [
+      "打印文本模板重构为块格式 {\" 前缀\\:{占位符}}：占位符值为空时整块（含前缀）不打印，支持同行多块、宽度对齐、字号、底部居中组合；旧裸占位符在文本模板中不再解析（barcode/qrcode 取值模板不受影响），text_value 与 text_template 均需改用新格式"
+    ]
+  }
 }
