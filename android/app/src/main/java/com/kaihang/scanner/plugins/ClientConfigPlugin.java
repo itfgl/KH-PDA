@@ -135,8 +135,9 @@ public class ClientConfigPlugin extends Plugin {
         String paperType = normalizePaperType(prefs.getString(KEY_PAPER_TYPE, "thermal"));
         String layoutPreset = normalizeLayoutPreset(prefs.getString(KEY_LAYOUT_PRESET, "standard"));
         String injectionMode = normalizeInjectionMode(prefs.getString(KEY_INJECTION_MODE, "aggressive"));
-        boolean enableFloatingLogs = prefs.getBoolean(KEY_ENABLE_FLOATING_LOGS, true);
-        boolean enableVerboseLogs = prefs.getBoolean(KEY_ENABLE_VERBOSE_LOGS, true);
+        // 日志默认全关：生产环境零记录，调试人员在原生配置里手动打开
+        boolean enableFloatingLogs = prefs.getBoolean(KEY_ENABLE_FLOATING_LOGS, false);
+        boolean enableVerboseLogs = prefs.getBoolean(KEY_ENABLE_VERBOSE_LOGS, false);
         boolean enableNetworkHeaderPatch = prefs.getBoolean(KEY_ENABLE_NETWORK_HEADER_PATCH, true);
         boolean enableHistoryPatch = prefs.getBoolean(KEY_ENABLE_HISTORY_PATCH, true);
         boolean enableStoragePatch = prefs.getBoolean(KEY_ENABLE_STORAGE_PATCH, true);

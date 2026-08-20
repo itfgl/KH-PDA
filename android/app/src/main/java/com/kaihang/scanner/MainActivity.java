@@ -1718,7 +1718,7 @@ public class MainActivity extends BridgeActivity {
     private boolean isVerboseRuntimeLoggingEnabled() {
         long now = System.currentTimeMillis();
         if (now - cachedVerboseLogsAt > 5000L) {
-            cachedVerboseLogs = ClientConfigPlugin.getSavedConfig(this).optBoolean("enableVerboseLogs", true);
+            cachedVerboseLogs = ClientConfigPlugin.getSavedConfig(this).optBoolean("enableVerboseLogs", false);
             cachedVerboseLogsAt = now;
         }
         return cachedVerboseLogs;

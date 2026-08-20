@@ -128,8 +128,8 @@ final class NativeSettingsDialog {
         String layoutPreset = config.optString("layoutPreset", "standard");
         layoutSpinner.setSelection("compact".equals(layoutPreset) ? 1 : ("large".equals(layoutPreset) ? 2 : 0));
         injectionModeSpinner.setSelection(getInjectionModeSelection(config.optString("injectionMode", "aggressive")));
-        floatingLogsSwitch.setChecked(config.optBoolean("enableFloatingLogs", true));
-        verboseLogsSwitch.setChecked(config.optBoolean("enableVerboseLogs", true));
+        floatingLogsSwitch.setChecked(config.optBoolean("enableFloatingLogs", false));
+        verboseLogsSwitch.setChecked(config.optBoolean("enableVerboseLogs", false));
         networkPatchSwitch.setChecked(config.optBoolean("enableNetworkHeaderPatch", true));
         historyPatchSwitch.setChecked(config.optBoolean("enableHistoryPatch", true));
         storagePatchSwitch.setChecked(config.optBoolean("enableStoragePatch", true));
@@ -174,8 +174,9 @@ final class NativeSettingsDialog {
                 paperSpinner.setSelection(0);
                 layoutSpinner.setSelection(0);
                 injectionModeSpinner.setSelection(0);
-                floatingLogsSwitch.setChecked(true);
-                verboseLogsSwitch.setChecked(true);
+                // 日志默认关：恢复默认 = 回到生产态零日志
+                floatingLogsSwitch.setChecked(false);
+                verboseLogsSwitch.setChecked(false);
                 networkPatchSwitch.setChecked(true);
                 historyPatchSwitch.setChecked(true);
                 storagePatchSwitch.setChecked(true);

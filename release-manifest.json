@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 92,
+  "currentVersionCode": 93,
   "releases": [
+    {
+      "versionCode": 93,
+      "versionName": "1.2.84",
+      "apkFileName": "kaihang-scanner-v1.2.84-93.apk",
+      "changelog": "客户端设置只留动作核对，地址打印参数统一在原生配置修改，误改可一键恢复默认",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.84 (93)",
+        "客户端设置只留动作核对，地址打印参数统一在原生配置修改，误改可一键恢复默认",
+        "悬浮球改为闲置3秒即半藏到屏幕边缘"
+      ]
+    },
     {
       "versionCode": 92,
       "versionName": "1.2.83",
@@ -1073,8 +1085,7 @@
   ],
   "pending": {
     "notes": [
-      "客户端设置只留动作核对，地址打印参数统一在原生配置修改，误改可一键恢复默认",
-      "悬浮球改为闲置3秒即半藏到屏幕边缘"
+      "日志默认完全关闭，需要排查问题时再到原生配置高级选项里打开"
     ]
   }
 }
