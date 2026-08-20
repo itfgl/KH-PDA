@@ -105,7 +105,7 @@ final class NativeSettingsDialog {
         EditText updateInput = createUrlInput(activity, config.optString("updateBase", defaultUpdateBase));
         Spinner paperSpinner = createSpinner(activity, new String[]{"普通热敏纸", "黑标标签纸"});
         Spinner layoutSpinner = createSpinner(activity, new String[]{"标准排版", "紧凑排版", "大字排版"});
-        // 高级选项（仅排障用）：默认收起，避免现场误改注入时机/性能开关导致扫码打印失效
+        // 高级选项（仅排障用）：默认收起。注入时机已固定激进模式，不再提供切换
         TextView advancedToggle = createSectionLabel(activity, "高级选项（仅排障用）▸");
         LinearLayout advancedBox = new LinearLayout(activity);
         advancedBox.setOrientation(LinearLayout.VERTICAL);
@@ -115,19 +115,17 @@ final class NativeSettingsDialog {
             advancedBox.setVisibility(expanded ? android.view.View.GONE : android.view.View.VISIBLE);
             advancedToggle.setText(expanded ? "高级选项（仅排障用）▸" : "高级选项（仅排障用）▾");
         });
-        Spinner injectionModeSpinner = createSpinner(activity, new String[]{"激进模式（started + commit + loaded）", "稳妥模式（commit + loaded）", "轻量模式（仅 loaded）", "手动模式（只手动初始化）"});
-        SwitchCompat floatingLogsSwitch = createSwitchRow(activity, advancedBox, "网页浮动日志", "控制网页侧日志面板、日志持久化和全局错误日志");
-        SwitchCompat verboseLogsSwitch = createSwitchRow(activity, advancedBox, "详细运行日志", "控制是否记录大量初始化、observer、动作匹配和控制台过程日志");
-        SwitchCompat networkPatchSwitch = createSwitchRow(activity, advancedBox, "自动补 X-Client-Type", "控制是否 patch fetch / XHR 并自动补客户端请求头");
-        SwitchCompat historyPatchSwitch = createSwitchRow(activity, advancedBox, "路由监听", "控制是否 patch history.pushState / replaceState");
-        SwitchCompat storagePatchSwitch = createSwitchRow(activity, advancedBox, "存储监听", "控制是否 patch localStorage / sessionStorage 变更");
-        SwitchCompat uiReadyObserverSwitch = createSwitchRow(activity, advancedBox, "页面就绪 observer", "控制网页 ready 的 DOM 兜底检测");
-        SwitchCompat actionObserverSwitch = createSwitchRow(activity, advancedBox, "页面动作 observer", "控制 DOM 变化时是否自动刷新页面动作");
-        SwitchCompat runtimeReuseSwitch = createSwitchRow(activity, advancedBox, "同页复用 runtime", "控制检测到已初始化 runtime 后是否只刷新页面动作，不再重复整段注入");
+        SwitchCompat floatingLogsSwitch = createSwitchRow(activity, advancedBox, "网页浮动日志（调试）", "默认关。排障时打开，可查看网页侧运行日志并持久化");
+        SwitchCompat verboseLogsSwitch = createSwitchRow(activity, advancedBox, "详细运行日志（调试）", "默认关。排障时打开，记录动作匹配、observer、控制台等过程日志");
+        SwitchCompat networkPatchSwitch = createSwitchRow(activity, advancedBox, "自动补 X-Client-Type", "默认开。给 App 内网页请求补客户端标识头，服务端按此识别 PDA 客户端");
+        SwitchCompat historyPatchSwitch = createSwitchRow(activity, advancedBox, "路由监听", "默认开。切页后自动刷新扫码/打印动作，请勿关闭");
+        SwitchCompat storagePatchSwitch = createSwitchRow(activity, advancedBox, "存储监听", "默认开。登录态变化后自动刷新页面动作，请勿关闭");
+        SwitchCompat uiReadyObserverSwitch = createSwitchRow(activity, advancedBox, "页面就绪 observer", "默认开。页面就绪判定的兜底检测，请勿关闭");
+        SwitchCompat actionObserverSwitch = createSwitchRow(activity, advancedBox, "页面动作 observer", "默认开。条件显示按钮等场景依赖，请勿关闭");
+        SwitchCompat runtimeReuseSwitch = createSwitchRow(activity, advancedBox, "同页复用 runtime", "默认开。避免重复注入大段脚本，性能优化，请勿关闭");
         paperSpinner.setSelection("black_mark".equals(config.optString("paperType", "thermal")) ? 1 : 0);
         String layoutPreset = config.optString("layoutPreset", "standard");
         layoutSpinner.setSelection("compact".equals(layoutPreset) ? 1 : ("large".equals(layoutPreset) ? 2 : 0));
-        injectionModeSpinner.setSelection(getInjectionModeSelection(config.optString("injectionMode", "aggressive")));
         floatingLogsSwitch.setChecked(config.optBoolean("enableFloatingLogs", false));
         verboseLogsSwitch.setChecked(config.optBoolean("enableVerboseLogs", false));
         networkPatchSwitch.setChecked(config.optBoolean("enableNetworkHeaderPatch", true));
@@ -147,10 +145,7 @@ final class NativeSettingsDialog {
         root.addView(layoutSpinner);
         root.addView(advancedToggle);
         root.addView(advancedBox);
-        // 注入时机与性能开关收进高级区，保存值与展开无关
-        advancedBox.addView(createSectionLabel(activity, "注入时机"));
-        advancedBox.addView(injectionModeSpinner);
-        advancedBox.addView(createSectionLabel(activity, "性能开关"));
+        advancedBox.addView(createSectionLabel(activity, "调试与功能开关"));
 
         TextView note = new TextView(activity);
         note.setText("保存后写入 Android 本地并重启加载。高级选项仅排障用，日常保持默认即可；改错会导致扫码打印失效。");
@@ -173,8 +168,7 @@ final class NativeSettingsDialog {
                 updateInput.setText(defaultUpdateBase);
                 paperSpinner.setSelection(0);
                 layoutSpinner.setSelection(0);
-                injectionModeSpinner.setSelection(0);
-                // 日志默认关：恢复默认 = 回到生产态零日志
+                // 日志等调试项默认关，功能项默认开
                 floatingLogsSwitch.setChecked(false);
                 verboseLogsSwitch.setChecked(false);
                 networkPatchSwitch.setChecked(true);
@@ -201,7 +195,7 @@ final class NativeSettingsDialog {
                 updateBase,
                 paperSpinner.getSelectedItemPosition() == 1 ? "black_mark" : "thermal",
                 layoutSpinner.getSelectedItemPosition() == 1 ? "compact" : (layoutSpinner.getSelectedItemPosition() == 2 ? "large" : "standard"),
-                getInjectionModeValue(injectionModeSpinner.getSelectedItemPosition()),
+                "aggressive",
                 floatingLogsSwitch.isChecked(),
                 verboseLogsSwitch.isChecked(),
                 networkPatchSwitch.isChecked(),
@@ -287,33 +281,6 @@ final class NativeSettingsDialog {
         row.addView(toggle);
         root.addView(row);
         return toggle;
-    }
-
-    private static int getInjectionModeSelection(String mode) {
-        String normalized = safe(mode).trim().toLowerCase(java.util.Locale.ROOT);
-        if ("commit_loaded".equals(normalized)) {
-            return 1;
-        }
-        if ("loaded_only".equals(normalized)) {
-            return 2;
-        }
-        if ("manual".equals(normalized)) {
-            return 3;
-        }
-        return 0;
-    }
-
-    private static String getInjectionModeValue(int selection) {
-        if (selection == 1) {
-            return "commit_loaded";
-        }
-        if (selection == 2) {
-            return "loaded_only";
-        }
-        if (selection == 3) {
-            return "manual";
-        }
-        return "aggressive";
     }
 
     private static int dp(Activity activity, int value) {

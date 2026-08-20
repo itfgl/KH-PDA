@@ -178,11 +178,8 @@ public class ClientConfigPlugin extends Plugin {
         return "standard";
     }
 
+    // 注入时机固定激进模式：定制 ROM 只在该模式下可靠注入，不再提供其他选项
     private static String normalizeInjectionMode(String value) {
-        String raw = value == null ? "" : value.trim().toLowerCase();
-        if ("loaded_only".equals(raw) || "commit_loaded".equals(raw) || "manual".equals(raw)) {
-            return raw;
-        }
         return "aggressive";
     }
 }
