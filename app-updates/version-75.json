@@ -1,0 +1,14 @@
+{
+  "versionCode": 75,
+  "versionName": "1.2.66",
+  "apkFileName": "kaihang-scanner-v1.2.66-75.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.66-75.apk",
+  "changelog": "修复底部居中偏右与打印内容比预览偏下的问题",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.66 (75)",
+    "底部居中行文本宽度改用 Paint.measureText 精确测量，修复含数字/字母文本（如批次号）居中偏右的问题",
+    "热敏纸打印前裁掉位图顶部 8 点，抵消打印 SDK 强制的 setTop(8) 顶部边距，实纸内容位置与预览一致",
+    "黑标纸（机器二维码标签）打印行为保持不变"
+  ]
+}

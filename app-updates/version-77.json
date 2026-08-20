@@ -1,0 +1,13 @@
+{
+  "versionCode": 77,
+  "versionName": "1.2.68",
+  "apkFileName": "kaihang-scanner-v1.2.68-77.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.68-77.apk",
+  "changelog": "标签底部留白减半",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.68 (77)",
+    "标签底部留白减半：通用标签底边距 24→12 点，兼容旧布局 16→8 点",
+    "bottom 贴底行与纸底间距 8→4 点"
+  ]
+}

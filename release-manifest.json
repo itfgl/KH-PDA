@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 78,
+  "currentVersionCode": 79,
   "releases": [
+    {
+      "versionCode": 79,
+      "versionName": "1.2.70",
+      "apkFileName": "kaihang-scanner-v1.2.70-79.apk",
+      "changelog": "打印标签模板升级：字段为空自动不打印",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.70 (79)",
+        "打印标签模板改为新写法：{\"标签名\":{字段}}，例如 {\"机台号：\":{machine}}",
+        "字段没有值时，这一行自动不打印",
+        "需要保留空行时，加 keep：{\"备注：\"|keep:{note}}",
+        "旧写法 {machine} 在文字模板中不再生效，请改用新写法"
+      ]
+    },
     {
       "versionCode": 78,
       "versionName": "1.2.69",
@@ -912,11 +926,5 @@
         "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
       ]
     }
-  ],
-  "pending": {
-    "notes": [
-      "打印文本模板重构为块格式 {\" 前缀\\:{占位符}}：占位符值为空时整块（含前缀）不打印，支持同行多块、宽度对齐、字号、底部居中组合；旧裸占位符在文本模板中不再解析（barcode/qrcode 取值模板不受影响），text_value 与 text_template 均需改用新格式",
-      "打印模板空值跳行改为可选：块外层加 keep（如 {\"备注：\"|keep:{note}}）时空值只隐藏该块、保留空行不跳过；默认不带 keep 仍为整行跳过；宽度/字号/bottom 等格式仍写在占位符内层，可与 keep 组合"
-    ]
-  }
+  ]
 }
