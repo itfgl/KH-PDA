@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 89,
+  "currentVersionCode": 90,
   "releases": [
+    {
+      "versionCode": 90,
+      "versionName": "1.2.81",
+      "apkFileName": "kaihang-scanner-v1.2.81-90.apk",
+      "changelog": "进页面更流畅：打开页面时减少重复注入大段脚本，页面加载不再被拖慢",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.81 (90)",
+        "进页面更流畅：打开页面时减少重复注入大段脚本，页面加载不再被拖慢"
+      ]
+    },
     {
       "versionCode": 89,
       "versionName": "1.2.80",
@@ -1039,7 +1050,7 @@
   ],
   "pending": {
     "notes": [
-      "进页面更流畅：打开页面时减少重复注入大段脚本，页面加载不再被拖慢"
+      "修复冷启动后扫码打印配置失效：恢复启动时注入，无需再点工具图标激活"
     ]
   }
 }

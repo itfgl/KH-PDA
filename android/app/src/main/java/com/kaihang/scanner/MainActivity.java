@@ -862,11 +862,6 @@ public class MainActivity extends BridgeActivity {
         if (trigger == InjectionTrigger.MANUAL) {
             return true;
         }
-        // PAGE_STARTED 阶段文档未就绪，早期注入大概率丢弃还阻塞页面解析；
-        // onPageCommitVisible(minSdk 24 保证)与 onPageFinished 双保险已覆盖注入时机
-        if (trigger == InjectionTrigger.PAGE_STARTED) {
-            return false;
-        }
         if ("manual".equals(mode)) {
             return false;
         }
@@ -902,12 +897,13 @@ public class MainActivity extends BridgeActivity {
         lastInjectAtMs = now;
         String script = buildClientRuntimeScript(url);
         view.evaluateJavascript(script, null);
-        // 二次确认改为轻量探测：runtime 存活且版本匹配时只跑 bootOnce+refresh（~200B），
-        // 不匹配才全量补注入 158KB；原无条件二次全量注入挤占页面加载期主线程，是低端机进页卡顿主因之一
+        // 350ms 兜底：探测 runtime 存活则只跑 bootOnce+refresh（省一次 158KB 全量注入）；
+        // 探测失败时传 PAGE_LOADED（force=true）强制重注——必须绕过 injectClientTypeHeader 的
+        // 1200ms 同 URL 去重闸门，否则定制 ROM 上首次注入静默失败后兜底会被闸门吞掉（冷启动 runtime 缺失）
         view.postDelayed(() -> {
             String latestUrl = safe(view.getUrl());
             if (latestUrl.equals(url)) {
-                probeReusableRuntime(view, latestUrl, InjectionTrigger.PAGE_COMMIT_VISIBLE);
+                probeReusableRuntime(view, latestUrl, InjectionTrigger.PAGE_LOADED);
             }
         }, 350);
     }
