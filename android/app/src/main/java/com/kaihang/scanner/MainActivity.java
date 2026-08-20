@@ -862,6 +862,11 @@ public class MainActivity extends BridgeActivity {
         if (trigger == InjectionTrigger.MANUAL) {
             return true;
         }
+        // PAGE_STARTED 阶段文档未就绪，早期注入大概率丢弃还阻塞页面解析；
+        // onPageCommitVisible(minSdk 24 保证)与 onPageFinished 双保险已覆盖注入时机
+        if (trigger == InjectionTrigger.PAGE_STARTED) {
+            return false;
+        }
         if ("manual".equals(mode)) {
             return false;
         }
@@ -897,10 +902,12 @@ public class MainActivity extends BridgeActivity {
         lastInjectAtMs = now;
         String script = buildClientRuntimeScript(url);
         view.evaluateJavascript(script, null);
+        // 二次确认改为轻量探测：runtime 存活且版本匹配时只跑 bootOnce+refresh（~200B），
+        // 不匹配才全量补注入 158KB；原无条件二次全量注入挤占页面加载期主线程，是低端机进页卡顿主因之一
         view.postDelayed(() -> {
             String latestUrl = safe(view.getUrl());
             if (latestUrl.equals(url)) {
-                view.evaluateJavascript(buildClientRuntimeScript(latestUrl), null);
+                probeReusableRuntime(view, latestUrl, InjectionTrigger.PAGE_COMMIT_VISIBLE);
             }
         }, 350);
     }

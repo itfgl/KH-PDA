@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 88,
+  "currentVersionCode": 89,
   "releases": [
+    {
+      "versionCode": 89,
+      "versionName": "1.2.80",
+      "apkFileName": "kaihang-scanner-v1.2.80-89.apk",
+      "changelog": "流畅度优化：日志改为内存缓冲批量保存，扫码打印不再卡顿",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.80 (89)",
+        "流畅度优化：日志改为内存缓冲批量保存，扫码打印不再卡顿"
+      ]
+    },
     {
       "versionCode": 88,
       "versionName": "1.2.79",
@@ -1028,7 +1039,7 @@
   ],
   "pending": {
     "notes": [
-      "流畅度优化：日志改为内存缓冲批量保存，扫码打印不再卡顿"
+      "进页面更流畅：打开页面时减少重复注入大段脚本，页面加载不再被拖慢"
     ]
   }
 }
