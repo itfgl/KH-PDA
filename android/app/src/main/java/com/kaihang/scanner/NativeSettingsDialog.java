@@ -164,8 +164,27 @@ final class NativeSettingsDialog {
             .setView(wrapInDialogScrollView(activity, root))
             .setPositiveButton("保存并重启", null)
             .setNegativeButton("关闭", null)
+            .setNeutralButton("恢复默认", null)
             .create();
-        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+        dialog.setOnShowListener(ignored -> {
+            // 恢复默认：只把输入区填回默认值，不关闭弹窗、不立即生效，误改地址后一键还原
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                serverInput.setText(defaultServerBase);
+                updateInput.setText(defaultUpdateBase);
+                paperSpinner.setSelection(0);
+                layoutSpinner.setSelection(0);
+                injectionModeSpinner.setSelection(0);
+                floatingLogsSwitch.setChecked(true);
+                verboseLogsSwitch.setChecked(true);
+                networkPatchSwitch.setChecked(true);
+                historyPatchSwitch.setChecked(true);
+                storagePatchSwitch.setChecked(true);
+                uiReadyObserverSwitch.setChecked(true);
+                actionObserverSwitch.setChecked(true);
+                runtimeReuseSwitch.setChecked(true);
+                callbacks.toast("已恢复默认值，点「保存并重启」生效");
+            });
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String serverBase = callbacks.normalizeBaseUrl(serverInput.getText().toString(), defaultServerBase);
             String updateBase = callbacks.normalizeBaseUrl(updateInput.getText().toString(), defaultUpdateBase);
             if (serverBase.isEmpty()) {
@@ -193,7 +212,8 @@ final class NativeSettingsDialog {
             );
             callbacks.onSave(values);
             dialog.dismiss();
-        }));
+        });
+        });
         dialog.show();
     }
 

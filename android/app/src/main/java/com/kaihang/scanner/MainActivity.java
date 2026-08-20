@@ -61,10 +61,10 @@ public class MainActivity extends BridgeActivity {
     private int nativeControlDragStartBottomPx = 0;
     private boolean nativeControlDragging = false;
     private int nativeControlTouchSlopPx = 0;
-    // 悬浮球闲置半藏：6 秒无交互滑向最近的屏幕边缘，保留 45% 可见；任意触碰即滑回
+    // 悬浮球闲置半藏：3 秒无交互滑向最近的屏幕边缘，保留 45% 可见；任意触碰即滑回
     private boolean nativeControlDocked = false;
     private Runnable nativeControlDockRunnable = null;
-    private static final long NATIVE_CONTROL_DOCK_DELAY_MS = 6000L;
+    private static final long NATIVE_CONTROL_DOCK_DELAY_MS = 3000L;
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
