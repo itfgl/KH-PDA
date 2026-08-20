@@ -336,6 +336,11 @@ public class PrintPlugin extends Plugin {
         } else {
             mediaBottom = bodyTop;
         }
+        // 右侧字段区域：上方整个媒体区（有一维码时从一维码顶部起，到二维码底部止），
+        // 字段容量按整个区域高度计算，不再只按二维码高度
+        int besideRegionTop = barcode != null ? layout.barcodeTop : Math.max(qrTop, 0);
+        int besideRegionHeight = Math.max(0, qrTop + qrEffHeight - besideRegionTop);
+        int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
 
         FieldTextPlan plan = planFieldText(
             safeTextValue,
@@ -343,9 +348,9 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? 999 : 0,
-            Math.max(qrTop, 0),
-            qrEffHeight,
+            besideRowCapacity,
+            besideRegionTop,
+            besideRegionHeight,
             bodyTop,
             layout.lineHeight,
             layout.wrapUnits,
@@ -929,6 +934,10 @@ public class PrintPlugin extends Plugin {
         // 二维码与下方字段零间距紧贴，空白由用户模板控制；一维码标签保持 24
         int belowGap = qr != null ? 0 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
+        // 右侧字段区域：上方整个媒体区（有一维码时从一维码顶部起，到二维码底部止）
+        int besideRegionTop = barcode != null ? 8 : qrTopPad;
+        int besideRegionHeight = Math.max(0, qrTopPad + qrEffHeight - besideRegionTop);
+        int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
 
         FieldTextPlan plan = planFieldText(
             safeTextValue,
@@ -936,9 +945,9 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? 999 : 0,
-            8,
-            qrEffHeight,
+            besideRowCapacity,
+            besideRegionTop,
+            besideRegionHeight,
             belowStartY,
             layout.lineHeight,
             layout.wrapUnits,
@@ -1044,6 +1053,10 @@ public class PrintPlugin extends Plugin {
         // 二维码与下方字段零间距紧贴，与实纸打印保持一致；一维码标签保持 24
         int belowGap = qr != null ? 0 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
+        // 右侧字段区域：上方整个媒体区（有一维码时从一维码顶部起，到二维码底部止）
+        int besideRegionTop = barcode != null ? 8 : qrTopPad;
+        int besideRegionHeight = Math.max(0, qrTopPad + qrEffHeight - besideRegionTop);
+        int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
 
         FieldTextPlan plan = planFieldText(
             safeTextValue,
@@ -1051,9 +1064,9 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? 999 : 0,
-            qrTopPad,
-            qrEffHeight,
+            besideRowCapacity,
+            besideRegionTop,
+            besideRegionHeight,
             belowStartY,
             layout.lineHeight,
             layout.wrapUnits,
@@ -1292,7 +1305,8 @@ public class PrintPlugin extends Plugin {
     /**
      * 统一规划字段文本落位：
      * - center 样式行（占位符 |center）收集为居中行，紧贴二维码下方；
-     * - besideEnabled（二维码靠左时）：右侧窄列收普通字段（含带字号），从二维码顶部依次往下排，装不下的字段转入下方；
+     * - besideEnabled（二维码靠左时）：右侧窄列收普通字段（含带字号），从上方整个媒体区顶部
+     *   （besideRegionTop，有一维码时为一维码顶部）依次往下排，容量按整个区域高度算，装不下转入下方；
      * - 下方区域按 columns 列排版：1 列保持原有整段换行行为；2 列时字段行序配对；带字号的行按字号加高行距；
      * - 返回每行文本的绝对坐标（含字号）及内容底部 y，center 行由 placeCenterRows 落位。
      */
@@ -1303,8 +1317,8 @@ public class PrintPlugin extends Plugin {
         int besideX,
         int besideWidth,
         int besideRowCapacity,
-        int qrTop,
-        int qrHeight,
+        int besideRegionTop,
+        int besideRegionHeight,
         int belowStartY,
         int lineHeight,
         int baseWrapUnits,
@@ -1344,8 +1358,8 @@ public class PrintPlugin extends Plugin {
         List<Integer> remaining = normalIndexes;
         int belowY = belowStartY;
 
-        // 二维码右侧窄列：字段（含带字号）从二维码顶部依次往下排，
-        // 不受二维码高度限制，可延伸到二维码下方右侧区域，标签高度随内容自适应
+        // 二维码右侧窄列：字段（含带字号）从上方整个媒体区顶部依次往下排，
+        // 容量按整个区域高度（一维码段+间距+二维码段）计算，超出部分转入下方
         if (besideEnabled && !normalIndexes.isEmpty() && besideRowCapacity > 0 && besideWidth > 0) {
             int besideUnits = columnWrapUnits(baseWrapUnits, besideWidth);
             List<int[]> besideRows = new ArrayList<>(); // {rowStart, rowCount, rowUnits, styleSize}
@@ -1369,8 +1383,8 @@ public class PrintPlugin extends Plugin {
                 position++;
             }
             if (position > 0) {
-                // 右侧列不做垂直居中：从二维码顶部开始排，起始偏移由用户模板开头空行控制
-                int startY = qrTop;
+                // 右侧列从上方媒体区顶部开始排，起始偏移由用户模板开头空行控制
+                int startY = besideRegionTop;
                 for (int i = 0; i < besideRows.size(); i++) {
                     int rowStart = besideRows.get(i)[0];
                     int rowUnits = besideRows.get(i)[2];
