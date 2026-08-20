@@ -1523,6 +1523,7 @@ public class MainActivity extends BridgeActivity {
                 int qrSize = payload.optInt("qrSize", 0);
                 String qrAlign = payload.optString("qrAlign", "center");
                 int textColumns = payload.optInt("textColumns", 1);
+                String textStylesJson = payload.optString("textStyles", "");
                 nativePrintBridgeCallCount += 1;
                 String compactText = safe(textValue).replace("\r", " ").replace("\n", "\\n");
                 if (compactText.length() > 120) compactText = compactText.substring(0, 120) + "…";
@@ -1536,6 +1537,7 @@ public class MainActivity extends BridgeActivity {
                         + ", qrSize=" + qrSize
                         + ", qrAlign=" + safe(qrAlign)
                         + ", textColumns=" + textColumns
+                        + (textStylesJson.isEmpty() ? "" : ", textStyles=" + textStylesJson)
                 );
                 if (shouldPreviewPrint()) {
                     appendNativeLog("原生打印桥检测到无打印机，强制转为标签预览");
@@ -1550,7 +1552,8 @@ public class MainActivity extends BridgeActivity {
                             layoutPreset,
                             qrSize,
                             qrAlign,
-                            textColumns
+                            textColumns,
+                            textStylesJson
                         );
                     });
                     return true;
@@ -1565,7 +1568,8 @@ public class MainActivity extends BridgeActivity {
                     layoutPreset,
                     qrSize,
                     qrAlign,
-                    textColumns
+                    textColumns,
+                    textStylesJson
                 ));
                 return true;
             } catch (Exception e) {
@@ -1585,6 +1589,7 @@ public class MainActivity extends BridgeActivity {
                 int qrSize = payload.optInt("qrSize", 0);
                 String qrAlign = payload.optString("qrAlign", "center");
                 int textColumns = payload.optInt("textColumns", 1);
+                String textStylesJson = payload.optString("textStyles", "");
                 appendNativeLog(
                     "无打印机，生成标签预览: barcode=" + safe(barcodeValue)
                         + ", qrcode=" + safe(qrCodeValue)
@@ -1592,6 +1597,7 @@ public class MainActivity extends BridgeActivity {
                         + ", qrSize=" + qrSize
                         + ", qrAlign=" + safe(qrAlign)
                         + ", textColumns=" + textColumns
+                        + (textStylesJson.isEmpty() ? "" : ", textStyles=" + textStylesJson)
                 );
                 runOnUiThread(() -> {
                     toast("正在生成标签预览…");
@@ -1604,7 +1610,8 @@ public class MainActivity extends BridgeActivity {
                         layoutPreset,
                         qrSize,
                         qrAlign,
-                        textColumns
+                        textColumns,
+                        textStylesJson
                     );
                 });
                 return true;
