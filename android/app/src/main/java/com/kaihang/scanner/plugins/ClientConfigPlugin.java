@@ -60,10 +60,11 @@ public class ClientConfigPlugin extends Plugin {
     ) {
         String normalizedServerBase = normalizeBaseUrl(serverBase, DEFAULT_SERVER_BASE);
         String normalizedUpdateBase = normalizeBaseUrl(updateBase, DEFAULT_UPDATE_BASE);
-        String normalizedPaperType = normalizePaperType(paperType);
-        String normalizedLayoutPreset = normalizeLayoutPreset(layoutPreset);
-        String normalizedInjectionMode = normalizeInjectionMode(injectionMode);
         JSObject current = readConfig(context);
+        // 字符串字段传 null（未携带）时保留现值，允许两个设置面板只保存各自负责的字段
+        String normalizedPaperType = normalizePaperType(paperType != null ? paperType : current.optString("paperType", "thermal"));
+        String normalizedLayoutPreset = normalizeLayoutPreset(layoutPreset != null ? layoutPreset : current.optString("layoutPreset", "standard"));
+        String normalizedInjectionMode = normalizeInjectionMode(injectionMode != null ? injectionMode : current.optString("injectionMode", "aggressive"));
 
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         prefs.edit()

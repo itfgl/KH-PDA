@@ -105,15 +105,25 @@ final class NativeSettingsDialog {
         EditText updateInput = createUrlInput(activity, config.optString("updateBase", defaultUpdateBase));
         Spinner paperSpinner = createSpinner(activity, new String[]{"普通热敏纸", "黑标标签纸"});
         Spinner layoutSpinner = createSpinner(activity, new String[]{"标准排版", "紧凑排版", "大字排版"});
+        // 高级选项（仅排障用）：默认收起，避免现场误改注入时机/性能开关导致扫码打印失效
+        TextView advancedToggle = createSectionLabel(activity, "高级选项（仅排障用）▸");
+        LinearLayout advancedBox = new LinearLayout(activity);
+        advancedBox.setOrientation(LinearLayout.VERTICAL);
+        advancedBox.setVisibility(android.view.View.GONE);
+        advancedToggle.setOnClickListener(v -> {
+            boolean expanded = advancedBox.getVisibility() == android.view.View.VISIBLE;
+            advancedBox.setVisibility(expanded ? android.view.View.GONE : android.view.View.VISIBLE);
+            advancedToggle.setText(expanded ? "高级选项（仅排障用）▸" : "高级选项（仅排障用）▾");
+        });
         Spinner injectionModeSpinner = createSpinner(activity, new String[]{"激进模式（started + commit + loaded）", "稳妥模式（commit + loaded）", "轻量模式（仅 loaded）", "手动模式（只手动初始化）"});
-        SwitchCompat floatingLogsSwitch = createSwitchRow(activity, root, "网页浮动日志", "控制网页侧日志面板、日志持久化和全局错误日志");
-        SwitchCompat verboseLogsSwitch = createSwitchRow(activity, root, "详细运行日志", "控制是否记录大量初始化、observer、动作匹配和控制台过程日志");
-        SwitchCompat networkPatchSwitch = createSwitchRow(activity, root, "自动补 X-Client-Type", "控制是否 patch fetch / XHR 并自动补客户端请求头");
-        SwitchCompat historyPatchSwitch = createSwitchRow(activity, root, "路由监听", "控制是否 patch history.pushState / replaceState");
-        SwitchCompat storagePatchSwitch = createSwitchRow(activity, root, "存储监听", "控制是否 patch localStorage / sessionStorage 变更");
-        SwitchCompat uiReadyObserverSwitch = createSwitchRow(activity, root, "页面就绪 observer", "控制网页 ready 的 DOM 兜底检测");
-        SwitchCompat actionObserverSwitch = createSwitchRow(activity, root, "页面动作 observer", "控制 DOM 变化时是否自动刷新页面动作");
-        SwitchCompat runtimeReuseSwitch = createSwitchRow(activity, root, "同页复用 runtime", "控制检测到已初始化 runtime 后是否只刷新页面动作，不再重复整段注入");
+        SwitchCompat floatingLogsSwitch = createSwitchRow(activity, advancedBox, "网页浮动日志", "控制网页侧日志面板、日志持久化和全局错误日志");
+        SwitchCompat verboseLogsSwitch = createSwitchRow(activity, advancedBox, "详细运行日志", "控制是否记录大量初始化、observer、动作匹配和控制台过程日志");
+        SwitchCompat networkPatchSwitch = createSwitchRow(activity, advancedBox, "自动补 X-Client-Type", "控制是否 patch fetch / XHR 并自动补客户端请求头");
+        SwitchCompat historyPatchSwitch = createSwitchRow(activity, advancedBox, "路由监听", "控制是否 patch history.pushState / replaceState");
+        SwitchCompat storagePatchSwitch = createSwitchRow(activity, advancedBox, "存储监听", "控制是否 patch localStorage / sessionStorage 变更");
+        SwitchCompat uiReadyObserverSwitch = createSwitchRow(activity, advancedBox, "页面就绪 observer", "控制网页 ready 的 DOM 兜底检测");
+        SwitchCompat actionObserverSwitch = createSwitchRow(activity, advancedBox, "页面动作 observer", "控制 DOM 变化时是否自动刷新页面动作");
+        SwitchCompat runtimeReuseSwitch = createSwitchRow(activity, advancedBox, "同页复用 runtime", "控制检测到已初始化 runtime 后是否只刷新页面动作，不再重复整段注入");
         paperSpinner.setSelection("black_mark".equals(config.optString("paperType", "thermal")) ? 1 : 0);
         String layoutPreset = config.optString("layoutPreset", "standard");
         layoutSpinner.setSelection("compact".equals(layoutPreset) ? 1 : ("large".equals(layoutPreset) ? 2 : 0));
@@ -135,19 +145,22 @@ final class NativeSettingsDialog {
         root.addView(paperSpinner);
         root.addView(createSectionLabel(activity, "排版预设"));
         root.addView(layoutSpinner);
-        root.addView(createSectionLabel(activity, "注入时机"));
-        root.addView(injectionModeSpinner);
-        root.addView(createSectionLabel(activity, "性能开关"));
+        root.addView(advancedToggle);
+        root.addView(advancedBox);
+        // 注入时机与性能开关收进高级区，保存值与展开无关
+        advancedBox.addView(createSectionLabel(activity, "注入时机"));
+        advancedBox.addView(injectionModeSpinner);
+        advancedBox.addView(createSectionLabel(activity, "性能开关"));
 
         TextView note = new TextView(activity);
-        note.setText("保存后会写入 Android 本地配置，并重启后直接加载新的远程地址。性能问题排查时可以单独关闭某个注入能力，不用重新改包。");
+        note.setText("保存后写入 Android 本地并重启加载。高级选项仅排障用，日常保持默认即可；改错会导致扫码打印失效。");
         note.setTextSize(13);
         note.setTextColor(Color.parseColor("#667085"));
         note.setPadding(0, dp(activity, 14), 0, 0);
         root.addView(note);
 
         AlertDialog dialog = new AlertDialog.Builder(activity)
-            .setTitle("客户端设置")
+            .setTitle("原生配置")
             .setView(wrapInDialogScrollView(activity, root))
             .setPositiveButton("保存并重启", null)
             .setNegativeButton("关闭", null)
