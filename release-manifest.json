@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 79,
+  "currentVersionCode": 80,
   "releases": [
+    {
+      "versionCode": 80,
+      "versionName": "1.2.71",
+      "apkFileName": "kaihang-scanner-v1.2.71-80.apk",
+      "changelog": "打印模板改用单引号写法：{'机台号：':{machine}}，避免与配置里的双引号冲突；双引号旧写法仍可用",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.71 (80)",
+        "打印模板改用单引号写法：{'机台号：':{machine}}，避免与配置里的双引号冲突；双引号旧写法仍可用"
+      ]
+    },
     {
       "versionCode": 79,
       "versionName": "1.2.70",
@@ -929,7 +940,7 @@
   ],
   "pending": {
     "notes": [
-      "打印模板改用单引号写法：{'机台号：':{machine}}，避免与配置里的双引号冲突；双引号旧写法仍可用"
+      "连续打印多张时支持设置间隔：动作配置加 print_interval_ms（毫秒），打完一张等待后再打下一张"
     ]
   }
 }
