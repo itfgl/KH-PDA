@@ -260,6 +260,8 @@ public class PrintPlugin extends Plugin {
         String textValue,
         String layoutPreset,
         Integer qrSize,
+        String qrAlign,
+        Integer textColumns,
         String diagnosticSource
     ) {
         if (context == null) throw new IllegalArgumentException("context is required");
@@ -270,6 +272,7 @@ public class PrintPlugin extends Plugin {
             throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
         }
 
+        int columns = normalizeTextColumns(textColumns);
         GenericLabelLayout layout = getGenericLabelLayout(layoutPreset, qrSize);
         Bitmap barcode = null;
         Bitmap qr = null;
@@ -285,7 +288,8 @@ public class PrintPlugin extends Plugin {
             if (qr == null) throw new IllegalStateException("qr bitmap null");
         }
 
-        List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
+        // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
+        boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
         int bodyTop = 16;
         int qrTop = -1;
         if (barcode != null) {
@@ -299,10 +303,34 @@ public class PrintPlugin extends Plugin {
                 : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
             bodyTop = Math.max(bodyTop, qrTop + layout.qrHeight + layout.mediaGap);
         }
-        int bodyHeight = Math.max(1, textLines.size()) * layout.lineHeight;
-        int labelHeight = Math.max(bodyTop + bodyHeight + 24, layout.minHeight);
+        int qrLeft = -1;
+        int besideX = 0;
+        int besideWidth = 0;
+        if (qr != null) {
+            qrLeft = qrLeftAligned
+                ? TEXT_MARGIN
+                : resolveCenteredMediaLeft(layout.qrWidth);
+            if (qrLeftAligned) {
+                besideX = qrLeft + layout.qrWidth + BESIDE_GAP;
+                besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
+            }
+        }
         int barcodeLeft = barcode != null ? resolveCenteredMediaLeft(layout.barcodeWidth) : -1;
-        int qrLeft = qr != null ? resolveCenteredMediaLeft(layout.qrWidth) : -1;
+
+        FieldTextPlan plan = planFieldText(
+            safeTextValue,
+            columns,
+            qrLeftAligned,
+            besideX,
+            besideWidth,
+            qrLeftAligned ? layout.qrHeight / layout.lineHeight : 0,
+            Math.max(qrTop, 0),
+            bodyTop,
+            layout.lineHeight,
+            layout.wrapUnits,
+            resolveLeftAlignedTextLeft()
+        );
+        int labelHeight = Math.max(plan.bottomY + 24, layout.minHeight);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
         if (barcode != null) {
@@ -311,11 +339,8 @@ public class PrintPlugin extends Plugin {
         if (qr != null) {
             builder.addBmp(qr, qrLeft, qrTop);
         }
-
-        int y = bodyTop;
-        for (String line : textLines) {
-            builder.addText(line, layout.textSize, resolveLeftAlignedTextLeft(), y);
-            y += layout.lineHeight;
+        for (TextRow row : plan.rows) {
+            builder.addText(row.text, layout.textSize, row.x, row.y);
         }
 
         Bitmap label = builder.getBitmap();
@@ -332,7 +357,9 @@ public class PrintPlugin extends Plugin {
                 + ", qrTop=" + qrTop
                 + ", label=" + bitmapSize(label)
                 + ", bodyTop=" + bodyTop
-                + ", lines=" + textLines.size()
+                + ", lines=" + plan.rows.size()
+                + ", qrAlign=" + normalizeQrAlign(qrAlign)
+                + ", textColumns=" + columns
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
     }
@@ -346,7 +373,7 @@ public class PrintPlugin extends Plugin {
         }
     }
 
-    public static void printLabelNative(Context context, Activity activity, String barcodeValue, String qrCodeValue, String textValue, String paperType, String layoutPreset, int qrSize) {
+    public static void printLabelNative(Context context, Activity activity, String barcodeValue, String qrCodeValue, String textValue, String paperType, String layoutPreset, int qrSize, String qrAlign, int textColumns) {
         if (context == null || activity == null) return;
         connectNative(activity);
         nativePrintExecutor.execute(() -> {
@@ -363,6 +390,8 @@ public class PrintPlugin extends Plugin {
                     textValue,
                     layoutPreset,
                     qrSize,
+                    qrAlign,
+                    textColumns,
                     "printLabelNativeLegacy"
                 );
                 emitPrintDiagnostic(
@@ -383,7 +412,9 @@ public class PrintPlugin extends Plugin {
         String qrCodeValue,
         String textValue,
         String layoutPreset,
-        int qrSize
+        int qrSize,
+        String qrAlign,
+        int textColumns
     ) {
         if (context == null || activity == null) return;
         nativePrintExecutor.execute(() -> {
@@ -394,6 +425,8 @@ public class PrintPlugin extends Plugin {
                     textValue,
                     layoutPreset,
                     qrSize,
+                    qrAlign,
+                    textColumns,
                     "previewLabelNativeLegacy"
                 );
                 emitPrintDiagnostic("previewLabelNative", builtLabel.diagnostic);
@@ -784,6 +817,8 @@ public class PrintPlugin extends Plugin {
         String textValue,
         String layoutPreset,
         Integer qrSize,
+        String qrAlign,
+        Integer textColumns,
         String diagnosticSource
     ) {
         if (context == null) throw new IllegalArgumentException("context is required");
@@ -794,6 +829,7 @@ public class PrintPlugin extends Plugin {
             throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
         }
 
+        int columns = normalizeTextColumns(textColumns);
         LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset, qrSize);
         Bitmap barcode = null;
         Bitmap qr = null;
@@ -809,23 +845,44 @@ public class PrintPlugin extends Plugin {
             if (qr == null) throw new IllegalStateException("qr bitmap null");
         }
 
-        List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
+        // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
+        boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        int qrLeft = qrLeftAligned ? TEXT_MARGIN : layout.qrLeft;
+        int besideX = 0;
+        int besideWidth = 0;
+        if (qrLeftAligned) {
+            besideX = qrLeft + layout.qrWidth + BESIDE_GAP;
+            besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
+        }
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
-        int y = mediaBottom > 0 ? mediaBottom + 24 : 16;
-        int labelHeight = Math.max(y + (Math.max(1, textLines.size()) * layout.lineHeight) + 16, layout.minHeight);
+        int belowStartY = mediaBottom > 0 ? mediaBottom + 24 : 16;
+
+        FieldTextPlan plan = planFieldText(
+            safeTextValue,
+            columns,
+            qrLeftAligned,
+            besideX,
+            besideWidth,
+            qrLeftAligned ? layout.qrHeight / layout.lineHeight : 0,
+            8,
+            belowStartY,
+            layout.lineHeight,
+            layout.wrapUnits,
+            layout.textLeft
+        );
+        int labelHeight = Math.max(plan.bottomY + 16, layout.minHeight);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
         if (barcode != null) {
             builder.addBmp(barcode, 8, 8);
         }
         if (qr != null) {
-            builder.addBmp(qr, layout.qrLeft, 8);
+            builder.addBmp(qr, qrLeft, 8);
         }
-        for (String line : textLines) {
-            builder.addText(line, layout.textSize, layout.textLeft, y);
-            y += layout.lineHeight;
+        for (TextRow row : plan.rows) {
+            builder.addText(row.text, layout.textSize, row.x, row.y);
         }
 
         Bitmap label = builder.getBitmap();
@@ -839,8 +896,10 @@ public class PrintPlugin extends Plugin {
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
-                + ", bodyTop=" + y
-                + ", lines=" + textLines.size()
+                + ", bodyTop=" + plan.bottomY
+                + ", lines=" + plan.rows.size()
+                + ", qrAlign=" + normalizeQrAlign(qrAlign)
+                + ", textColumns=" + columns
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
     }
@@ -851,6 +910,8 @@ public class PrintPlugin extends Plugin {
         String textValue,
         String layoutPreset,
         Integer qrSize,
+        String qrAlign,
+        Integer textColumns,
         String diagnosticSource
     ) throws Exception {
         String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
@@ -860,6 +921,7 @@ public class PrintPlugin extends Plugin {
             throw new IllegalArgumentException("preview requires barcodeValue, qrCodeValue or textValue");
         }
 
+        int columns = normalizeTextColumns(textColumns);
         LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset, qrSize);
         Bitmap barcode = safeBarcodeValue.isEmpty()
             ? null
@@ -868,27 +930,48 @@ public class PrintPlugin extends Plugin {
             ? null
             : createPortableCode(safeQrCodeValue, BarcodeFormat.QR_CODE, layout.qrWidth, layout.qrHeight);
 
-        List<String> textLines = wrapPlainText(safeTextValue, layout.wrapUnits);
+        // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
+        boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        int qrLeft = qrLeftAligned ? TEXT_MARGIN : layout.qrLeft;
+        int besideX = 0;
+        int besideWidth = 0;
+        if (qrLeftAligned) {
+            besideX = qrLeft + layout.qrWidth + BESIDE_GAP;
+            besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
+        }
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
-        int y = mediaBottom > 0 ? mediaBottom + 24 : 16;
-        int labelHeight = Math.max(y + (Math.max(1, textLines.size()) * layout.lineHeight) + 16, layout.minHeight);
+        int belowStartY = mediaBottom > 0 ? mediaBottom + 24 : 16;
+
+        FieldTextPlan plan = planFieldText(
+            safeTextValue,
+            columns,
+            qrLeftAligned,
+            besideX,
+            besideWidth,
+            qrLeftAligned ? layout.qrHeight / layout.lineHeight : 0,
+            8,
+            belowStartY,
+            layout.lineHeight,
+            layout.wrapUnits,
+            layout.textLeft
+        );
+        int labelHeight = Math.max(plan.bottomY + 16, layout.minHeight);
 
         Bitmap label = Bitmap.createBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight, Bitmap.Config.ARGB_8888);
         android.graphics.Canvas canvas = new android.graphics.Canvas(label);
         canvas.drawColor(android.graphics.Color.WHITE);
         if (barcode != null) canvas.drawBitmap(barcode, 8, 8, null);
-        if (qr != null) canvas.drawBitmap(qr, layout.qrLeft, 8, null);
+        if (qr != null) canvas.drawBitmap(qr, qrLeft, 8, null);
 
         android.graphics.Paint textPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         textPaint.setColor(android.graphics.Color.BLACK);
         textPaint.setTextSize(layout.textSize);
         textPaint.setTypeface(android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.NORMAL));
         android.graphics.Paint.FontMetrics fontMetrics = textPaint.getFontMetrics();
-        for (String line : textLines) {
-            canvas.drawText(line, layout.textLeft, y - fontMetrics.top, textPaint);
-            y += layout.lineHeight;
+        for (TextRow row : plan.rows) {
+            canvas.drawText(row.text, row.x, row.y - fontMetrics.top, textPaint);
         }
 
         String diagnostic =
@@ -897,7 +980,9 @@ public class PrintPlugin extends Plugin {
                 + ", barcode=" + bitmapSize(barcode)
                 + ", qr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
-                + ", lines=" + textLines.size()
+                + ", lines=" + plan.rows.size()
+                + ", qrAlign=" + normalizeQrAlign(qrAlign)
+                + ", textColumns=" + columns
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
     }
@@ -975,6 +1060,143 @@ public class PrintPlugin extends Plugin {
         return lines;
     }
 
+    // ── 字段排版：单列/双列 + 二维码右侧区域 ─────────────────────────────────
+
+    private static final int TEXT_MARGIN = 8;
+    private static final int COLUMN_GAP = 16;
+    private static final int BESIDE_GAP = 12;
+    private static final int MIN_BESIDE_WIDTH = 80;
+
+    private static String normalizeQrAlign(String value) {
+        return "left".equalsIgnoreCase(String.valueOf(value).trim()) ? "left" : "center";
+    }
+
+    private static int normalizeTextColumns(Integer value) {
+        return value != null && value >= 2 ? 2 : 1;
+    }
+
+    private static final class TextRow {
+        final String text;
+        final int x;
+        final int y;
+
+        TextRow(String text, int x, int y) {
+            this.text = text;
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    private static final class FieldTextPlan {
+        final List<TextRow> rows = new ArrayList<>();
+        int bottomY = 0;
+    }
+
+    private static int columnWrapUnits(int baseWrapUnits, int columnWidth) {
+        int fullWidth = GenericLabelLayout.LABEL_WIDTH - 2 * TEXT_MARGIN;
+        return Math.max(6, (int) Math.round(baseWrapUnits * (double) Math.max(0, columnWidth) / fullWidth));
+    }
+
+    /**
+     * 统一规划字段文本落位：
+     * - besideEnabled（二维码靠左时）：先在二维码右侧窄列（单列）逐字段排放，放不下的字段转入下方；
+     * - 下方区域按 columns 列排版：1 列保持原有整段换行行为；2 列时字段行序配对（第 1、2 个并排第一行，依此类推）；
+     * - 返回每行文本的绝对坐标及内容底部 y，供各标签构建器摆放。
+     */
+    private static FieldTextPlan planFieldText(
+        String textValue,
+        int columns,
+        boolean besideEnabled,
+        int besideX,
+        int besideWidth,
+        int besideRowCapacity,
+        int besideStartY,
+        int belowStartY,
+        int lineHeight,
+        int baseWrapUnits,
+        int textLeft
+    ) {
+        FieldTextPlan plan = new FieldTextPlan();
+        List<String> fields = new ArrayList<>();
+        if (textValue != null && !textValue.trim().isEmpty()) {
+            for (String raw : textValue.replace("\r", "").split("\n")) {
+                fields.add(raw == null ? "" : raw.trim());
+            }
+        }
+        List<String> remaining = fields;
+        int belowY = belowStartY;
+
+        // 二维码右侧窄列：逐字段排放，某个字段放不下时整体留给下方
+        if (besideEnabled && !fields.isEmpty() && besideRowCapacity > 0 && besideWidth >= MIN_BESIDE_WIDTH) {
+            int besideUnits = columnWrapUnits(baseWrapUnits, besideWidth);
+            int usedRows = 0;
+            int index = 0;
+            while (index < fields.size()) {
+                List<String> wrapped = wrapPlainText(fields.get(index), besideUnits);
+                if (wrapped.isEmpty()) {
+                    wrapped = new ArrayList<>();
+                    wrapped.add("");
+                }
+                if (usedRows + wrapped.size() > besideRowCapacity) break;
+                for (String line : wrapped) {
+                    plan.rows.add(new TextRow(line, besideX, besideStartY + usedRows * lineHeight));
+                    usedRows++;
+                }
+                index++;
+            }
+            if (index >= fields.size()) {
+                remaining = new ArrayList<>();
+            } else if (index > 0) {
+                remaining = new ArrayList<>(fields.subList(index, fields.size()));
+            }
+        }
+
+        if (columns >= 2) {
+            // 双列：行序配对，左右字段各自在半宽内换行，行高取两者最大值
+            int halfWidth = (GenericLabelLayout.LABEL_WIDTH - 2 * TEXT_MARGIN - COLUMN_GAP) / 2;
+            int halfUnits = columnWrapUnits(baseWrapUnits, halfWidth);
+            int col1X = TEXT_MARGIN;
+            int col2X = TEXT_MARGIN + halfWidth + COLUMN_GAP;
+            int y = belowY;
+            int index = 0;
+            while (index < remaining.size()) {
+                List<String> left = wrapPlainText(remaining.get(index), halfUnits);
+                if (left.isEmpty()) {
+                    left = new ArrayList<>();
+                    left.add("");
+                }
+                List<String> right = new ArrayList<>();
+                if (index + 1 < remaining.size()) {
+                    right = wrapPlainText(remaining.get(index + 1), halfUnits);
+                    if (right.isEmpty()) {
+                        right = new ArrayList<>();
+                        right.add("");
+                    }
+                }
+                int height = Math.max(left.size(), right.size());
+                for (int k = 0; k < left.size(); k++) {
+                    plan.rows.add(new TextRow(left.get(k), col1X, y + k * lineHeight));
+                }
+                for (int k = 0; k < right.size(); k++) {
+                    plan.rows.add(new TextRow(right.get(k), col2X, y + k * lineHeight));
+                }
+                y += height * lineHeight;
+                index += 2;
+            }
+            plan.bottomY = y;
+        } else {
+            // 单列：保持原有整段换行行为
+            List<String> lines = wrapPlainText(String.join("\n", remaining), baseWrapUnits);
+            int y = belowY;
+            for (String line : lines) {
+                plan.rows.add(new TextRow(line, textLeft, y));
+                y += lineHeight;
+            }
+            plan.bottomY = y;
+        }
+        return plan;
+    }
+
     /**
      * 批次标签（一维码）
      * 布局 384×644：条码放大，文字略缩小；机器/日期分行；品类支持换行；
@@ -989,6 +1211,7 @@ public class PrintPlugin extends Plugin {
         String date        = getCallString(call, "date");
         String periodLabel = getCallString(call, "periodLabel");
         String laneNo      = getCallString(call, "laneNo");
+        Integer textColumns = getCallOptionalInt(call, "textColumns");
 
         if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
 
@@ -1013,6 +1236,8 @@ public class PrintPlugin extends Plugin {
                     String.join("\n", lines),
                     LAYOUT_STANDARD,
                     null,
+                    null,
+                    textColumns,
                     "printBatchLabel"
                 );
                 emitPrintDiagnostic(
@@ -1040,6 +1265,8 @@ public class PrintPlugin extends Plugin {
     public void printMachineQR(PluginCall call) {
         String machineId = call.getString("machineId", "");
         Integer qrSize = getCallOptionalInt(call, "qrSize");
+        String qrAlign = getCallString(call, "qrAlign");
+        Integer textColumns = getCallOptionalInt(call, "textColumns");
 
         if (machineId.isEmpty()) { call.reject("machineId is required"); return; }
 
@@ -1055,6 +1282,8 @@ public class PrintPlugin extends Plugin {
                     "机 器：" + machineId + "\n打印：" + printTime,
                     "large",
                     qrSize,
+                    qrAlign,
+                    textColumns,
                     "printMachineQR"
                 );
                 emitPrintDiagnostic("printMachineQR", builtLabel.diagnostic + ", machineId=" + machineId);
@@ -1074,6 +1303,8 @@ public class PrintPlugin extends Plugin {
      * - qrCodeValue: 二维码内容
      * - textValue: 多行正文，支持换行
      * - qrSize: 二维码边长（打印点数），可选，缺省约 154 点（画布宽 40%）
+     * - qrAlign: 二维码水平对齐，center（默认）/ left；靠左时右侧空白区放字段
+     * - textColumns: 字段列数，1（默认）/ 2；双列时字段行序配对并排
      */
     @PluginMethod
     public void printLabel(PluginCall call) {
@@ -1083,6 +1314,8 @@ public class PrintPlugin extends Plugin {
         String paperType = normalizePaperType(getCallString(call, "paperType"));
         String layoutPreset = getCallString(call, "layoutPreset");
         Integer qrSize = getCallOptionalInt(call, "qrSize");
+        String qrAlign = getCallString(call, "qrAlign");
+        Integer textColumns = getCallOptionalInt(call, "textColumns");
 
         if (barcodeValue.isEmpty() && qrCodeValue.isEmpty() && textValue.trim().isEmpty()) {
             call.reject("printLabel requires barcodeValue, qrCodeValue or textValue");
@@ -1099,6 +1332,8 @@ public class PrintPlugin extends Plugin {
                     textValue,
                     layoutPreset,
                     qrSize,
+                    qrAlign,
+                    textColumns,
                     "printLabelPluginLegacy"
                 );
                 emitPrintDiagnostic(

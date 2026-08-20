@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 72,
+  "currentVersionCode": 73,
   "releases": [
+    {
+      "versionCode": 73,
+      "versionName": "1.2.64",
+      "apkFileName": "kaihang-scanner-v1.2.64-73.apk",
+      "changelog": "打印字段支持单列/双列，二维码支持居中/靠左，靠左时右侧空白区展示字段",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.64 (73)",
+        "打印字段支持单列/双列，二维码支持居中/靠左，靠左时右侧空白区展示字段"
+      ]
+    },
     {
       "versionCode": 72,
       "versionName": "1.2.63",
