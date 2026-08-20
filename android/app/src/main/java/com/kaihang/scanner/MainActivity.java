@@ -1697,6 +1697,11 @@ public class MainActivity extends BridgeActivity {
     };
 
     private void appendNativeLog(String message) {
+        // 原生日志默认不记录：详细运行日志开关关闭时静默丢弃（真零日志）；
+        // 打开开关后才写入环形缓冲（200 条上限），供运行日志窗口查看与导出
+        if (!isVerboseRuntimeLoggingEnabled()) {
+            return;
+        }
         String line = "[" + NATIVE_LOG_TIME_FORMAT.get().format(new java.util.Date()) + "] " + message;
         nativeLogLines.add(line);
         if (nativeLogLines.size() > 200) {
@@ -1712,7 +1717,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     // verbose 开关 5 秒缓存：每条 console 消息都会查一次，避免每次都全量读取 SharedPreferences 配置
-    private volatile boolean cachedVerboseLogs = true;
+    private volatile boolean cachedVerboseLogs = false;
     private volatile long cachedVerboseLogsAt = 0L;
 
     private boolean isVerboseRuntimeLoggingEnabled() {
