@@ -1,6 +1,21 @@
 {
-  "currentVersionCode": 73,
+  "currentVersionCode": 74,
   "releases": [
+    {
+      "versionCode": 74,
+      "versionName": "1.2.65",
+      "apkFileName": "kaihang-scanner-v1.2.65-74.apk",
+      "changelog": "打印模板占位符支持宽度对齐/字号/底部居中，二维码靠左时右侧字段垂直居中、下方间距减半",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.65 (74)",
+        "打印文本模板占位符扩展：{field:<W} 左对齐宽度、{field:>W} 右对齐宽度、{field|S} 指定行字号、{field|bottom} 贴标签底部水平居中，可用 | 组合如 {field:<10|bottom|34}，宽度按半角计（中文算 2）",
+        "表格打印 text_template 索引占位符支持 {N:<W}/{N|S}/{N|bottom}（带格式从 0 计数），旧 {N} 保持从 1 计数不变",
+        "二维码靠左（qrAlign=left）时：右侧字段整列相对二维码垂直居中；二维码与下方字段间距减半，标签更紧凑",
+        "打印 payload 支持 qrAlign（center/left）、textColumns（1/2）、textStyles（行样式 JSON，由占位符语法自动生成）",
+        "动作表 options 对应配置项：qr_align、text_columns"
+      ]
+    },
     {
       "versionCode": 73,
       "versionName": "1.2.64",
