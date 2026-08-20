@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 82,
+  "currentVersionCode": 83,
   "releases": [
+    {
+      "versionCode": 83,
+      "versionName": "1.2.74",
+      "apkFileName": "kaihang-scanner-v1.2.74-83.apk",
+      "changelog": "纯二维码标签高度改为按内容自适应，二维码上移贴近顶部，去除二维码与文字间多余空白",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.74 (83)",
+        "纯二维码标签高度改为按内容自适应，二维码上移贴近顶部，去除二维码与文字间多余空白"
+      ]
+    },
     {
       "versionCode": 82,
       "versionName": "1.2.73",
@@ -962,7 +973,7 @@
   ],
   "pending": {
     "notes": [
-      "纯二维码标签高度改为按内容自适应，二维码上移贴近顶部，去除二维码与文字间多余空白"
+      "表格批量打印支持勾选：勾了行只打勾选的，没勾打印全部"
     ]
   }
 }
