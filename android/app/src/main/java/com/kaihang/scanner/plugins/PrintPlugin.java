@@ -349,7 +349,8 @@ public class PrintPlugin extends Plugin {
             builder.addBmp(qr, qrLeft, qrTop);
         }
         for (TextRow row : plan.rows) {
-            builder.addText(row.text, row.size > 0 ? row.size : layout.textSize, row.x, row.y);
+            int textSize = row.size > 0 ? row.size : layout.textSize;
+            builder.addText(row.text, textSize, row.x, textBaselineY(row.y, textSize));
         }
 
         Bitmap label = builder.getBitmap();
@@ -920,7 +921,8 @@ public class PrintPlugin extends Plugin {
             builder.addBmp(qr, qrLeft, 8);
         }
         for (TextRow row : plan.rows) {
-            builder.addText(row.text, row.size > 0 ? row.size : layout.textSize, row.x, row.y);
+            int textSize = row.size > 0 ? row.size : layout.textSize;
+            builder.addText(row.text, textSize, row.x, textBaselineY(row.y, textSize));
         }
 
         Bitmap label = builder.getBitmap();
@@ -1069,6 +1071,18 @@ public class PrintPlugin extends Plugin {
         synchronized (TEXT_MEASURE_PAINT) {
             TEXT_MEASURE_PAINT.setTextSize(textSize);
             return (int) Math.ceil(TEXT_MEASURE_PAINT.measureText(text));
+        }
+    }
+
+    /**
+     * SDK AbsoluteLayoutBitmap.addText 的 y 参数是文字基线（直接传给 Canvas.drawText），
+     * 而 TextRow.y 语义是行顶部。此方法把行顶部坐标换算成基线坐标，
+     * 使实纸渲染与预览（drawText 用 y - fontMetrics.top）完全同基准。
+     */
+    private static int textBaselineY(int topY, int textSize) {
+        synchronized (TEXT_MEASURE_PAINT) {
+            TEXT_MEASURE_PAINT.setTextSize(textSize);
+            return topY - (int) Math.ceil(TEXT_MEASURE_PAINT.getFontMetrics().top);
         }
     }
 
