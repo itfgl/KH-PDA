@@ -323,7 +323,7 @@ public class PrintPlugin extends Plugin {
             }
         }
         int barcodeLeft = barcode != null ? resolveCenteredMediaLeft(layout.barcodeWidth) : -1;
-        // 计算媒体内容底部位置（二维码或一维码底部），用于 bottom 字段紧贴
+        // 计算媒体内容底部位置（二维码或一维码底部），用于 center 字段紧贴
         int mediaBottom;
         if (qr != null && barcode != null) {
             mediaBottom = Math.max(qrTop + qrEffHeight, layout.barcodeTop + layout.barcodeHeight);
@@ -355,17 +355,17 @@ public class PrintPlugin extends Plugin {
         // 其他标签：保留 minHeight 约束
         int labelHeight;
         if (pureQrLabel) {
-            labelHeight = plan.bottomY + 8;
-            if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            labelHeight = plan.centerY + 8;
+            if (plan.hasCenterRows()) {
+                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
             }
         } else {
-            labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
-            if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            labelHeight = Math.max(plan.centerY + 8, layout.minHeight);
+            if (plan.hasCenterRows()) {
+                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
             }
         }
-        placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
+        placeCenterRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
         if (barcode != null) {
@@ -396,7 +396,7 @@ public class PrintPlugin extends Plugin {
                 + ", lines=" + plan.rows.size()
                 + ", qrAlign=" + normalizeQrAlign(qrAlign)
                 + ", textColumns=" + columns
-                + ", bottomLines=" + plan.bottomTexts.size()
+                + ", centerLines=" + plan.centerTexts.size()
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
     }
@@ -943,17 +943,17 @@ public class PrintPlugin extends Plugin {
         // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
         int labelHeight;
         if (pureQrLabel) {
-            labelHeight = plan.bottomY + 8;
-            if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            labelHeight = plan.centerY + 8;
+            if (plan.hasCenterRows()) {
+                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
             }
         } else {
-            labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
-            if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            labelHeight = Math.max(plan.centerY + 8, layout.minHeight);
+            if (plan.hasCenterRows()) {
+                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
             }
         }
-        placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
+        placeCenterRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
         if (barcode != null) {
@@ -978,11 +978,11 @@ public class PrintPlugin extends Plugin {
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
-                + ", bodyTop=" + plan.bottomY
+                + ", bodyTop=" + plan.centerY
                 + ", lines=" + plan.rows.size()
                 + ", qrAlign=" + normalizeQrAlign(qrAlign)
                 + ", textColumns=" + columns
-                + ", bottomLines=" + plan.bottomTexts.size()
+                + ", centerLines=" + plan.centerTexts.size()
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
     }
@@ -1053,17 +1053,17 @@ public class PrintPlugin extends Plugin {
         // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
         int labelHeight;
         if (pureQrLabel) {
-            labelHeight = plan.bottomY + 8;
-            if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            labelHeight = plan.centerY + 8;
+            if (plan.hasCenterRows()) {
+                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
             }
         } else {
-            labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
-            if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            labelHeight = Math.max(plan.centerY + 8, layout.minHeight);
+            if (plan.hasCenterRows()) {
+                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
             }
         }
-        placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
+        placeCenterRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
         Bitmap label = Bitmap.createBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight, Bitmap.Config.ARGB_8888);
         android.graphics.Canvas canvas = new android.graphics.Canvas(label);
@@ -1089,7 +1089,7 @@ public class PrintPlugin extends Plugin {
                 + ", lines=" + plan.rows.size()
                 + ", qrAlign=" + normalizeQrAlign(qrAlign)
                 + ", textColumns=" + columns
-                + ", bottomLines=" + plan.bottomTexts.size()
+                + ", centerLines=" + plan.centerTexts.size()
                 + ", source=" + diagnosticSource;
         return new BuiltLabel(label, diagnostic);
     }
@@ -1214,14 +1214,14 @@ public class PrintPlugin extends Plugin {
         }
     }
 
-    /** 单行样式：来自 H5 textStyles（占位符 |bottom / |字号 语法生成） */
+    /** 单行样式：来自 H5 textStyles（占位符 |center / |字号 语法生成） */
     private static final class LineStyle {
         final int size;      // 0 = 默认字号
-        final boolean bottom; // true = 贴标签底部水平居中
+        final boolean center; // true = 二维码下方居中显示
 
-        LineStyle(int size, boolean bottom) {
+        LineStyle(int size, boolean center) {
             this.size = size;
-            this.bottom = bottom;
+            this.center = center;
         }
     }
 
@@ -1230,7 +1230,7 @@ public class PrintPlugin extends Plugin {
     }
 
     /**
-     * 解析 H5 传来的行样式 JSON：[{"align":"left","size":30,"bottom":false},...]
+     * 解析 H5 传来的行样式 JSON：[{"align":"left","size":30,"center":false},...]
      * 与 textValue 的 \n 行一一对应，缺失或解析失败按默认样式补齐。
      */
     private static List<LineStyle> parseTextStyles(String json, int expectedLines) {
@@ -1244,7 +1244,7 @@ public class PrintPlugin extends Plugin {
                         styles.add(defaultLineStyle());
                         continue;
                     }
-                    styles.add(new LineStyle(item.optInt("size", 0), item.optBoolean("bottom", false)));
+                    styles.add(new LineStyle(item.optInt("size", 0), item.optBoolean("center", false)));
                 }
             } catch (Exception ignore) {
                 styles.clear();
@@ -1256,14 +1256,14 @@ public class PrintPlugin extends Plugin {
 
     private static final class FieldTextPlan {
         final List<TextRow> rows = new ArrayList<>();
-        /** 贴底居中行（文本、字号），由 placeBottomRows 在确定标签高度后落位 */
-        final List<LineStyle> bottomStyles = new ArrayList<>();
-        final List<String> bottomTexts = new ArrayList<>();
-        int bottomY = 0;          // 非 bottom 内容底部 y
-        int bottomBlockHeight = 0; // bottom 行总高（含行距）
+        /** 居中行（文本、字号），由 placeCenterRows 在确定标签高度后落位 */
+        final List<LineStyle> centerStyles = new ArrayList<>();
+        final List<String> centerTexts = new ArrayList<>();
+        int centerY = 0;          // 非 center 内容底部 y
+        int centerBlockHeight = 0; // center 行总高（含行距）
 
-        boolean hasBottomRows() {
-            return !bottomTexts.isEmpty();
+        boolean hasCenterRows() {
+            return !centerTexts.isEmpty();
         }
     }
 
@@ -1280,10 +1280,10 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 统一规划字段文本落位：
-     * - bottom 样式行（占位符 |bottom）收集为贴底居中行，不参与右侧/下方排版；
+     * - center 样式行（占位符 |center）收集为居中行，紧贴二维码下方；
      * - besideEnabled（二维码靠左时）：右侧窄列只放默认样式字段，整列相对二维码垂直居中，放不下的字段转入下方；
      * - 下方区域按 columns 列排版：1 列保持原有整段换行行为；2 列时字段行序配对；带字号的行按字号加高行距；
-     * - 返回每行文本的绝对坐标（含字号）及内容底部 y，bottom 行由 placeBottomRows 落位。
+     * - 返回每行文本的绝对坐标（含字号）及内容底部 y，center 行由 placeCenterRows 落位。
      */
     private static FieldTextPlan planFieldText(
         String textValue,
@@ -1310,25 +1310,25 @@ public class PrintPlugin extends Plugin {
         }
         List<LineStyle> styles = parseTextStyles(textStylesJson, fields.size());
 
-        // 分离 bottom 行与普通行（普通行保留原顺序，样式随行）
+        // 分离 center 行与普通行（普通行保留原顺序，样式随行）
         List<Integer> normalIndexes = new ArrayList<>();
         for (int i = 0; i < fields.size(); i++) {
             LineStyle style = styles.get(i);
-            if (style.bottom) {
+            if (style.center) {
                 String trimmed = fields.get(i);
                 if (!trimmed.isEmpty()) {
-                    plan.bottomTexts.add(trimmed);
-                    plan.bottomStyles.add(style);
+                    plan.centerTexts.add(trimmed);
+                    plan.centerStyles.add(style);
                 }
                 continue;
             }
             normalIndexes.add(i);
         }
-        int bottomBlockHeight = 0;
-        for (LineStyle style : plan.bottomStyles) {
-            bottomBlockHeight += styledLineHeight(lineHeight, style);
+        int centerBlockHeight = 0;
+        for (LineStyle style : plan.centerStyles) {
+            centerBlockHeight += styledLineHeight(lineHeight, style);
         }
-        plan.bottomBlockHeight = bottomBlockHeight;
+        plan.centerBlockHeight = centerBlockHeight;
 
         List<Integer> remaining = normalIndexes;
         int belowY = belowStartY;
@@ -1407,8 +1407,8 @@ public class PrintPlugin extends Plugin {
                 y += Math.max(Math.max(left.size(), right.size()), 1) * rowHeight;
                 index += 2;
             }
-            // 只有 bottom 字段：紧贴二维码/一维码底部
-            plan.bottomY = remaining.isEmpty() && plan.hasBottomRows() ? mediaBottom : y;
+            // 只有 center 字段：紧贴二维码/一维码底部
+            plan.centerY = remaining.isEmpty() && plan.hasCenterRows() ? mediaBottom : y;
         } else {
             // 单列：逐行按样式输出（保持原有整段换行行为，字号行行距加高）
             int y = belowY;
@@ -1426,25 +1426,25 @@ public class PrintPlugin extends Plugin {
                 y += lines.size() * rowHeight;
             }
             if (remaining.isEmpty()) {
-                // 只有 bottom 字段：紧贴二维码/一维码底部，无额外间距
-                plan.bottomY = plan.hasBottomRows() ? mediaBottom : belowY;
+                // 只有 center 字段：紧贴二维码/一维码底部，无额外间距
+                plan.centerY = plan.hasCenterRows() ? mediaBottom : belowY;
             } else {
-                plan.bottomY = y;
+                plan.centerY = y;
             }
         }
         return plan;
     }
 
     /**
-     * bottom 行落位：水平居中、紧跟正文行之后（不再贴标签底），
-     * 消除正文与贴底行之间被拉伸出的空白，标签高度随内容收紧。
+     * center 行落位：水平居中、紧贴二维码下方，
+     * 用户通过换行符自行控制间距。
      */
-    private static void placeBottomRows(FieldTextPlan plan, int labelHeight, int lineHeight, int defaultTextSize) {
-        if (!plan.hasBottomRows()) return;
-        int y = plan.bottomY;
-        for (int i = 0; i < plan.bottomTexts.size(); i++) {
-            LineStyle style = plan.bottomStyles.get(i);
-            String line = plan.bottomTexts.get(i);
+    private static void placeCenterRows(FieldTextPlan plan, int labelHeight, int lineHeight, int defaultTextSize) {
+        if (!plan.hasCenterRows()) return;
+        int y = plan.centerY;
+        for (int i = 0; i < plan.centerTexts.size(); i++) {
+            LineStyle style = plan.centerStyles.get(i);
+            String line = plan.centerTexts.get(i);
             int size = style.size > 0 ? style.size : defaultTextSize;
             int x = Math.max(0, (GenericLabelLayout.LABEL_WIDTH - estimateTextWidth(line, size)) / 2);
             plan.rows.add(new TextRow(line, x, y, style.size));
