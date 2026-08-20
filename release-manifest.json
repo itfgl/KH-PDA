@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 94,
+  "currentVersionCode": 95,
   "releases": [
+    {
+      "versionCode": 95,
+      "versionName": "1.2.86",
+      "apkFileName": "kaihang-scanner-v1.2.86-95.apk",
+      "changelog": "原生日志也默认不记录，打开详细日志开关后才会写入运行日志",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.86 (95)",
+        "原生日志也默认不记录，打开详细日志开关后才会写入运行日志",
+        "高级选项默认只显示开关名，点小眼睛才展开每项详细说明"
+      ]
+    },
     {
       "versionCode": 94,
       "versionName": "1.2.85",
@@ -1097,8 +1109,7 @@
   ],
   "pending": {
     "notes": [
-      "原生日志也默认不记录，打开详细日志开关后才会写入运行日志",
-      "高级选项默认只显示开关名，点小眼睛才展开每项详细说明"
+      "黑标贴纸二维码顶部留空收紧：内容整体上移约1毫米，贴纸利用更充分"
     ]
   }
 }

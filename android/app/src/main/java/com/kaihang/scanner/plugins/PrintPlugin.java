@@ -401,8 +401,9 @@ public class PrintPlugin extends Plugin {
     private static void printBuiltLabel(Bitmap label, String paperType, String jobName) {
         String normalizedPaperType = normalizePaperType(paperType);
         if (PAPER_BLACK_MARK.equals(normalizedPaperType)) {
-            // 黑标纸靠标签物理定位，保持原有 setTop 行为
-            Printer.print(new BitmapData(label, 15, 0), 8, jobName, false);
+            // 黑标纸：同样裁顶 8 点抵消 SDK 强制 setTop(8)，二维码顶部留空从 ~20 点收紧到 ~12 点
+            Bitmap printable = cropTopOffset(label);
+            Printer.print(new BitmapData(printable, 15, 0), 8, jobName, false);
         } else {
             // 热敏纸：裁顶抵消 SDK 强制 setTop(8)，实纸与预览对齐
             Bitmap printable = cropTopOffset(label);
