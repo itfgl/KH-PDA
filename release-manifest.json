@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 102,
+  "currentVersionCode": 103,
   "releases": [
+    {
+      "versionCode": 103,
+      "versionName": "1.2.94",
+      "apkFileName": "kaihang-scanner-v1.2.94-103.apk",
+      "changelog": "模板开头结尾的空行不再被吞掉；二维码靠左时右侧字段按内容真正垂直居中，开头空行可下移起始位置",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.94 (103)",
+        "模板开头结尾的空行不再被吞掉；二维码靠左时右侧字段按内容真正垂直居中，开头空行可下移起始位置"
+      ]
+    },
     {
       "versionCode": 102,
       "versionName": "1.2.93",
@@ -1188,7 +1199,7 @@
   ],
   "pending": {
     "notes": [
-      "模板开头结尾的空行不再被吞掉；二维码靠左时右侧字段按内容真正垂直居中，开头空行可下移起始位置"
+      "二维码靠左时右侧字段改为从二维码顶部开始排，位置用模板开头空行自己控制"
     ]
   }
 }
