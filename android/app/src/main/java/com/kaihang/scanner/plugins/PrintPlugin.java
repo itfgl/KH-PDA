@@ -1419,11 +1419,12 @@ public class PrintPlugin extends Plugin {
     }
 
     /**
-     * 在标签高度确定后为 bottom 行落位：水平居中、贴标签底部，多行依次向上。
+     * bottom 行落位：水平居中、紧跟正文行之后（不再贴标签底），
+     * 消除正文与贴底行之间被拉伸出的空白，标签高度随内容收紧。
      */
     private static void placeBottomRows(FieldTextPlan plan, int labelHeight, int lineHeight, int defaultTextSize) {
         if (!plan.hasBottomRows()) return;
-        int y = labelHeight - 4 - plan.bottomBlockHeight;
+        int y = plan.bottomY;
         for (int i = 0; i < plan.bottomTexts.size(); i++) {
             LineStyle style = plan.bottomStyles.get(i);
             String line = plan.bottomTexts.get(i);

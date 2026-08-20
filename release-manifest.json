@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 96,
+  "currentVersionCode": 97,
   "releases": [
+    {
+      "versionCode": 97,
+      "versionName": "1.2.88",
+      "apkFileName": "kaihang-scanner-v1.2.88-97.apk",
+      "changelog": "修复二维码居中打印时与下方文字间空白过大：按二维码实际大小排字，居中和靠左间距一致",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.88 (97)",
+        "修复二维码居中打印时与下方文字间空白过大：按二维码实际大小排字，居中和靠左间距一致"
+      ]
+    },
     {
       "versionCode": 96,
       "versionName": "1.2.87",
@@ -1120,7 +1131,8 @@
   ],
   "pending": {
     "notes": [
-      "修复二维码居中打印时与下方文字间空白过大：按二维码实际大小排字，居中和靠左间距一致"
+      "修复黑标贴纸先出一张空白再出内容的问题",
+      "贴纸底部字段改为紧跟内容排列，不再贴底拉伸，消除中间大段空白"
     ]
   }
 }
