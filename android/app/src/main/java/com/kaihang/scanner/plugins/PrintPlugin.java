@@ -297,14 +297,18 @@ public class PrintPlugin extends Plugin {
         if (barcode != null) {
             bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
         }
+        // 二维码实际位图高度：SDK 生成的 QR 可能小于请求尺寸（内容短/版本低），
+        // 布局必须按实际高度预留，否则居中模式下二维码与下方字段间出现大片空白
+        int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
+        int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
         if (qr != null) {
             // 纯二维码标签：二维码紧贴顶部（12 点），减少上方空白
             // 同时存在一维码时：接在一维码之后
             qrTop = barcode == null
                 ? 12
                 : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-            // 二维码与下方字段间距统一 8 点（居中/靠左一致）
-            bodyTop = Math.max(bodyTop, qrTop + layout.qrHeight + 8);
+            // 二维码与下方字段间距统一 8 点（居中/靠左一致），按实际高度计算
+            bodyTop = Math.max(bodyTop, qrTop + qrEffHeight + 8);
         }
         int qrLeft = -1;
         int besideX = 0;
@@ -312,9 +316,9 @@ public class PrintPlugin extends Plugin {
         if (qr != null) {
             qrLeft = qrLeftAligned
                 ? TEXT_MARGIN
-                : resolveCenteredMediaLeft(layout.qrWidth);
+                : resolveCenteredMediaLeft(qrEffWidth);
             if (qrLeftAligned) {
-                besideX = qrLeft + layout.qrWidth + BESIDE_GAP;
+                besideX = qrLeft + qrEffWidth + BESIDE_GAP;
                 besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
             }
         }
@@ -326,9 +330,9 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? layout.qrHeight / layout.lineHeight : 0,
+            qrLeftAligned ? qrEffHeight / layout.lineHeight : 0,
             Math.max(qrTop, 0),
-            layout.qrHeight,
+            qrEffHeight,
             bodyTop,
             layout.lineHeight,
             layout.wrapUnits,
@@ -891,15 +895,19 @@ public class PrintPlugin extends Plugin {
         boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
         boolean pureQrLabel = barcode == null && qr != null;
         int qrLeft = qrLeftAligned ? TEXT_MARGIN : layout.qrLeft;
+        // 二维码实际位图尺寸参与布局：SDK 生成的 QR 可能小于请求尺寸，按实际值预留
+        int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
+        int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
+        if (qrLeftAligned) qrLeft = TEXT_MARGIN;
         int besideX = 0;
         int besideWidth = 0;
         if (qrLeftAligned) {
-            besideX = qrLeft + layout.qrWidth + BESIDE_GAP;
+            besideX = qrLeft + qrEffWidth + BESIDE_GAP;
             besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
         }
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
-        if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
+        if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + qrEffHeight);
         // 二维码与下方字段间距统一 8 点（居中/靠左一致）；一维码标签保持 24
         int belowGap = qr != null ? 8 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
@@ -910,9 +918,9 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? layout.qrHeight / layout.lineHeight : 0,
+            qrLeftAligned ? qrEffHeight / layout.lineHeight : 0,
             8,
-            layout.qrHeight,
+            qrEffHeight,
             belowStartY,
             layout.lineHeight,
             layout.wrapUnits,
@@ -996,16 +1004,19 @@ public class PrintPlugin extends Plugin {
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
         boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
         boolean pureQrLabel = barcode == null && qr != null;
+        // 实际位图尺寸参与布局，与实纸打印保持一致
+        int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
+        int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
         int qrLeft = qrLeftAligned ? TEXT_MARGIN : layout.qrLeft;
         int besideX = 0;
         int besideWidth = 0;
         if (qrLeftAligned) {
-            besideX = qrLeft + layout.qrWidth + BESIDE_GAP;
+            besideX = qrLeft + qrEffWidth + BESIDE_GAP;
             besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
         }
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
-        if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + layout.qrHeight);
+        if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + qrEffHeight);
         // 二维码与下方字段间距统一 8 点（居中/靠左一致），与实纸打印一致；一维码标签保持 24
         int belowGap = qr != null ? 8 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
@@ -1016,9 +1027,9 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? layout.qrHeight / layout.lineHeight : 0,
+            qrLeftAligned ? qrEffHeight / layout.lineHeight : 0,
             8,
-            layout.qrHeight,
+            qrEffHeight,
             belowStartY,
             layout.lineHeight,
             layout.wrapUnits,

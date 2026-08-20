@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 95,
+  "currentVersionCode": 96,
   "releases": [
+    {
+      "versionCode": 96,
+      "versionName": "1.2.87",
+      "apkFileName": "kaihang-scanner-v1.2.87-96.apk",
+      "changelog": "黑标贴纸二维码顶部留空收紧：内容整体上移约1毫米，贴纸利用更充分",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.87 (96)",
+        "黑标贴纸二维码顶部留空收紧：内容整体上移约1毫米，贴纸利用更充分"
+      ]
+    },
     {
       "versionCode": 95,
       "versionName": "1.2.86",
@@ -1109,7 +1120,7 @@
   ],
   "pending": {
     "notes": [
-      "黑标贴纸二维码顶部留空收紧：内容整体上移约1毫米，贴纸利用更充分"
+      "修复二维码居中打印时与下方文字间空白过大：按二维码实际大小排字，居中和靠左间距一致"
     ]
   }
 }
