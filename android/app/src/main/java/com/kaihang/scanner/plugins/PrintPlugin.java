@@ -335,9 +335,9 @@ public class PrintPlugin extends Plugin {
             resolveLeftAlignedTextLeft(),
             textStylesJson
         );
-        int labelHeight = Math.max(plan.bottomY + 24, layout.minHeight);
+        int labelHeight = Math.max(plan.bottomY + 12, layout.minHeight);
         if (plan.hasBottomRows()) {
-            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 24);
+            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 12);
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
@@ -907,9 +907,9 @@ public class PrintPlugin extends Plugin {
             layout.textLeft,
             textStylesJson
         );
-        int labelHeight = Math.max(plan.bottomY + 16, layout.minHeight);
+        int labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
         if (plan.hasBottomRows()) {
-            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 16);
+            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
@@ -1003,9 +1003,9 @@ public class PrintPlugin extends Plugin {
             layout.textLeft,
             textStylesJson
         );
-        int labelHeight = Math.max(plan.bottomY + 16, layout.minHeight);
+        int labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
         if (plan.hasBottomRows()) {
-            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 16);
+            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
@@ -1381,7 +1381,7 @@ public class PrintPlugin extends Plugin {
      */
     private static void placeBottomRows(FieldTextPlan plan, int labelHeight, int lineHeight, int defaultTextSize) {
         if (!plan.hasBottomRows()) return;
-        int y = labelHeight - 8 - plan.bottomBlockHeight;
+        int y = labelHeight - 4 - plan.bottomBlockHeight;
         for (int i = 0; i < plan.bottomTexts.size(); i++) {
             LineStyle style = plan.bottomStyles.get(i);
             String line = plan.bottomTexts.get(i);
