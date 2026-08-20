@@ -145,7 +145,7 @@ final class NativeSettingsDialog {
         root.addView(layoutSpinner);
         root.addView(advancedToggle);
         root.addView(advancedBox);
-        advancedBox.addView(createSectionLabel(activity, "调试与功能开关"));
+        createDetailToggle(activity, advancedBox);
 
         TextView note = new TextView(activity);
         note.setText("保存后写入 Android 本地并重启加载。高级选项仅排障用，日常保持默认即可；改错会导致扫码打印失效。");
@@ -161,6 +161,7 @@ final class NativeSettingsDialog {
             .setNegativeButton("关闭", null)
             .setNeutralButton("恢复默认", null)
             .create();
+        dialog.setOnDismissListener(d -> detailModeSummaries.clear());
         dialog.setOnShowListener(ignored -> {
             // 恢复默认：只把输入区填回默认值，不关闭弹窗、不立即生效，误改地址后一键还原
             dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
@@ -207,6 +208,7 @@ final class NativeSettingsDialog {
             );
             callbacks.onSave(values);
             dialog.dismiss();
+            detailModeSummaries.clear();
         });
         });
         dialog.show();
@@ -249,6 +251,9 @@ final class NativeSettingsDialog {
         return scrollView;
     }
 
+    /** 开关行：说明文字默认隐藏，由 detailMode 列表统一控制显隐（小眼睛切换） */
+    private static final java.util.List<TextView> detailModeSummaries = new java.util.ArrayList<>();
+
     private static SwitchCompat createSwitchRow(Activity activity, LinearLayout root, String title, String summary) {
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
@@ -270,6 +275,8 @@ final class NativeSettingsDialog {
         summaryView.setTextSize(12);
         summaryView.setTextColor(Color.parseColor("#667085"));
         summaryView.setPadding(0, dp(activity, 4), dp(activity, 12), 0);
+        summaryView.setVisibility(android.view.View.GONE);
+        detailModeSummaries.add(summaryView);
 
         textWrap.addView(titleView);
         textWrap.addView(summaryView);
@@ -281,6 +288,38 @@ final class NativeSettingsDialog {
         row.addView(toggle);
         root.addView(row);
         return toggle;
+    }
+
+    /** 小眼睛开关：整组切换所有开关行的详细说明显隐，默认隐藏 */
+    private static android.widget.ImageButton createDetailToggle(Activity activity, LinearLayout advancedBox) {
+        LinearLayout head = new LinearLayout(activity);
+        head.setOrientation(LinearLayout.HORIZONTAL);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView label = createSectionLabel(activity, "调试与功能开关");
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        label.setLayoutParams(labelParams);
+
+        android.widget.ImageButton eye = new android.widget.ImageButton(activity);
+        eye.setImageResource(android.R.drawable.ic_menu_view);
+        eye.setBackground(null);
+        eye.setColorFilter(Color.parseColor("#667085"));
+        eye.setContentDescription("显示/隐藏详细说明");
+        LinearLayout.LayoutParams eyeParams = new LinearLayout.LayoutParams(dp(activity, 36), dp(activity, 36));
+        eye.setLayoutParams(eyeParams);
+
+        head.addView(label);
+        head.addView(eye);
+        advancedBox.addView(head);
+
+        eye.setOnClickListener(v -> {
+            boolean show = detailModeSummaries.isEmpty() || detailModeSummaries.get(0).getVisibility() != android.view.View.VISIBLE;
+            for (TextView summary : detailModeSummaries) {
+                summary.setVisibility(show ? android.view.View.VISIBLE : android.view.View.GONE);
+            }
+            eye.setColorFilter(show ? Color.parseColor("#1570EF") : Color.parseColor("#667085"));
+        });
+        return eye;
     }
 
     private static int dp(Activity activity, int value) {
