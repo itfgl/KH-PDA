@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 97,
+  "currentVersionCode": 98,
   "releases": [
+    {
+      "versionCode": 98,
+      "versionName": "1.2.89",
+      "apkFileName": "kaihang-scanner-v1.2.89-98.apk",
+      "changelog": "修复黑标贴纸先出一张空白再出内容的问题",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.89 (98)",
+        "修复黑标贴纸先出一张空白再出内容的问题",
+        "贴纸底部字段改为紧跟内容排列，不再贴底拉伸，消除中间大段空白"
+      ]
+    },
     {
       "versionCode": 97,
       "versionName": "1.2.88",
@@ -1131,8 +1143,7 @@
   ],
   "pending": {
     "notes": [
-      "修复黑标贴纸先出一张空白再出内容的问题",
-      "贴纸底部字段改为紧跟内容排列，不再贴底拉伸，消除中间大段空白"
+      "黑标贴纸间距收紧：二维码顶部留白从12点减到8点，二维码与下方文字间距从8点减到4点，贴纸利用率更高"
     ]
   }
 }

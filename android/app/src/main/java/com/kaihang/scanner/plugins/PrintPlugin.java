@@ -302,13 +302,13 @@ public class PrintPlugin extends Plugin {
         int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
         int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
         if (qr != null) {
-            // 纯二维码标签：二维码紧贴顶部（12 点），减少上方空白
+            // 纯二维码标签：二维码紧贴顶部（8 点），减少上方空白
             // 同时存在一维码时：接在一维码之后
             qrTop = barcode == null
-                ? 12
+                ? 8
                 : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-            // 二维码与下方字段间距统一 8 点（居中/靠左一致），按实际高度计算
-            bodyTop = Math.max(bodyTop, qrTop + qrEffHeight + 8);
+            // 二维码与下方字段间距收紧到 4 点（居中/靠左一致），按实际高度计算
+            bodyTop = Math.max(bodyTop, qrTop + qrEffHeight + 4);
         }
         int qrLeft = -1;
         int besideX = 0;
@@ -343,14 +343,14 @@ public class PrintPlugin extends Plugin {
         // 其他标签：保留 minHeight 约束
         int labelHeight;
         if (pureQrLabel) {
-            labelHeight = plan.bottomY + 12;
+            labelHeight = plan.bottomY + 8;
             if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 12);
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
             }
         } else {
-            labelHeight = Math.max(plan.bottomY + 12, layout.minHeight);
+            labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
             if (plan.hasBottomRows()) {
-                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 12);
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
             }
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
@@ -908,8 +908,8 @@ public class PrintPlugin extends Plugin {
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + qrEffHeight);
-        // 二维码与下方字段间距统一 8 点（居中/靠左一致）；一维码标签保持 24
-        int belowGap = qr != null ? 8 : 24;
+        // 二维码与下方字段间距收紧到 4 点（居中/靠左一致）；一维码标签保持 24
+        int belowGap = qr != null ? 4 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
 
         FieldTextPlan plan = planFieldText(
@@ -1017,8 +1017,8 @@ public class PrintPlugin extends Plugin {
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + qrEffHeight);
-        // 二维码与下方字段间距统一 8 点（居中/靠左一致），与实纸打印一致；一维码标签保持 24
-        int belowGap = qr != null ? 8 : 24;
+        // 二维码与下方字段间距收紧到 4 点（居中/靠左一致），与实纸打印保持一致；一维码标签保持 24
+        int belowGap = qr != null ? 4 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
 
         FieldTextPlan plan = planFieldText(
