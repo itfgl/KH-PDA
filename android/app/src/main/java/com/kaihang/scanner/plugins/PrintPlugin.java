@@ -287,6 +287,8 @@ public class PrintPlugin extends Plugin {
         if (!safeQrCodeValue.isEmpty()) {
             qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
             if (qr == null) throw new IllegalStateException("qr bitmap null");
+            // 裁掉二维码位图四周白边（quiet zone），字段才能紧贴二维码黑块本身
+            qr = cropBitmapToContent(qr);
         }
 
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
@@ -307,8 +309,8 @@ public class PrintPlugin extends Plugin {
             qrTop = barcode == null
                 ? 8
                 : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-            // 二维码与下方字段间距收紧到 4 点（居中/靠左一致），按实际高度计算
-            bodyTop = Math.max(bodyTop, qrTop + qrEffHeight + 4);
+            // 二维码与下方字段零间距紧贴，需要空白由用户在模板里用换行控制
+            bodyTop = Math.max(bodyTop, qrTop + qrEffHeight);
         }
         int qrLeft = -1;
         int besideX = 0;
@@ -901,6 +903,8 @@ public class PrintPlugin extends Plugin {
         if (!safeQrCodeValue.isEmpty()) {
             qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
             if (qr == null) throw new IllegalStateException("qr bitmap null");
+            // 裁掉二维码位图四周白边（quiet zone），字段才能紧贴二维码黑块本身
+            qr = cropBitmapToContent(qr);
         }
 
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
@@ -920,8 +924,8 @@ public class PrintPlugin extends Plugin {
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + qrEffHeight);
-        // 二维码与下方字段间距收紧到 4 点（居中/靠左一致）；一维码标签保持 24
-        int belowGap = qr != null ? 4 : 24;
+        // 二维码与下方字段零间距紧贴，空白由用户模板控制；一维码标签保持 24
+        int belowGap = qr != null ? 0 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
 
         FieldTextPlan plan = planFieldText(
@@ -1013,6 +1017,8 @@ public class PrintPlugin extends Plugin {
         Bitmap qr = safeQrCodeValue.isEmpty()
             ? null
             : createPortableCode(safeQrCodeValue, BarcodeFormat.QR_CODE, layout.qrWidth, layout.qrHeight);
+        // 裁掉二维码位图四周白边（quiet zone），与实纸打印行为一致
+        if (qr != null) qr = cropBitmapToContent(qr);
 
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
         boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
@@ -1030,8 +1036,8 @@ public class PrintPlugin extends Plugin {
         int mediaBottom = 0;
         if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
         if (qr != null) mediaBottom = Math.max(mediaBottom, 8 + qrEffHeight);
-        // 二维码与下方字段间距收紧到 4 点（居中/靠左一致），与实纸打印保持一致；一维码标签保持 24
-        int belowGap = qr != null ? 4 : 24;
+        // 二维码与下方字段零间距紧贴，与实纸打印保持一致；一维码标签保持 24
+        int belowGap = qr != null ? 0 : 24;
         int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
 
         FieldTextPlan plan = planFieldText(

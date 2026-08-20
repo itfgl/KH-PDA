@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 99,
+  "currentVersionCode": 100,
   "releases": [
+    {
+      "versionCode": 100,
+      "versionName": "1.2.91",
+      "apkFileName": "kaihang-scanner-v1.2.91-100.apk",
+      "changelog": "bottom字段改为紧贴二维码底部，不再有额外留白",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.91 (100)",
+        "bottom字段改为紧贴二维码底部，不再有额外留白",
+        "占位符语法从 |bottom 改为 |center，字段在二维码下方居中显示"
+      ]
+    },
     {
       "versionCode": 99,
       "versionName": "1.2.90",
@@ -1154,8 +1166,7 @@
   ],
   "pending": {
     "notes": [
-      "bottom字段改为紧贴二维码底部，不再有额外留白",
-      "占位符语法从 |bottom 改为 |center，字段在二维码下方居中显示"
+      "字段紧贴二维码黑块本身，二维码自带白边已裁掉，需要空白自己在模板里加"
     ]
   }
 }
