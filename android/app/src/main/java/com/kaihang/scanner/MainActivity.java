@@ -61,6 +61,10 @@ public class MainActivity extends BridgeActivity {
     private int nativeControlDragStartBottomPx = 0;
     private boolean nativeControlDragging = false;
     private int nativeControlTouchSlopPx = 0;
+    // 悬浮球闲置半藏：6 秒无交互滑向最近的屏幕边缘，保留 45% 可见；任意触碰即滑回
+    private boolean nativeControlDocked = false;
+    private Runnable nativeControlDockRunnable = null;
+    private static final long NATIVE_CONTROL_DOCK_DELAY_MS = 6000L;
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
@@ -948,6 +952,7 @@ public class MainActivity extends BridgeActivity {
         nativeControlButton.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case android.view.MotionEvent.ACTION_DOWN:
+                    undockNativeControl();
                     nativeControlDragDownRawX = event.getRawX();
                     nativeControlDragDownRawY = event.getRawY();
                     nativeControlDragStartEndPx = getNativeControlMarginEndPx();
@@ -972,6 +977,7 @@ public class MainActivity extends BridgeActivity {
                 case android.view.MotionEvent.ACTION_UP:
                     boolean handledAsClick = !nativeControlDragging;
                     nativeControlDragging = false;
+                    scheduleNativeControlDock();
                     if (handledAsClick) {
                         v.performClick();
                     }
@@ -1021,6 +1027,8 @@ public class MainActivity extends BridgeActivity {
         nativeControlButton.bringToFront();
         updateNativeControlPositions();
         updateNativeStatusDot();
+        // 布局完成后启动首次闲置计时
+        nativeControlButton.post(() -> scheduleNativeControlDock());
     }
 
     private int getNativeControlMarginEndPx() {
@@ -1095,6 +1103,60 @@ public class MainActivity extends BridgeActivity {
         nativeStatusDot.setLayoutParams(dotParams);
     }
 
+    /** 闲置自动半藏：滑向最近的屏幕左右边缘，露出 45%，状态点跟随平移 */
+    private void dockNativeControl() {
+        if (nativeControlButton == null || nativeControlDocked || nativeControlOverlay == null) {
+            return;
+        }
+        int overlayWidth = nativeControlOverlay.getWidth();
+        int btnWidth = nativeControlButton.getWidth() > 0 ? nativeControlButton.getWidth() : dp(56);
+        if (overlayWidth <= 0 || btnWidth <= 0) {
+            return;
+        }
+        float visible = btnWidth * 0.45f;
+        int left = nativeControlButton.getLeft();
+        boolean nearRight = (left + btnWidth / 2f) >= overlayWidth / 2f;
+        float targetLeft = nearRight ? overlayWidth - visible : visible - btnWidth;
+        float translation = targetLeft - left;
+        nativeControlDocked = true;
+        nativeControlButton.animate().translationX(translation).setDuration(220).start();
+        if (nativeStatusDot != null) {
+            nativeStatusDot.animate().translationX(translation).setDuration(220).start();
+        }
+        appendVerboseNativeLog("悬浮球已半藏至" + (nearRight ? "右侧" : "左侧") + "边缘，点击可唤回");
+    }
+
+    /** 唤回：滑回原位并重置闲置计时 */
+    private void undockNativeControl() {
+        cancelNativeControlDockTimer();
+        if (!nativeControlDocked) {
+            return;
+        }
+        nativeControlDocked = false;
+        if (nativeControlButton != null) {
+            nativeControlButton.animate().translationX(0f).setDuration(180).start();
+        }
+        if (nativeStatusDot != null) {
+            nativeStatusDot.animate().translationX(0f).setDuration(180).start();
+        }
+    }
+
+    private void scheduleNativeControlDock() {
+        cancelNativeControlDockTimer();
+        if (nativeControlButton == null) {
+            return;
+        }
+        nativeControlDockRunnable = this::dockNativeControl;
+        nativeControlButton.postDelayed(nativeControlDockRunnable, NATIVE_CONTROL_DOCK_DELAY_MS);
+    }
+
+    private void cancelNativeControlDockTimer() {
+        if (nativeControlDockRunnable != null && nativeControlButton != null) {
+            nativeControlButton.removeCallbacks(nativeControlDockRunnable);
+        }
+        nativeControlDockRunnable = null;
+    }
+
     private android.graphics.drawable.Drawable buildNativeFabBackground() {
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
         background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
@@ -1160,6 +1222,7 @@ public class MainActivity extends BridgeActivity {
         menu.getMenu().add(0, 4, 3, "原生配置");
         menu.getMenu().add(0, 5, 4, "检查更新");
         menu.getMenu().add(0, 6, 5, "日志");
+        menu.setOnDismissListener(menu1 -> scheduleNativeControlDock());
         menu.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
             if (id == 1) {
