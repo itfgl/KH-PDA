@@ -291,16 +291,17 @@ public class PrintPlugin extends Plugin {
 
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
         boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        boolean pureQrLabel = barcode == null && qr != null;
         int bodyTop = 16;
         int qrTop = -1;
         if (barcode != null) {
             bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
         }
         if (qr != null) {
-            // 二维码单独打印时直接从标签顶部排版；同时存在一维码时再接在其后。
-            // 旧逻辑无条件使用 qrTop，导致机器二维码上方保留了一整块不存在的一维码区域。
+            // 纯二维码标签：二维码紧贴顶部（12 点），减少上方空白
+            // 同时存在一维码时：接在一维码之后
             qrTop = barcode == null
-                ? layout.barcodeTop
+                ? 12
                 : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
             // 二维码与下方字段间距统一 8 点（居中/靠左一致）
             bodyTop = Math.max(bodyTop, qrTop + layout.qrHeight + 8);
@@ -334,9 +335,19 @@ public class PrintPlugin extends Plugin {
             resolveLeftAlignedTextLeft(),
             textStylesJson
         );
-        int labelHeight = Math.max(plan.bottomY + 12, layout.minHeight);
-        if (plan.hasBottomRows()) {
-            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 12);
+        // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
+        // 其他标签：保留 minHeight 约束
+        int labelHeight;
+        if (pureQrLabel) {
+            labelHeight = plan.bottomY + 12;
+            if (plan.hasBottomRows()) {
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 12);
+            }
+        } else {
+            labelHeight = Math.max(plan.bottomY + 12, layout.minHeight);
+            if (plan.hasBottomRows()) {
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 12);
+            }
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
@@ -877,6 +888,7 @@ public class PrintPlugin extends Plugin {
 
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
         boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        boolean pureQrLabel = barcode == null && qr != null;
         int qrLeft = qrLeftAligned ? TEXT_MARGIN : layout.qrLeft;
         int besideX = 0;
         int besideWidth = 0;
@@ -906,9 +918,18 @@ public class PrintPlugin extends Plugin {
             layout.textLeft,
             textStylesJson
         );
-        int labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
-        if (plan.hasBottomRows()) {
-            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+        // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
+        int labelHeight;
+        if (pureQrLabel) {
+            labelHeight = plan.bottomY + 8;
+            if (plan.hasBottomRows()) {
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            }
+        } else {
+            labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
+            if (plan.hasBottomRows()) {
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            }
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
@@ -973,6 +994,7 @@ public class PrintPlugin extends Plugin {
 
         // 二维码靠左仅在「纯二维码标签」（无一维码）时生效，右侧空白区放字段
         boolean qrLeftAligned = qr != null && barcode == null && "left".equals(normalizeQrAlign(qrAlign));
+        boolean pureQrLabel = barcode == null && qr != null;
         int qrLeft = qrLeftAligned ? TEXT_MARGIN : layout.qrLeft;
         int besideX = 0;
         int besideWidth = 0;
@@ -1002,9 +1024,18 @@ public class PrintPlugin extends Plugin {
             layout.textLeft,
             textStylesJson
         );
-        int labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
-        if (plan.hasBottomRows()) {
-            labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+        // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
+        int labelHeight;
+        if (pureQrLabel) {
+            labelHeight = plan.bottomY + 8;
+            if (plan.hasBottomRows()) {
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            }
+        } else {
+            labelHeight = Math.max(plan.bottomY + 8, layout.minHeight);
+            if (plan.hasBottomRows()) {
+                labelHeight = Math.max(labelHeight, plan.bottomY + plan.bottomBlockHeight + 8);
+            }
         }
         placeBottomRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
