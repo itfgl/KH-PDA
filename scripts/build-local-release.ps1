@@ -1,9 +1,9 @@
 ﻿# 本地一键构建 Release APK（与 GitHub Actions 产物一致）
 # 用法：在仓库根目录执行  .\scripts\build-local-release.ps1 或双击 build-local-release.bat
-# 启动时会询问版本：
-#   回车      = 沿用当前版本重新构建（覆盖同名 APK）
-#   输入说明  = 自动升一版（versionCode+1，versionName 末位+1，如 1.2.63 -> 1.2.64）
-#              并把说明写入 release-manifest.json 的 changelog/notes
+# 版本说明机制：助手改完代码会把说明累积到 release-manifest.json 的 pending.notes，
+# 本脚本构建时询问：
+#   有待发布说明时：回车 = 升一版并写入全部待发布说明；r = 沿用当前版本重打（说明保留）
+#   无待发布说明时：回车 = 沿用当前版本重新构建；输入一行说明 = 升一版
 # 升版后记得提交推送（commit message = 新版本号），保持远端 CI 与本地一致
 # 前置条件（本机已配置好，换机器需重装）：
 #   1. JDK 21           C:\Program Files\Eclipse Adoptium\jdk-21.0.12.8-hotspot
@@ -31,18 +31,42 @@ if (-not (Test-Path (Join-Path $androidDir 'app\release.keystore'))) { throw "�
 
 $env:JAVA_HOME = $javaHome
 
-# ── 版本选择：升一版 或 沿用当前版本 ──────────────────────────────────────
+# ── 版本选择：升一版（用已写好的待发布说明）或 沿用当前版本 ────────────────
 $manifestNow = Get-Content $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $currentNow = ($manifestNow.releases | Where-Object { [int]$_.versionCode -eq [int]$manifestNow.currentVersionCode })[0]
+$pendingNotes = @()
+if ($manifestNow.pending -and $manifestNow.pending.notes) { $pendingNotes = @($manifestNow.pending.notes) }
 Write-Host ""
 Write-Host "当前版本: $($currentNow.versionName) (versionCode $($manifestNow.currentVersionCode))" -ForegroundColor Cyan
-$choice = Read-Host "回车 = 沿用当前版本重新构建；输入本次更新说明 = 自动升一版（如：修复扫码重复提交）"
-if ($choice.Trim() -ne '') {
-    node (Join-Path $repoRoot 'scripts\bump-version.mjs') $manifestPath $choice.Trim()
-    if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
-    Write-Host "已升版，本次构建新版本" -ForegroundColor Green
+$bumpScript = Join-Path $repoRoot 'scripts\bump-version.mjs'
+if ($pendingNotes.Count -gt 0) {
+    Write-Host "待发布说明（共 $($pendingNotes.Count) 条，将随新版本一起写入 changelog）:" -ForegroundColor Cyan
+    $pendingNotes | ForEach-Object { Write-Host "  - $_" }
+    Write-Host ""
+    Write-Host "回车 = 升一版并用以上说明；r = 沿用当前版本重打（说明继续保留）；也可以直接输入一行新说明覆盖" -ForegroundColor Cyan
+    $choice = Read-Host "选择"
+    if ($choice.Trim() -eq '') {
+        node $bumpScript $manifestPath '--use-pending'
+        if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
+        Write-Host "已升版并写入待发布说明" -ForegroundColor Green
+    } elseif ($choice.Trim() -eq 'r' -or $choice.Trim() -eq 'R') {
+        Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建，待发布说明保留" -ForegroundColor Yellow
+    } else {
+        node $bumpScript $manifestPath $choice.Trim()
+        if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
+        Write-Host "已升版并使用输入的说明（待发布说明仍保留在 pending 中）" -ForegroundColor Green
+    }
 } else {
-    Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建" -ForegroundColor Yellow
+    Write-Host "当前没有待发布说明" -ForegroundColor DarkGray
+    Write-Host "回车 = 沿用当前版本重新构建；输入一行说明 = 自动升一版" -ForegroundColor Cyan
+    $choice = Read-Host "选择"
+    if ($choice.Trim() -ne '') {
+        node $bumpScript $manifestPath $choice.Trim()
+        if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
+        Write-Host "已升版，本次构建新版本" -ForegroundColor Green
+    } else {
+        Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建" -ForegroundColor Yellow
+    }
 }
 
 # 代理按需启用：7890 有监听才走代理
