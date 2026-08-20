@@ -268,8 +268,8 @@ public class PrintPlugin extends Plugin {
         if (context == null) throw new IllegalArgumentException("context is required");
         String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
         String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
-        String safeTextValue = textValue == null ? "" : textValue.trim();
-        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.isEmpty()) {
+        String safeTextValue = textValue == null ? "" : textValue;
+        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
             throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
         }
 
@@ -884,8 +884,8 @@ public class PrintPlugin extends Plugin {
         if (context == null) throw new IllegalArgumentException("context is required");
         String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
         String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
-        String safeTextValue = textValue == null ? "" : textValue.trim();
-        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.isEmpty()) {
+        String safeTextValue = textValue == null ? "" : textValue;
+        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
             throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
         }
 
@@ -1006,8 +1006,8 @@ public class PrintPlugin extends Plugin {
     ) throws Exception {
         String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
         String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
-        String safeTextValue = textValue == null ? "" : textValue.trim();
-        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.isEmpty()) {
+        String safeTextValue = textValue == null ? "" : textValue;
+        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
             throw new IllegalArgumentException("preview requires barcodeValue, qrCodeValue or textValue");
         }
 
@@ -1366,8 +1366,19 @@ public class PrintPlugin extends Plugin {
                 position++;
             }
             if (position > 0) {
-                // 垂直居中：内容总高不超过二维码高度时居中起始，否则从二维码顶部开始
-                int contentHeight = usedRows * lineHeight;
+                // 开头连续空行视为用户指定的顶部偏移，不计入居中高度计算，
+                // 否则空行撑大内容高度导致居中失效变贴顶
+                int contentRows = 0;
+                int skip = 0;
+                while (skip < besideWrapped.size()
+                    && besideWrapped.get(skip).size() == 1
+                    && besideWrapped.get(skip).get(0).isEmpty()) {
+                    skip++;
+                }
+                for (int j = skip; j < besideWrapped.size(); j++) contentRows += besideWrapped.get(j).size();
+                // 垂直居中：按非空内容总高计算，不超过二维码高度时居中起始，否则从二维码顶部开始
+                // 开头空行从居中起点顺延占位（首字段 = 居中位置 + 空行数 × 行高）
+                int contentHeight = contentRows * lineHeight;
                 int startY = contentHeight < qrHeight
                     ? qrTop + Math.max(0, (qrHeight - contentHeight) / 2)
                     : qrTop;
