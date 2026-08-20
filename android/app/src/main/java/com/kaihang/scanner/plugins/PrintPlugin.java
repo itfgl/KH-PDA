@@ -343,7 +343,7 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? qrEffHeight / layout.lineHeight : 0,
+            qrLeftAligned ? 999 : 0,
             Math.max(qrTop, 0),
             qrEffHeight,
             bodyTop,
@@ -936,7 +936,7 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? qrEffHeight / layout.lineHeight : 0,
+            qrLeftAligned ? 999 : 0,
             8,
             qrEffHeight,
             belowStartY,
@@ -1051,7 +1051,7 @@ public class PrintPlugin extends Plugin {
             qrLeftAligned,
             besideX,
             besideWidth,
-            qrLeftAligned ? qrEffHeight / layout.lineHeight : 0,
+            qrLeftAligned ? 999 : 0,
             qrTopPad,
             qrEffHeight,
             belowStartY,
@@ -1271,6 +1271,7 @@ public class PrintPlugin extends Plugin {
         final List<String> centerTexts = new ArrayList<>();
         int centerY = 0;          // 非 center 内容底部 y
         int centerBlockHeight = 0; // center 行总高（含行距）
+        int besideBottom = 0;     // 右侧列内容底部 y（可延伸超过二维码底部）
 
         boolean hasCenterRows() {
             return !centerTexts.isEmpty();
@@ -1344,7 +1345,7 @@ public class PrintPlugin extends Plugin {
         int belowY = belowStartY;
 
         // 二维码右侧窄列：字段（含带字号）从二维码顶部依次往下排，
-        // 装不下（超出二维码高度）的字段及后续转入下方
+        // 不受二维码高度限制，可延伸到二维码下方右侧区域，标签高度随内容自适应
         if (besideEnabled && !normalIndexes.isEmpty() && besideRowCapacity > 0 && besideWidth > 0) {
             int besideUnits = columnWrapUnits(baseWrapUnits, besideWidth);
             List<int[]> besideRows = new ArrayList<>(); // {rowStart, rowCount, rowUnits, styleSize}
@@ -1353,7 +1354,7 @@ public class PrintPlugin extends Plugin {
             int position = 0;
             while (position < normalIndexes.size()) {
                 int fieldIndex = normalIndexes.get(position);
-                // 带字号行按实际行高折算等效行数，占用更多右侧容量
+                // 带字号行按实际行高折算等效行数，行距加高
                 int styleSize = styles.get(fieldIndex).size;
                 int rowUnits = Math.max(1, (int) Math.round((double) styledLineHeight(lineHeight, styles.get(fieldIndex)) / lineHeight));
                 List<String> wrapped = wrapPlainText(fields.get(fieldIndex), besideUnits);
@@ -1378,6 +1379,7 @@ public class PrintPlugin extends Plugin {
                         plan.rows.add(new TextRow(besideWrapped.get(i).get(k), besideX, startY + (rowStart + k * rowUnits) * lineHeight, styleSize));
                     }
                 }
+                plan.besideBottom = startY + usedRows * lineHeight;
                 remaining = normalIndexes.subList(position, normalIndexes.size());
             }
         }
@@ -1419,8 +1421,8 @@ public class PrintPlugin extends Plugin {
                 y += Math.max(Math.max(left.size(), right.size()), 1) * rowHeight;
                 index += 2;
             }
-            // 只有 center 字段：紧贴二维码/一维码底部
-            plan.centerY = remaining.isEmpty() && plan.hasCenterRows() ? mediaBottom : y;
+            // centerY 取下方内容底与右侧列底较大者，避免与右列延伸部分重叠
+            plan.centerY = Math.max(remaining.isEmpty() && plan.hasCenterRows() ? mediaBottom : y, plan.besideBottom);
         } else {
             // 单列：逐行按样式输出（保持原有整段换行行为，字号行行距加高）
             int y = belowY;
@@ -1437,11 +1439,11 @@ public class PrintPlugin extends Plugin {
                 }
                 y += lines.size() * rowHeight;
             }
+            // centerY 取下方内容底与右侧列底较大者，避免与右列延伸部分重叠
             if (remaining.isEmpty()) {
-                // 只有 center 字段：紧贴二维码/一维码底部，无额外间距
-                plan.centerY = plan.hasCenterRows() ? mediaBottom : belowY;
+                plan.centerY = Math.max(plan.hasCenterRows() ? mediaBottom : belowY, plan.besideBottom);
             } else {
-                plan.centerY = y;
+                plan.centerY = Math.max(y, plan.besideBottom);
             }
         }
         return plan;
