@@ -1622,8 +1622,16 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    // 日志时间格式线程级缓存：避免每条日志都 new SimpleDateFormat（console 高频转发时开销可观）
+    private static final ThreadLocal<java.text.SimpleDateFormat> NATIVE_LOG_TIME_FORMAT = new ThreadLocal<java.text.SimpleDateFormat>() {
+        @Override
+        protected java.text.SimpleDateFormat initialValue() {
+            return new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault());
+        }
+    };
+
     private void appendNativeLog(String message) {
-        String line = "[" + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date()) + "] " + message;
+        String line = "[" + NATIVE_LOG_TIME_FORMAT.get().format(new java.util.Date()) + "] " + message;
         nativeLogLines.add(line);
         if (nativeLogLines.size() > 200) {
             nativeLogLines.remove(0);
@@ -1637,8 +1645,17 @@ public class MainActivity extends BridgeActivity {
         appendNativeLog(message);
     }
 
+    // verbose 开关 5 秒缓存：每条 console 消息都会查一次，避免每次都全量读取 SharedPreferences 配置
+    private volatile boolean cachedVerboseLogs = true;
+    private volatile long cachedVerboseLogsAt = 0L;
+
     private boolean isVerboseRuntimeLoggingEnabled() {
-        return ClientConfigPlugin.getSavedConfig(this).optBoolean("enableVerboseLogs", true);
+        long now = System.currentTimeMillis();
+        if (now - cachedVerboseLogsAt > 5000L) {
+            cachedVerboseLogs = ClientConfigPlugin.getSavedConfig(this).optBoolean("enableVerboseLogs", true);
+            cachedVerboseLogsAt = now;
+        }
+        return cachedVerboseLogs;
     }
 
     private void showNativeSettingsDialog() {

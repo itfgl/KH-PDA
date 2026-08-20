@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 87,
+  "currentVersionCode": 88,
   "releases": [
+    {
+      "versionCode": 88,
+      "versionName": "1.2.79",
+      "apkFileName": "kaihang-scanner-v1.2.79-88.apk",
+      "changelog": "连续点打印改为排队依次出纸，上一张打完自动打下一张，不再互相干扰",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.79 (88)",
+        "连续点打印改为排队依次出纸，上一张打完自动打下一张，不再互相干扰"
+      ]
+    },
     {
       "versionCode": 87,
       "versionName": "1.2.78",
@@ -1017,7 +1028,7 @@
   ],
   "pending": {
     "notes": [
-      "连续点打印改为排队依次出纸，上一张打完自动打下一张，不再互相干扰"
+      "流畅度优化：日志改为内存缓冲批量保存，扫码打印不再卡顿"
     ]
   }
 }

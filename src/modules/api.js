@@ -320,10 +320,31 @@ async function refreshRoleRoutes() {
   }
 }
 
+// 请求超时：默认 20 秒，避免弱网下 fetch 无限挂起（可通过 opts.timeoutMs 覆盖；传 opts.signal 时以外部 signal 为准）
+const DEFAULT_TIMEOUT_MS = 20000;
+
+function withTimeout(opts = {}) {
+  const timeoutMs = Number.parseInt(opts.timeoutMs, 10);
+  const ms = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_TIMEOUT_MS;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`请求超时（${ms / 1000}s）`)), ms);
+  if (opts.signal) {
+    if (opts.signal.aborted) controller.abort(opts.signal.reason);
+    else opts.signal.addEventListener('abort', () => controller.abort(opts.signal.reason), { once: true });
+  }
+  return { signal: controller.signal, cancel: () => clearTimeout(timer) };
+}
+
 export async function apiFetch(path, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...authHeaders(), ...(opts.headers || {}) };
   const url = path.startsWith('http') ? path : `${getServerBase()}${path}`;
-  const res = await fetch(url, { ...opts, headers });
+  const timeout = withTimeout(opts);
+  let res;
+  try {
+    res = await fetch(url, { ...opts, headers, signal: timeout.signal });
+  } finally {
+    timeout.cancel();
+  }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) { logout(); notifyAuthExpired(); throw new AuthError(data.detail ?? '登录已失效'); }
   if (!res.ok) throw new Error(data.detail ?? `请求失败 ${res.status}`);
@@ -333,14 +354,21 @@ export async function apiFetch(path, opts = {}) {
 /** 用户名/密码登录，成功后持久化 token + 用户信息并返回 user */
 export async function login(username, password) {
   const authenticator = getAuthenticator() || DEFAULT_AUTHENTICATOR;
-  const res = await fetch(`${getServerBase()}/api/auth:signIn`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Authenticator': authenticator,
-    },
-    body: JSON.stringify({ account: username, password }),
-  });
+  const timeout = withTimeout({});
+  let res;
+  try {
+    res = await fetch(`${getServerBase()}/api/auth:signIn`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Authenticator': authenticator,
+      },
+      body: JSON.stringify({ account: username, password }),
+      signal: timeout.signal,
+    });
+  } finally {
+    timeout.cancel();
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.detail ?? `登录失败 ${res.status}`);
 
@@ -450,10 +478,17 @@ export async function uploadEventFile(batchNo, file) {
   const fd = new FormData();
   fd.append('batch_no', batchNo);
   fd.append('file', file);
+  // 图片上传放宽到 60 秒（压缩后仍可能有数 MB，弱网下耗时较长）
+  const timeout = withTimeout({ timeoutMs: 60000 });
   // 不要手设 Content-Type，让浏览器带上 multipart 边界；仅注入鉴权头
-  const res = await fetch(`${getServerBase()}/api/events/upload`, {
-    method: 'POST', body: fd, headers: { ...authHeaders() },
-  });
+  let res;
+  try {
+    res = await fetch(`${getServerBase()}/api/events/upload`, {
+      method: 'POST', body: fd, headers: { ...authHeaders() }, signal: timeout.signal,
+    });
+  } finally {
+    timeout.cancel();
+  }
   const data = await res.json().catch(() => ({}));
   if (res.status === 401) { logout(); notifyAuthExpired(); throw new AuthError(data.detail ?? '登录已失效'); }
   if (!res.ok) throw new Error(data.detail ?? `上传失败 ${res.status}`);
