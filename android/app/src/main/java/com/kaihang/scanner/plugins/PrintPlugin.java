@@ -374,12 +374,28 @@ public class PrintPlugin extends Plugin {
         return new BuiltLabel(label, diagnostic);
     }
 
+    /**
+     * SDK 打印内容前强制 setTop(8)（最小顶部边距 8 点，传更小也会被钳到 8），
+     * 裁掉位图顶部 8 点抵消该偏移，保证实纸内容位置与预览位图坐标一致。
+     */
+    private static final int PRINT_TOP_OFFSET = 8;
+
+    private static Bitmap cropTopOffset(Bitmap source) {
+        if (source == null || source.getHeight() <= PRINT_TOP_OFFSET) return source;
+        Bitmap cropped = Bitmap.createBitmap(source, 0, PRINT_TOP_OFFSET, source.getWidth(), source.getHeight() - PRINT_TOP_OFFSET);
+        if (cropped != source && !source.isRecycled()) source.recycle();
+        return cropped;
+    }
+
     private static void printBuiltLabel(Bitmap label, String paperType, String jobName) {
         String normalizedPaperType = normalizePaperType(paperType);
         if (PAPER_BLACK_MARK.equals(normalizedPaperType)) {
+            // 黑标纸靠标签物理定位，保持原有 setTop 行为
             Printer.print(new BitmapData(label, 15, 0), 8, jobName, false);
         } else {
-            Printer.print(new BitmapData(label, 15, false), 8, BATCH_EXTRA_FEED, jobName, false);
+            // 热敏纸：裁顶抵消 SDK 强制 setTop(8)，实纸与预览对齐
+            Bitmap printable = cropTopOffset(label);
+            Printer.print(new BitmapData(printable, 15, false), 8, BATCH_EXTRA_FEED, jobName, false);
         }
     }
 
@@ -1045,13 +1061,15 @@ public class PrintPlugin extends Plugin {
         return bitmap;
     }
 
+    /** 文本宽度测量 Paint：与 SDK AbsoluteLayoutBitmap.addText 的默认渲染基准一致 */
+    private static final android.graphics.Paint TEXT_MEASURE_PAINT = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
     private static int estimateTextWidth(String text, int textSize) {
         if (text == null || text.isEmpty()) return 0;
-        int units = 0;
-        for (int i = 0; i < text.length(); i++) {
-            units += charUnits(text.charAt(i));
+        synchronized (TEXT_MEASURE_PAINT) {
+            TEXT_MEASURE_PAINT.setTextSize(textSize);
+            return (int) Math.ceil(TEXT_MEASURE_PAINT.measureText(text));
         }
-        return Math.max(textSize * 2, (units * textSize) / 2);
     }
 
     private static int resolveCenteredTextLeft(String text, GenericLabelLayout layout) {
