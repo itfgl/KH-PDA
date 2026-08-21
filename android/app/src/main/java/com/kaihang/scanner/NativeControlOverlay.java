@@ -6,12 +6,11 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
 
 /**
- * 原生悬浮控件层：工具球（可拖拽、闲置半藏）、页面状态点、扫码胶囊按钮。
+ * 原生悬浮控件层：工具球（可拖拽、闲置半藏）、页面状态点、相机扫码图标按钮（独立拖拽）。
  * 只负责视图呈现与手势，业务决策（点击行为、扫码入口、日志）通过 Host 回调交给 MainActivity。
  */
 final class NativeControlOverlay {
@@ -22,7 +21,10 @@ final class NativeControlOverlay {
     private static final int MARGIN_BOTTOM_DP = 24;
     private static final int STATUS_DOT_OFFSET_END_DP = 2;
     private static final int STATUS_DOT_OFFSET_BOTTOM_DP = 46;
-    private static final int SCAN_BUTTON_OFFSET_BOTTOM_DP = 68;
+    // 扫码按钮独立锚点：默认停在工具球正上方（与旧版跟随位置一致），支持单独拖动
+    private static final int SCAN_BUTTON_SIZE_DP = 48;
+    private static final int SCAN_MARGIN_END_DP = MARGIN_END_DP;
+    private static final int SCAN_MARGIN_BOTTOM_DP = MARGIN_BOTTOM_DP + 68;
 
     interface Host {
         boolean isCameraScanEntryAvailable();
@@ -40,7 +42,7 @@ final class NativeControlOverlay {
     private final Host host;
 
     private ImageButton fabButton;
-    private Button scanButton;
+    private ImageButton scanButton;
     private View statusDot;
     private FrameLayout overlayContainer;
 
@@ -55,6 +57,14 @@ final class NativeControlOverlay {
     private boolean docked = false;
     private Runnable dockRunnable = null;
     private String pageReadyState = "loading";
+    // 扫码按钮独立位置与拖拽状态（不随工具球移动）
+    private int scanMarginEndPx = -1;
+    private int scanMarginBottomPx = -1;
+    private float scanDragDownRawX = 0f;
+    private float scanDragDownRawY = 0f;
+    private int scanDragStartEndPx = 0;
+    private int scanDragStartBottomPx = 0;
+    private boolean scanDragging = false;
 
     private NativeControlOverlay(Activity activity, Host host) {
         this.activity = activity;
@@ -79,8 +89,7 @@ final class NativeControlOverlay {
         boolean showCameraButton = host.isCameraScanEntryAvailable();
         scanButton.setVisibility(showCameraButton ? View.VISIBLE : View.GONE);
         if (showCameraButton) {
-            scanButton.setText("相机扫码");
-            scanButton.setBackground(buildCapsuleBackground(false));
+            scanButton.setBackground(buildCircleBackground(false));
             scanButton.bringToFront();
         } else {
             setScanActive(false);
@@ -91,8 +100,7 @@ final class NativeControlOverlay {
         if (scanButton == null) {
             return;
         }
-        scanButton.setText(host.isCameraScanEntryAvailable() ? "相机扫码" : (active ? "停扫" : "扫码"));
-        scanButton.setBackground(buildCapsuleBackground(active));
+        scanButton.setBackground(buildCircleBackground(active));
     }
 
     void scheduleDock() {
@@ -181,21 +189,54 @@ final class NativeControlOverlay {
         statusDot.setElevation(dp(12));
         statusDot.setBackground(buildStatusDotBackground("#98A2B3"));
 
-        scanButton = new Button(activity);
-        scanButton.setText("扫码");
-        scanButton.setTextSize(14);
-        scanButton.setTextColor(android.graphics.Color.WHITE);
-        scanButton.setAllCaps(false);
-        scanButton.setBackground(buildCapsuleBackground(false));
+        scanButton = new ImageButton(activity);
+        scanButton.setImageResource(android.R.drawable.ic_menu_camera);
+        scanButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        scanButton.setColorFilter(android.graphics.Color.WHITE);
+        scanButton.setContentDescription("相机扫码");
+        scanButton.setBackground(buildCircleBackground(false));
         scanButton.setVisibility(View.GONE);
         scanButton.setElevation(dp(8));
-        FrameLayout.LayoutParams scanParams = new FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            dp(44)
-        );
+        int scanSize = dp(SCAN_BUTTON_SIZE_DP);
+        FrameLayout.LayoutParams scanParams = new FrameLayout.LayoutParams(scanSize, scanSize);
         scanButton.setLayoutParams(scanParams);
-        scanButton.setPadding(dp(18), 0, dp(18), 0);
         scanButton.setOnClickListener(v -> host.onScanClick());
+        // 独立拖拽：位置不随工具球移动，拖动只更新自己的锚点
+        scanButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    scanDragDownRawX = event.getRawX();
+                    scanDragDownRawY = event.getRawY();
+                    scanDragStartEndPx = getScanMarginEndPx();
+                    scanDragStartBottomPx = getScanMarginBottomPx();
+                    scanDragging = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    float deltaX = event.getRawX() - scanDragDownRawX;
+                    float deltaY = event.getRawY() - scanDragDownRawY;
+                    if (!scanDragging) {
+                        scanDragging = Math.hypot(deltaX, deltaY) > touchSlopPx;
+                    }
+                    if (scanDragging) {
+                        int nextEnd = Math.round(scanDragStartEndPx - deltaX);
+                        int nextBottom = Math.round(scanDragStartBottomPx - deltaY);
+                        updateScanAnchor(nextEnd, nextBottom);
+                    }
+                    return true;
+                case MotionEvent.ACTION_CANCEL:
+                    scanDragging = false;
+                    return true;
+                case MotionEvent.ACTION_UP:
+                    boolean handledAsClick = !scanDragging;
+                    scanDragging = false;
+                    if (handledAsClick) {
+                        v.performClick();
+                    }
+                    return true;
+                default:
+                    return false;
+            }
+        });
 
         container.addView(statusDot);
         container.addView(scanButton);
@@ -225,40 +266,57 @@ final class NativeControlOverlay {
         return marginBottomPx;
     }
 
+    private int getScanMarginEndPx() {
+        if (scanMarginEndPx < 0) {
+            scanMarginEndPx = dp(SCAN_MARGIN_END_DP);
+        }
+        return scanMarginEndPx;
+    }
+
+    private int getScanMarginBottomPx() {
+        if (scanMarginBottomPx < 0) {
+            scanMarginBottomPx = dp(SCAN_MARGIN_BOTTOM_DP);
+        }
+        return scanMarginBottomPx;
+    }
+
     private void updateAnchor(int endPx, int bottomPx) {
-        marginEndPx = clampHorizontalMargin(endPx);
-        marginBottomPx = clampVerticalMargin(bottomPx);
-        updatePositions();
+        marginEndPx = clampMargin(endPx, true, fabButton, FAB_SIZE_DP);
+        marginBottomPx = clampMargin(bottomPx, false, fabButton, FAB_SIZE_DP);
+        updateFabPositions();
     }
 
-    private int clampHorizontalMargin(int requestedPx) {
-        int overlayWidth = overlayContainer != null ? overlayContainer.getWidth() : 0;
-        int buttonWidth = fabButton != null ? fabButton.getWidth() : 0;
-        if (overlayWidth <= 0) {
-            overlayWidth = activity.getResources().getDisplayMetrics().widthPixels;
+    private void updateScanAnchor(int endPx, int bottomPx) {
+        scanMarginEndPx = clampMargin(endPx, true, scanButton, SCAN_BUTTON_SIZE_DP);
+        scanMarginBottomPx = clampMargin(bottomPx, false, scanButton, SCAN_BUTTON_SIZE_DP);
+        updateScanPosition();
+    }
+
+    /** 按钮边距钳制：限制在 overlay 可视范围内（布局未完成时用屏幕尺寸兜底） */
+    private int clampMargin(int requestedPx, boolean horizontal, View button, int fallbackSizeDp) {
+        int overlaySize = 0;
+        if (overlayContainer != null) {
+            overlaySize = horizontal ? overlayContainer.getWidth() : overlayContainer.getHeight();
         }
-        if (buttonWidth <= 0) {
-            buttonWidth = dp(FAB_SIZE_DP);
+        if (overlaySize <= 0) {
+            overlaySize = horizontal
+                ? activity.getResources().getDisplayMetrics().widthPixels
+                : activity.getResources().getDisplayMetrics().heightPixels;
         }
-        int maxMargin = Math.max(0, overlayWidth - buttonWidth);
+        int buttonSize = 0;
+        if (button != null) {
+            buttonSize = horizontal ? button.getWidth() : button.getHeight();
+        }
+        if (buttonSize <= 0) {
+            buttonSize = dp(fallbackSizeDp);
+        }
+        int maxMargin = Math.max(0, overlaySize - buttonSize);
         return Math.max(0, Math.min(requestedPx, maxMargin));
     }
 
-    private int clampVerticalMargin(int requestedPx) {
-        int overlayHeight = overlayContainer != null ? overlayContainer.getHeight() : 0;
-        int buttonHeight = fabButton != null ? fabButton.getHeight() : 0;
-        if (overlayHeight <= 0) {
-            overlayHeight = activity.getResources().getDisplayMetrics().heightPixels;
-        }
-        if (buttonHeight <= 0) {
-            buttonHeight = dp(FAB_SIZE_DP);
-        }
-        int maxMargin = Math.max(0, overlayHeight - buttonHeight);
-        return Math.max(0, Math.min(requestedPx, maxMargin));
-    }
-
-    private void updatePositions() {
-        if (fabButton == null || scanButton == null || statusDot == null) {
+    /** 工具球与状态点共用锚点（状态点贴工具球）；扫码按钮独立锚点，互不影响 */
+    private void updateFabPositions() {
+        if (fabButton == null || statusDot == null) {
             return;
         }
         int end = getMarginEndPx();
@@ -269,15 +327,25 @@ final class NativeControlOverlay {
         fabParams.setMargins(0, 0, end, bottom);
         fabButton.setLayoutParams(fabParams);
 
-        FrameLayout.LayoutParams scanParams = (FrameLayout.LayoutParams) scanButton.getLayoutParams();
-        scanParams.gravity = Gravity.END | Gravity.BOTTOM;
-        scanParams.setMargins(0, 0, end, bottom + dp(SCAN_BUTTON_OFFSET_BOTTOM_DP));
-        scanButton.setLayoutParams(scanParams);
-
         FrameLayout.LayoutParams dotParams = (FrameLayout.LayoutParams) statusDot.getLayoutParams();
         dotParams.gravity = Gravity.END | Gravity.BOTTOM;
         dotParams.setMargins(0, 0, end + dp(STATUS_DOT_OFFSET_END_DP), bottom + dp(STATUS_DOT_OFFSET_BOTTOM_DP));
         statusDot.setLayoutParams(dotParams);
+    }
+
+    private void updateScanPosition() {
+        if (scanButton == null) {
+            return;
+        }
+        FrameLayout.LayoutParams scanParams = (FrameLayout.LayoutParams) scanButton.getLayoutParams();
+        scanParams.gravity = Gravity.END | Gravity.BOTTOM;
+        scanParams.setMargins(0, 0, getScanMarginEndPx(), getScanMarginBottomPx());
+        scanButton.setLayoutParams(scanParams);
+    }
+
+    private void updatePositions() {
+        updateFabPositions();
+        updateScanPosition();
     }
 
     /** 闲置自动半藏：滑向最近的屏幕左右边缘，露出 45%，状态点跟随平移 */
@@ -340,10 +408,9 @@ final class NativeControlOverlay {
         return background;
     }
 
-    private android.graphics.drawable.Drawable buildCapsuleBackground(boolean active) {
+    private android.graphics.drawable.Drawable buildCircleBackground(boolean active) {
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-        background.setCornerRadius(dp(22));
+        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
         background.setColor(android.graphics.Color.parseColor(active ? "#B42318" : "#1570EF"));
         return background;
     }

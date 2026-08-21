@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 110,
+  "currentVersionCode": 111,
   "releases": [
+    {
+      "versionCode": 111,
+      "versionName": "1.2.102",
+      "apkFileName": "kaihang-scanner-v1.2.102-111.apk",
+      "changelog": "修复打印按钮点了没反应的问题",
+      "releasedAt": "2026-08-21",
+      "notes": [
+        "Android 版本提升到 1.2.102 (111)",
+        "修复打印按钮点了没反应的问题"
+      ]
+    },
     {
       "versionCode": 110,
       "versionName": "1.2.101",
@@ -1281,7 +1292,7 @@
   ],
   "pending": {
     "notes": [
-      "修复打印按钮点了没反应的问题"
+      "相机扫码按钮改为相机图标，位置可单独拖动"
     ]
   }
 }
