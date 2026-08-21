@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 111,
+  "currentVersionCode": 112,
   "releases": [
+    {
+      "versionCode": 112,
+      "versionName": "1.2.103",
+      "apkFileName": "kaihang-scanner-v1.2.103-112.apk",
+      "changelog": "相机扫码按钮改为相机图标，位置可单独拖动",
+      "releasedAt": "2026-08-21",
+      "notes": [
+        "Android 版本提升到 1.2.103 (112)",
+        "相机扫码按钮改为相机图标，位置可单独拖动"
+      ]
+    },
     {
       "versionCode": 111,
       "versionName": "1.2.102",
@@ -1292,7 +1303,8 @@
   ],
   "pending": {
     "notes": [
-      "相机扫码按钮改为相机图标，位置可单独拖动"
+      "运行日志更干净：过滤网页框架自身的海量告警",
+      "优化内部代码结构，功能不变"
     ]
   }
 }

@@ -4,7 +4,7 @@
 
 ```
 APK（Capacitor 壳）
-  └─ 启动时加载 → http://115.29.178.34:2974  （服务端托管的 H5 页面）
+  └─ 启动时加载 → http://115.29.178.34:2973  （服务端托管的 H5 页面）
 
 服务端
   ├─ /static/        H5 前端文件
@@ -28,7 +28,7 @@ APK（Capacitor 壳）
   "appName": "凯航扫码",
   "webDir": "www",
   "server": {
-    "url": "http://115.29.178.34:2974",
+    "url": "http://115.29.178.34:2973",
     "cleartext": true
   }
 }
@@ -138,7 +138,7 @@ android/app/build/outputs/apk/debug/app-debug.apk
 ```bash
 # 构建 H5
 npm run build
-# 将 www/ 目录上传到服务器 115.29.178.34:2974 的静态文件目录
+# 将 www/ 目录上传到服务器 115.29.178.34:2973 的静态文件目录
 ```
 
 ---

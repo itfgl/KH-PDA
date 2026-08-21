@@ -2,7 +2,6 @@ package com.kaihang.scanner;
 
 import android.content.Intent;
 import android.net.Uri;
-import android.webkit.JavascriptInterface;
 import android.webkit.ConsoleMessage;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -41,7 +40,6 @@ public class MainActivity extends BridgeActivity {
     private String nativePageReadyState = "loading";
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
-    private int nativePrintBridgeCallCount = 0;
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
@@ -239,7 +237,7 @@ public class MainActivity extends BridgeActivity {
 
             @Override
             public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
-                if (consoleMessage != null) {
+                if (consoleMessage != null && !isFrameworkConsoleNoise(consoleMessage)) {
                     appendVerboseNativeLog(
                         "控制台[" + consoleMessage.messageLevel() + "]: "
                             + safe(consoleMessage.message())
@@ -287,6 +285,30 @@ public class MainActivity extends BridgeActivity {
         }
         PrintPlugin.setNativeEventSink(null);
         super.onDestroy();
+    }
+
+    /**
+     * 框架噪音过滤：NocoBase/React 框架包（vendors-*/umi.js）自身的高频告警不计入运行日志。
+     * 这类告警每页数百条（React prop 告警、FlowModel 派发日志、antd 警告、[object Object] 调试输出），
+     * 与本 App 无关且会淹没真正有用的日志；业务代码来源的消息不过滤。
+     */
+    private boolean isFrameworkConsoleNoise(ConsoleMessage consoleMessage) {
+        String source = safe(consoleMessage.sourceId());
+        boolean fromFrameworkBundle = source.contains("vendors-node_modules") || source.contains("/umi.js");
+        if (!fromFrameworkBundle) {
+            return false;
+        }
+        String message = safe(consoleMessage.message()).trim();
+        if ("[object Object]".equals(message) || "undefined".equals(message)) {
+            return true;
+        }
+        return message.startsWith("Warning:")
+            || message.contains("FlowModel]")
+            || message.contains("FlowEngine")
+            || message.contains("[antd:")
+            || message.contains("Warning: React")
+            || message.contains("validateDOMNesting")
+            || message.contains("defaultProps");
     }
 
     private boolean handleNavigation(WebView view, String url) {
@@ -848,7 +870,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void attachNativeWebBridge(WebView webView) {
-        webView.addJavascriptInterface(new NativeWebBridge(), "KaihangNativeBridge");
+        webView.addJavascriptInterface(new NativeWebBridge(this, nativeWebBridgeHost), "KaihangNativeBridge");
     }
 
     private void triggerNativeScan() {
@@ -955,199 +977,67 @@ public class MainActivity extends BridgeActivity {
         nativeControlOverlay.setScanActive(active);
     }
 
-    private final class NativeWebBridge {
-        @JavascriptInterface
-        public boolean startScan() {
-            runOnUiThread(() -> triggerNativeScan());
-            return true;
+    private final NativeWebBridge.Host nativeWebBridgeHost = new NativeWebBridge.Host() {
+        @Override
+        public void triggerScanStart() {
+            triggerNativeScan();
         }
 
-        @JavascriptInterface
-        public boolean stopScan() {
-            runOnUiThread(() -> stopNativeScan());
-            return true;
+        @Override
+        public void triggerScanStop() {
+            stopNativeScan();
         }
 
-        @JavascriptInterface
-        public void openSettings() {
-            runOnUiThread(() -> openClientRuntimeSettings());
+        @Override
+        public void openClientSettings() {
+            openClientRuntimeSettings();
         }
 
-        @JavascriptInterface
-        public void checkUpdate() {
-            runOnUiThread(() -> showNativeUpdateDialog());
+        @Override
+        public void showUpdateDialog() {
+            showNativeUpdateDialog();
         }
 
-        @JavascriptInterface
-        public void showLogs() {
-            runOnUiThread(() -> showNativeLogDialog());
+        @Override
+        public void showLogDialog() {
+            showNativeLogDialog();
         }
 
-        @JavascriptInterface
-        public String getClientConfig() {
-            return ClientConfigPlugin.getSavedConfig(MainActivity.this).toString();
+        @Override
+        public void setScanActionVisible(boolean visible) {
+            setNativeScanActionVisible(visible);
         }
 
-        @JavascriptInterface
-        public String saveClientConfig(String payloadJson) {
-            try {
-                org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
-                com.getcapacitor.JSObject current = ClientConfigPlugin.getSavedConfig(MainActivity.this);
-                com.getcapacitor.JSObject saved = ClientConfigPlugin.saveConfig(
-                    MainActivity.this,
-                    payload.optString("serverBase", null),
-                    payload.optString("updateBase", null),
-                    payload.optString("paperType", null),
-                    payload.has("enableFloatingLogs") ? payload.optBoolean("enableFloatingLogs") : current.optBoolean("enableFloatingLogs", true),
-                    payload.has("enableVerboseLogs") ? payload.optBoolean("enableVerboseLogs") : current.optBoolean("enableVerboseLogs", true),
-                    payload.has("enableNetworkHeaderPatch") ? payload.optBoolean("enableNetworkHeaderPatch") : current.optBoolean("enableNetworkHeaderPatch", true),
-                    payload.has("enableHistoryPatch") ? payload.optBoolean("enableHistoryPatch") : current.optBoolean("enableHistoryPatch", true),
-                    payload.has("enableStoragePatch") ? payload.optBoolean("enableStoragePatch") : current.optBoolean("enableStoragePatch", true),
-                    payload.has("enableUiReadyObserver") ? payload.optBoolean("enableUiReadyObserver") : current.optBoolean("enableUiReadyObserver", true),
-                    payload.has("enableActionObserver") ? payload.optBoolean("enableActionObserver") : current.optBoolean("enableActionObserver", true),
-                    payload.has("enableRuntimeReuse") ? payload.optBoolean("enableRuntimeReuse") : current.optBoolean("enableRuntimeReuse", true)
-                );
-                return saved.toString();
-            } catch (Exception e) {
-                appendNativeLog("保存客户端配置失败: " + e.getMessage());
-                return null;
+        @Override
+        public void setPageReadyState(String state, String detail) {
+            setNativePageReadyState(state, detail);
+        }
+
+        @Override
+        public void releaseScanAfterResult() {
+            if (pendingScanRelease != null) {
+                mainHandler.removeCallbacks(pendingScanRelease);
+                pendingScanRelease = null;
             }
+            setNativeScanActive(false);
+            appendNativeLog("扫码结果已返回，自动释放扫码状态");
         }
 
-        @JavascriptInterface
-        public void restartApp() {
-            runOnUiThread(() -> ClientConfigPlugin.restartApp(MainActivity.this));
-        }
-
-        @JavascriptInterface
-        public void setScanActionEnabled(boolean enabled) {
-            runOnUiThread(() -> setNativeScanActionVisible(enabled));
-        }
-
-        @JavascriptInterface
-        public void reportPageReadyState(String state, String detail) {
-            runOnUiThread(() -> setNativePageReadyState(state, detail));
-        }
-
-        @JavascriptInterface
-        public void onScanCompleted() {
-            runOnUiThread(() -> {
-                if (pendingScanRelease != null) {
-                    mainHandler.removeCallbacks(pendingScanRelease);
-                    pendingScanRelease = null;
-                }
-                setNativeScanActive(false);
-                appendNativeLog("扫码结果已返回，自动释放扫码状态");
-            });
-        }
-
-        @JavascriptInterface
-        public boolean connectPrinter() {
-            runOnUiThread(() -> PrintPlugin.connectNative(MainActivity.this));
-            return true;
-        }
-
-        @JavascriptInterface
+        @Override
         public boolean shouldPreviewPrint() {
             return deviceCapabilitiesResolved && !pdaPrinterAvailable;
         }
 
-        @JavascriptInterface
-        public boolean printLabel(String payloadJson) {
-            try {
-                org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
-                String qrCodeValue = payload.optString("qrCodeValue", "");
-                String textValue = payload.optString("textValue", "");
-                String paperType = payload.optString("paperType", "thermal");
-                int qrSize = payload.optInt("qrSize", 0);
-                String qrAlign = payload.optString("qrAlign", "center");
-                int textColumns = payload.optInt("textColumns", 1);
-                String textStylesJson = payload.optString("textStyles", "");
-                nativePrintBridgeCallCount += 1;
-                String compactText = safe(textValue).replace("\r", " ").replace("\n", "\\n");
-                if (compactText.length() > 120) compactText = compactText.substring(0, 120) + "…";
-                appendNativeLog(
-                    "原生打印桥调用#" + nativePrintBridgeCallCount
-                        + ": qrcode=" + safe(qrCodeValue)
-                        + ", text=" + compactText
-                        + ", paperType=" + safe(paperType)
-                        + ", qrSize=" + qrSize
-                        + ", qrAlign=" + safe(qrAlign)
-                        + ", textColumns=" + textColumns
-                        + (textStylesJson.isEmpty() ? "" : ", textStyles=" + textStylesJson)
-                );
-                if (shouldPreviewPrint()) {
-                    appendNativeLog("原生打印桥检测到无打印机，强制转为标签预览");
-                    runOnUiThread(() -> {
-                        toast("正在生成标签预览…");
-                        PrintPlugin.previewLabelNative(
-                            MainActivity.this,
-                            MainActivity.this,
-                            qrCodeValue,
-                            textValue,
-                            qrSize,
-                            qrAlign,
-                            textColumns,
-                            textStylesJson
-                        );
-                    });
-                    return true;
-                }
-                runOnUiThread(() -> PrintPlugin.printLabelNative(
-                    MainActivity.this,
-                    MainActivity.this,
-                    qrCodeValue,
-                    textValue,
-                    paperType,
-                    qrSize,
-                    qrAlign,
-                    textColumns,
-                    textStylesJson
-                ));
-                return true;
-            } catch (Exception e) {
-                appendNativeLog("原生打印桥参数解析失败: " + e.getMessage());
-                return false;
-            }
+        @Override
+        public void appendLog(String message) {
+            appendNativeLog(message);
         }
 
-        @JavascriptInterface
-        public boolean previewLabel(String payloadJson) {
-            try {
-                org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
-                String qrCodeValue = payload.optString("qrCodeValue", "");
-                String textValue = payload.optString("textValue", "");
-                int qrSize = payload.optInt("qrSize", 0);
-                String qrAlign = payload.optString("qrAlign", "center");
-                int textColumns = payload.optInt("textColumns", 1);
-                String textStylesJson = payload.optString("textStyles", "");
-                appendNativeLog(
-                    "无打印机，生成标签预览: qrcode=" + safe(qrCodeValue)
-                        + ", qrSize=" + qrSize
-                        + ", qrAlign=" + safe(qrAlign)
-                        + ", textColumns=" + textColumns
-                        + (textStylesJson.isEmpty() ? "" : ", textStyles=" + textStylesJson)
-                );
-                runOnUiThread(() -> {
-                    toast("正在生成标签预览…");
-                    PrintPlugin.previewLabelNative(
-                        MainActivity.this,
-                        MainActivity.this,
-                        qrCodeValue,
-                        textValue,
-                        qrSize,
-                        qrAlign,
-                        textColumns,
-                        textStylesJson
-                    );
-                });
-                return true;
-            } catch (Exception error) {
-                appendNativeLog("标签预览参数解析失败: " + error.getMessage());
-                return false;
-            }
+        @Override
+        public void toast(String message) {
+            MainActivity.this.toast(message);
         }
-    }
+    };
 
     // 日志时间格式线程级缓存：避免每条日志都 new SimpleDateFormat（console 高频转发时开销可观）
     private static final ThreadLocal<java.text.SimpleDateFormat> NATIVE_LOG_TIME_FORMAT = new ThreadLocal<java.text.SimpleDateFormat>() {
