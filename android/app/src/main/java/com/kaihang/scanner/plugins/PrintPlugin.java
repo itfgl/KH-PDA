@@ -28,8 +28,6 @@ import com.uc.pdasdk.utils.BarcodeCreater;
 import java.util.ArrayList;
 import java.util.ArrayDeque;
 import java.util.List;
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.EnumMap;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -236,127 +234,6 @@ public class PrintPlugin extends Plugin {
 
     public static void prepareToPrintLabelNative() {
         Printer.prepareToPrintLabel();
-    }
-
-    private static BuiltLabel buildUnifiedLabel(
-        Context context,
-        String qrCodeValue,
-        String textValue,
-        String layoutPreset,
-        Integer qrSize,
-        String qrAlign,
-        Integer textColumns,
-        String textStylesJson,
-        String diagnosticSource
-    ) {
-        if (context == null) throw new IllegalArgumentException("context is required");
-        String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
-        String safeTextValue = textValue == null ? "" : textValue;
-        if (safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
-            throw new IllegalArgumentException("printLabel requires qrCodeValue or textValue");
-        }
-
-        int columns = normalizeTextColumns(textColumns);
-        GenericLabelLayout layout = getGenericLabelLayout(layoutPreset, qrSize);
-        Bitmap qr = null;
-        if (!safeQrCodeValue.isEmpty()) {
-            qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
-            if (qr == null) throw new IllegalStateException("qr bitmap null");
-            // 裁掉二维码位图四周白边（quiet zone），字段才能紧贴二维码黑块本身
-            qr = cropBitmapToContent(qr);
-        }
-
-        // 二维码靠左时右侧放字段；右侧空间不足时字段照常换行
-        boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
-        boolean pureQrLabel = qr != null;
-        int bodyTop = 16;
-        int qrTop = -1;
-        // 二维码实际位图高度：SDK 生成的 QR 可能小于请求尺寸（内容短/版本低），
-        // 布局必须按实际高度预留，否则居中模式下二维码与下方字段间出现大片空白
-        int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
-        int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
-        if (qr != null) {
-            // 顶部页边距 = 基础 8 点 + 一行高度
-            qrTop = 8 + layout.lineHeight;
-            // 二维码与下方字段零间距紧贴，需要空白由用户在模板里用换行控制
-            bodyTop = Math.max(bodyTop, qrTop + qrEffHeight);
-        }
-        int qrLeft = -1;
-        int besideX = 0;
-        int besideWidth = 0;
-        if (qr != null) {
-            qrLeft = qrLeftAligned
-                ? TEXT_MARGIN
-                : resolveCenteredMediaLeft(qrEffWidth);
-            if (qrLeftAligned) {
-                besideX = qrLeft + qrEffWidth + BESIDE_GAP;
-                besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
-            }
-        }
-        // 媒体内容底部位置（二维码底部），用于 center 字段紧贴
-        int mediaBottom = qr != null ? qrTop + qrEffHeight : bodyTop;
-        // 右侧字段区域：二维码顶部到二维码底部，字段容量按区域高度计算
-        int besideRegionTop = Math.max(qrTop, 0);
-        int besideRegionHeight = Math.max(0, qrTop + qrEffHeight - besideRegionTop);
-        int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
-
-        FieldTextPlan plan = planFieldText(
-            safeTextValue,
-            columns,
-            qrLeftAligned,
-            besideX,
-            besideWidth,
-            besideRowCapacity,
-            besideRegionTop,
-            besideRegionHeight,
-            bodyTop,
-            layout.lineHeight,
-            layout.wrapUnits,
-            resolveLeftAlignedTextLeft(),
-            textStylesJson,
-            mediaBottom
-        );
-        // 纯二维码标签：不强制 minHeight，让标签高度根据内容自适应
-        // 其他标签：保留 minHeight 约束
-        int labelHeight;
-        if (pureQrLabel) {
-            labelHeight = plan.centerY + 8;
-            if (plan.hasCenterRows()) {
-                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
-            }
-        } else {
-            labelHeight = Math.max(plan.centerY + 8, layout.minHeight);
-            if (plan.hasCenterRows()) {
-                labelHeight = Math.max(labelHeight, plan.centerY + plan.centerBlockHeight + 8);
-            }
-        }
-        placeCenterRows(plan, labelHeight, layout.lineHeight, layout.textSize);
-
-        AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
-        if (qr != null) {
-            builder.addBmp(qr, qrLeft, qrTop);
-        }
-        for (TextRow row : plan.rows) {
-            int textSize = row.size > 0 ? row.size : layout.textSize;
-            builder.addText(row.text, textSize, row.x, textBaselineY(row.y, textSize));
-        }
-
-        Bitmap label = builder.getBitmap();
-        if (label == null) throw new IllegalStateException("label bitmap null");
-        String diagnostic =
-            "layoutPreset=" + normalizeLayoutPreset(layoutPreset)
-                + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
-                + ", actualQr=" + bitmapSize(qr)
-                + ", qrLeft=" + qrLeft
-                + ", qrTop=" + qrTop
-                + ", label=" + bitmapSize(label)
-                + ", bodyTop=" + bodyTop
-                + ", lines=" + plan.rows.size()
-                + ", qrAlign=" + normalizeQrAlign(qrAlign)
-                + ", textColumns=" + columns
-                + ", centerLines=" + plan.centerTexts.size()
-                + ", source=" + diagnosticSource;
-        return new BuiltLabel(label, diagnostic);
     }
 
     /**
@@ -657,30 +534,13 @@ public class PrintPlugin extends Plugin {
         return LAYOUT_STANDARD;
     }
 
+    /** 标签画布与二维码尺寸常量 */
     private static final class GenericLabelLayout {
         static final int LABEL_WIDTH = 384;
         // 默认二维码为约 40% 画布宽（154 点）
         static final double QR_WIDTH_RATIO = 0.40d;
         static final int QR_MIN_SIZE = 60;
         static final int QR_MAX_SIZE = LABEL_WIDTH;
-        final int qrWidth;
-        final int qrHeight;
-        final int qrTop;
-        final int textSize;
-        final int lineHeight;
-        final int minHeight;
-        final int wrapUnits;
-
-        GenericLabelLayout(int qrWidth, int qrHeight, int qrTop,
-                           int textSize, int lineHeight, int minHeight, int wrapUnits) {
-            this.qrWidth = qrWidth;
-            this.qrHeight = qrHeight;
-            this.qrTop = qrTop;
-            this.textSize = textSize;
-            this.lineHeight = lineHeight;
-            this.minHeight = minHeight;
-            this.wrapUnits = wrapUnits;
-        }
     }
 
     private static final class LegacyGenericLayout {
@@ -735,18 +595,6 @@ public class PrintPlugin extends Plugin {
         if (qrSize < GenericLabelLayout.QR_MIN_SIZE) return GenericLabelLayout.QR_MIN_SIZE;
         if (qrSize > GenericLabelLayout.QR_MAX_SIZE) return GenericLabelLayout.QR_MAX_SIZE;
         return qrSize;
-    }
-
-    private static GenericLabelLayout getGenericLabelLayout(String preset, Integer qrSize) {
-        int resolvedQrSize = resolveRequestedQrSize(qrSize);
-        switch (normalizeLayoutPreset(preset)) {
-            case "compact":
-                return new GenericLabelLayout(resolvedQrSize, resolvedQrSize, 138, 26, 32, 240, 32);
-            case "large":
-                return new GenericLabelLayout(resolvedQrSize, resolvedQrSize, 162, 30, 38, 288, 28);
-            default:
-                return new GenericLabelLayout(resolvedQrSize, resolvedQrSize, 148, 28, 36, 264, 30);
-        }
     }
 
     private static LegacyGenericLayout getLegacyGenericLayout(String preset, Integer qrSize) {
@@ -1023,15 +871,6 @@ public class PrintPlugin extends Plugin {
             TEXT_MEASURE_PAINT.setTextSize(textSize);
             return topY - (int) Math.ceil(TEXT_MEASURE_PAINT.getFontMetrics().top);
         }
-    }
-
-    private static int resolveCenteredTextLeft(String text, GenericLabelLayout layout) {
-        int width = estimateTextWidth(text, layout.textSize);
-        return Math.max(8, (GenericLabelLayout.LABEL_WIDTH - width) / 2);
-    }
-
-    private static int resolveLeftAlignedTextLeft() {
-        return 12;
     }
 
     private static List<String> wrapPlainText(String text, int maxUnits) {
@@ -1337,48 +1176,6 @@ public class PrintPlugin extends Plugin {
             plan.rows.add(new TextRow(line, x, y, style.size));
             y += styledLineHeight(lineHeight, style);
         }
-    }
-
-    /**
-     * 机器二维码标签
-     * 二维码约占 384 点纸宽的 60%，居中显示，下方打印机器编号和时间。
-     * QR 内容格式：machineId（仅机器编号）
-     */
-    @PluginMethod
-    public void printMachineQR(PluginCall call) {
-        String machineId = call.getString("machineId", "");
-        Integer qrSize = getCallOptionalInt(call, "qrSize");
-        String qrAlign = getCallString(call, "qrAlign");
-        Integer textColumns = getCallOptionalInt(call, "textColumns");
-        String textStylesJson = getCallString(call, "textStyles");
-
-        if (machineId.isEmpty()) { call.reject("machineId is required"); return; }
-
-        printExecutor.execute(() -> {
-            if (destroyed) { call.reject("printer destroyed"); return; }
-            try {
-                String printTime = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
-                    .format(new Date());
-                BuiltLabel builtLabel = buildUnifiedLabel(
-                    getContext(),
-                    machineId,
-                    "机 器：" + machineId + "\n打印：" + printTime,
-                    "large",
-                    qrSize,
-                    qrAlign,
-                    textColumns,
-                    textStylesJson,
-                    "printMachineQR"
-                );
-                emitPrintDiagnostic("printMachineQR", builtLabel.diagnostic + ", machineId=" + machineId);
-
-                if (destroyed) { call.reject("printer destroyed"); return; }
-                printBuiltLabel(builtLabel.label, PAPER_BLACK_MARK, "machine_qr_" + machineId);
-                call.resolve();
-            } catch (Exception e) {
-                call.reject("printMachineQR error: " + e.getMessage(), e);
-            }
-        });
     }
 
     /**

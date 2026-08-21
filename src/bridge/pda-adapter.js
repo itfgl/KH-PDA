@@ -68,7 +68,7 @@ export const ScanPlugin = {
 // ── PrintPlugin ──────────────────────────────────────────────────────────────
 // Capacitor 接口：
 //   addListener('printStatus', cb({ connection?, status?, flag? }))
-//   connect() / prepareToPrintLabel() / printMachineQR(p) / printLabel(p)
+//   connect() / prepareToPrintLabel() / printLabel(p)
 //
 // X8 打印状态字符串 → Capacitor connection/status 字段映射
 
@@ -108,25 +108,6 @@ export const PrintPlugin = {
         }
       });
       _send({ name: 'checkBlack' });
-    });
-  },
-
-  /**
-   * 机器标签（二维码）
-   * 与 PrintPlugin.java 的 printMachineQR 布局一致：
-   *   384×344  QR(76,8 232×232)  机器/品类/日期三行
-   */
-  async printMachineQR({ machineId = '', productType = '', date = '' }) {
-    _send({
-      name: 'printBmpLabel',
-      width: 384, height: 344, top: 8, concentration: 15,
-      data: [
-        { printType: 2, text: machineId,
-          desiredWidth: 232, desiredHeight: 232, displayCode: false, left: 76, top: 8 },
-        { printType: 0, text: `机 器：${machineId}`,   textSize: 24, x: 16, y: 264 },
-        { printType: 0, text: `品 类：${productType}`, textSize: 22, x: 16, y: 292 },
-        { printType: 0, text: `日 期：${date}`,        textSize: 22, x: 16, y: 318 },
-      ],
     });
   },
 
