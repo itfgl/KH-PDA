@@ -43,6 +43,11 @@ public class MainActivity extends BridgeActivity {
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
+    // 页面加载失败自动重试：间隔递增（3s/5s/10s/…封顶 30s），重新加载成功即停止；
+    // 状态点闪烁提示用户正在重试，点击 WebView 也可立即重试
+    private Runnable pendingPageRetry = null;
+    private int pageRetryAttempt = 0;
+    private boolean pageRetryFlashing = false;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -126,6 +131,7 @@ public class MainActivity extends BridgeActivity {
         WebView webView = bridge.getWebView();
         configureInAppNavigation(webView);
         attachNativeWebBridge(webView);
+        attachPageRetryTapTrigger(webView);
         nativeControlOverlay = NativeControlOverlay.attach(this, nativeControlHost);
 
         String launchUrl = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
@@ -158,6 +164,7 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                cancelPageAutoRetry();
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
             }
 
@@ -171,6 +178,7 @@ public class MainActivity extends BridgeActivity {
                         : "unknown";
                     appendNativeLog("页面加载失败: " + description + " @ " + failingUrl);
                     setNativePageReadyState("error", description);
+                    schedulePageAutoRetry(failingUrl);
                 }
             }
 
@@ -184,6 +192,7 @@ public class MainActivity extends BridgeActivity {
                     String detail = "HTTP " + statusCode + (reason.isEmpty() ? "" : (" " + reason));
                     appendNativeLog("页面 HTTP 异常: " + detail + " @ " + failingUrl);
                     setNativePageReadyState("error", detail);
+                    schedulePageAutoRetry(failingUrl);
                 }
             }
 
@@ -254,6 +263,7 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onPause() {
+        cancelPageAutoRetry();
         try {
             PrintPlugin.closeNative(this);
             appendNativeLog("页面暂停，关闭原生打印连接");
@@ -270,11 +280,20 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("页面恢复，检查打印连接");
             PrintPlugin.connectNative(MainActivity.this);
             refreshRuntimeAfterResume();
+            // 后台期间重试计时被取消：回到前台若页面仍处于失败态，重新拉起重试
+            if ("error".equals(nativePageReadyState) && pendingPageRetry == null && bridge != null && bridge.getWebView() != null) {
+                String url = safe(bridge.getWebView().getUrl());
+                if (url.isEmpty()) {
+                    url = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
+                }
+                schedulePageAutoRetry(url);
+            }
         }, 200L);
     }
 
     @Override
     public void onDestroy() {
+        cancelPageAutoRetry();
         try {
             stopNativeScan();
         } catch (Exception ignored) {}
@@ -309,6 +328,84 @@ public class MainActivity extends BridgeActivity {
             || message.contains("Warning: React")
             || message.contains("validateDOMNesting")
             || message.contains("defaultProps");
+    }
+
+    /**
+     * 页面加载失败自动重试：网页打不开（断网/服务器重启）时不再卡死白屏，
+     * 按递增间隔自动重新加载（3s/5s/10s/…封顶 30s），加载成功即停止。
+     * 状态点闪烁提示重试中；点击屏幕任意处可立即重试。
+     */
+    private void schedulePageAutoRetry(String failingUrl) {
+        cancelPageAutoRetry();
+        if (bridge == null || bridge.getWebView() == null || failingUrl == null || failingUrl.trim().isEmpty()) {
+            return;
+        }
+        final WebView webView = bridge.getWebView();
+        final String retryUrl = failingUrl.trim();
+        long[] delays = {3000L, 5000L, 10000L, 30000L};
+        long delayMs = delays[Math.min(pageRetryAttempt, delays.length - 1)];
+        appendNativeLog("网页打不开，" + (delayMs / 1000) + " 秒后自动重试（第 " + (pageRetryAttempt + 1) + " 次），点击屏幕可立即重试");
+        startRetryDotFlashing();
+        pendingPageRetry = () -> {
+            pendingPageRetry = null;
+            if (bridge == null || bridge.getWebView() != webView) {
+                stopRetryDotFlashing();
+                return;
+            }
+            appendNativeLog("自动重试加载: " + retryUrl);
+            pageRetryAttempt++;
+            webView.loadUrl(retryUrl);
+        };
+        mainHandler.postDelayed(pendingPageRetry, delayMs);
+    }
+
+    private void cancelPageAutoRetry() {
+        if (pendingPageRetry != null) {
+            mainHandler.removeCallbacks(pendingPageRetry);
+            pendingPageRetry = null;
+        }
+        stopRetryDotFlashing();
+    }
+
+    /** 重试中状态点闪烁（红色↔灰交替），提示用户正在自动重连 */
+    private void startRetryDotFlashing() {
+        if (pageRetryFlashing || nativeControlOverlay == null) return;
+        pageRetryFlashing = true;
+        mainHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (!pageRetryFlashing || nativeControlOverlay == null) return;
+                // 用 error↔loading 交替实现闪烁；setPageReadyState 内部会转发给状态点
+                nativeControlOverlay.setPageReadyState(pageRetryFlashTick ? "loading" : "error");
+                pageRetryFlashTick = !pageRetryFlashTick;
+                mainHandler.postDelayed(this, 600L);
+            }
+        }, 600L);
+    }
+
+    private void stopRetryDotFlashing() {
+        pageRetryFlashing = false;
+    }
+
+    private boolean pageRetryFlashTick = false;
+
+    /** 重试等待期间点击屏幕 → 立即重试加载（不用干等下一个重试周期） */
+    private void attachPageRetryTapTrigger(WebView webView) {
+        webView.setOnTouchListener((v, event) -> {
+            if (pendingPageRetry != null && event.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
+                if (bridge != null && bridge.getWebView() != null) {
+                    String url = safe(bridge.getWebView().getUrl());
+                    String target = url.isEmpty()
+                        ? buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE))
+                        : url;
+                    appendNativeLog("点击屏幕，立即重试加载: " + target);
+                    pageRetryAttempt++;
+                    cancelPageAutoRetry();
+                    bridge.getWebView().loadUrl(target);
+                }
+            }
+            return false;
+        });
     }
 
     private boolean handleNavigation(WebView view, String url) {
@@ -713,6 +810,14 @@ public class MainActivity extends BridgeActivity {
         }
         boolean changed = !normalized.equals(nativePageReadyState);
         nativePageReadyState = normalized;
+        if ("ready".equals(normalized)) {
+            // 页面真正就绪：终止自动重试（含闪烁），并清零重试计数
+            cancelPageAutoRetry();
+            pageRetryAttempt = 0;
+        }
+        if (pageRetryFlashing) {
+            return; // 重试闪烁期间不覆盖闪烁视觉
+        }
         if (nativeControlOverlay != null) {
             nativeControlOverlay.setPageReadyState(normalized);
         }
