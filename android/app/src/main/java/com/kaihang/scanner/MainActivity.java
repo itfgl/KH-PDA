@@ -861,25 +861,9 @@ public class MainActivity extends BridgeActivity {
         }, Math.max(200L, delayMs));
     }
 
+    // 注入时机固定激进模式：定制 ROM 只在该模式下可靠注入，任何页面事件都全量注入
     private boolean shouldInjectForTrigger(InjectionTrigger trigger) {
-        String mode = getCurrentInjectionMode();
-        if (trigger == InjectionTrigger.MANUAL) {
-            return true;
-        }
-        if ("manual".equals(mode)) {
-            return false;
-        }
-        if ("loaded_only".equals(mode)) {
-            return trigger == InjectionTrigger.PAGE_LOADED;
-        }
-        if ("commit_loaded".equals(mode)) {
-            return trigger == InjectionTrigger.PAGE_COMMIT_VISIBLE || trigger == InjectionTrigger.PAGE_LOADED;
-        }
         return true;
-    }
-
-    private String getCurrentInjectionMode() {
-        return ClientConfigPlugin.getSavedInjectionMode(this);
     }
 
     private boolean isRuntimeReuseEnabled() {
@@ -1515,7 +1499,6 @@ public class MainActivity extends BridgeActivity {
                     payload.optString("serverBase", null),
                     payload.optString("updateBase", null),
                     payload.optString("paperType", null),
-                    payload.optString("injectionMode", null),
                     payload.has("enableFloatingLogs") ? payload.optBoolean("enableFloatingLogs") : current.optBoolean("enableFloatingLogs", true),
                     payload.has("enableVerboseLogs") ? payload.optBoolean("enableVerboseLogs") : current.optBoolean("enableVerboseLogs", true),
                     payload.has("enableNetworkHeaderPatch") ? payload.optBoolean("enableNetworkHeaderPatch") : current.optBoolean("enableNetworkHeaderPatch", true),
@@ -1568,12 +1551,6 @@ public class MainActivity extends BridgeActivity {
         @JavascriptInterface
         public boolean shouldPreviewPrint() {
             return deviceCapabilitiesResolved && !pdaPrinterAvailable;
-        }
-
-        @JavascriptInterface
-        public boolean prepareToPrintLabel() {
-            runOnUiThread(PrintPlugin::prepareToPrintLabelNative);
-            return true;
         }
 
         @JavascriptInterface
@@ -1733,7 +1710,6 @@ public class MainActivity extends BridgeActivity {
                     values.serverBase,
                     values.updateBase,
                     values.paperType,
-                    values.injectionMode,
                     values.enableFloatingLogs,
                     values.enableVerboseLogs,
                     values.enableNetworkHeaderPatch,

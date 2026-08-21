@@ -231,10 +231,6 @@ public class PrintPlugin extends Plugin {
         emitNativeConnection("closed");
     }
 
-    public static void prepareToPrintLabelNative() {
-        Printer.prepareToPrintLabel();
-    }
-
     /**
      * SDK 打印内容前强制 setTop(8)（最小顶部边距 8 点，传更小也会被钳到 8），
      * 裁掉位图顶部 8 点抵消该偏移，保证实纸内容位置与预览位图坐标一致。
@@ -465,28 +461,6 @@ public class PrintPlugin extends Plugin {
             return;
         }
         doConnect();
-        call.resolve();
-    }
-
-    // ── 标签走纸 ──────────────────────────────────────────────────────────────
-
-    @PluginMethod
-    public void prepareToPrintLabel(PluginCall call) {
-        Printer.prepareToPrintLabel();
-        call.resolve();
-    }
-
-    /**
-     * 检测黑标（标签间隙检测）
-     * 每张标签打印完成（收到 printStatus.status == "PRINT_OK" 事件）后调用，
-     * 走纸到下一张标签的起始位置，准备打印下一张。
-     * 底层与 prepareToPrintLabel 调用相同 SDK 方法，回调同样走 printStatus 事件：
-     *   PREPARE_LABEL_OK → 已就绪，可继续打印
-     *   PREPARE_LABEL_BLACK_FLAG_NOT_FOUND → 未检测到标签间隙，需人工处理
-     */
-    @PluginMethod
-    public void checkBlack(PluginCall call) {
-        Printer.prepareToPrintLabel();
         call.resolve();
     }
 

@@ -30,7 +30,6 @@ final class NativeSettingsDialog {
         final String serverBase;
         final String updateBase;
         final String paperType;
-        final String injectionMode;
         final boolean enableFloatingLogs;
         final boolean enableVerboseLogs;
         final boolean enableNetworkHeaderPatch;
@@ -44,7 +43,6 @@ final class NativeSettingsDialog {
             String serverBase,
             String updateBase,
             String paperType,
-            String injectionMode,
             boolean enableFloatingLogs,
             boolean enableVerboseLogs,
             boolean enableNetworkHeaderPatch,
@@ -57,7 +55,6 @@ final class NativeSettingsDialog {
             this.serverBase = serverBase;
             this.updateBase = updateBase;
             this.paperType = paperType;
-            this.injectionMode = injectionMode;
             this.enableFloatingLogs = enableFloatingLogs;
             this.enableVerboseLogs = enableVerboseLogs;
             this.enableNetworkHeaderPatch = enableNetworkHeaderPatch;
@@ -72,7 +69,6 @@ final class NativeSettingsDialog {
             return "已保存原生设置: serverBase=" + serverBase
                 + ", updateBase=" + updateBase
                 + ", paperType=" + paperType
-                + ", injectionMode=" + injectionMode
                 + ", floatingLogs=" + enableFloatingLogs
                 + ", verboseLogs=" + enableVerboseLogs
                 + ", headerPatch=" + enableNetworkHeaderPatch
@@ -185,7 +181,6 @@ final class NativeSettingsDialog {
                 serverBase,
                 updateBase,
                 paperSpinner.getSelectedItemPosition() == 1 ? "black_mark" : "thermal",
-                "aggressive",
                 floatingLogsSwitch.isChecked(),
                 verboseLogsSwitch.isChecked(),
                 networkPatchSwitch.isChecked(),

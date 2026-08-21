@@ -139,57 +139,38 @@ Printer.print(data, int top, int forwardMorePaper, String flag, boolean runOnNew
 // top: 距顶部空白，单位点（8点=1mm），范围 8~304
 // forwardMorePaper: 打印后额外走纸，范围 0~248
 
-// 标签纸打印（不走 forwardMorePaper，走纸由 prepareToPrintLabel/checkBlack 控制）
+// 标签纸（黑标）打印：不走 forwardMorePaper，黑标定位由 SDK 自身完成
 Printer.print(data, int top, String flag, boolean runOnNewThread);
-
-// 标签就绪：走纸到第一张标签的起始位置（打印前调用一次）
-Printer.prepareToPrintLabel();
-
-// 检测黑标：每张标签打印完成（PRINT_OK 回调后）调用，走纸到下一张标签起始位置
-// Java SDK 底层与 prepareToPrintLabel 相同；H5 壳子将其暴露为独立的 checkBlack 命令
-Printer.prepareToPrintLabel(); // 即 checkBlack 的实现
 
 // 关闭打印机
 Printer.close(activity);
 ```
 
-#### 批次标签（printBatchLabel）：普通纸（热敏）打印流程
+> **历史注记**：早期版本曾用 `Printer.prepareToPrintLabel()` 做黑标走纸定位（H5 侧暴露为
+> `prepareToPrintLabel` / `checkBlack`）。实测会导致每张标签前多走一张空白，且 SDK 黑标模式
+> 自身能对齐，2026-08-21 已将两个接口连同打印流程中的调用全部删除。
 
-`PrintPlugin.printBatchLabel` 内部走 `Printer.print(BitmapData, top, forwardMorePaper, flag, runOnNewThread)`
-（普通纸 5 参数重载，`top=8, forwardMorePaper=24`），不依赖黑标检测：
+#### 通用二维码标签（printLabel，当前唯一打印入口）
 
-```
-connect()
-    └─ printStatus: connection=connected
-         └─ printBatchLabel(...)  // 打印第一张
-              └─ printStatus: PRINT_OK
-                   └─ printBatchLabel(...)  // 打印第二张，直接继续
-                        └─ ...（循环直到所有张数打完，每张之间不需要 checkBlack）
-```
-
-#### 机器二维码标签（printMachineQR）：标签纸多张打印流程
+`printLabel` 内部走 `buildLegacyGenericLabel` 生成 384 宽位图后按纸张类型出纸：
 
 ```
 connect()
     └─ printStatus: connection=connected
-         └─ prepareToPrintLabel()          // 走纸到第一张标签起始
-              └─ printStatus: PREPARE_LABEL_OK
-                   └─ printMachineQR(...)  // 打印第一张
-                        └─ printStatus: PRINT_OK
-                             └─ checkBlack()  // 走纸到第二张标签起始  ← 必须调用
-                                  └─ printStatus: PREPARE_LABEL_OK
-                                       └─ printMachineQR(...)  // 打印第二张
-                                            └─ ...（循环直到所有张数打完）
+         └─ printLabel({ qrCodeValue, textValue, paperType, ... })
+              └─ paperType=thermal  → Printer.print(data, 8, BATCH_EXTRA_FEED=96, ...) 普通纸连续走纸
+              └─ paperType=black_mark → Printer.print(data, 8, ...) 黑标纸逐张出纸
+                   └─ printStatus: PRINT_OK
+                        └─ 多张连打直接循环，无需任何走纸调用
 ```
 
-> **注意**：标签纸模式下，每次 `PRINT_OK` 后必须调用 `checkBlack()`，否则打印机不走纸，下一张会从错误位置打印。
-> `prepareToPrintLabel` 与 `checkBlack` 的区别仅是语义：前者用于"首次就绪"，后者用于"每张打完后继续"，底层调用相同。
-> 批次标签已改为普通纸模式，不适用本段。
+多张连打、间隔等待、工作流等待（wait_workflow）均由注入 runtime 的全局打印队列
+（`kh.enqueuePrintJob`）统一编排，见 client-runtime.core.js。
 
 #### BarcodeCreater
 
 ```java
-// type: 1=一维码(Code128), 2=二维码(QR)
+// type: 2=二维码(QR)（一维码 type=1 已随二维码化移除）
 // displayCode: 是否在码下方显示内容字符串
 Bitmap bmp = BarcodeCreater.createBarcode(context, content, width, height, displayCode, type);
 ```
@@ -197,36 +178,33 @@ Bitmap bmp = BarcodeCreater.createBarcode(context, content, width, height, displ
 #### AbsoluteLayoutBitmap（标签布局）
 
 ```java
-Bitmap label = new AbsoluteLayoutBitmap(384, 280)  // 宽x高，单位点
-    .addBmp(barcodeBmp, x, y)
-    .addText("批次码：M05260604030012", textSize, x, y)  // y为文字基线位置
+Bitmap label = new AbsoluteLayoutBitmap(384, labelHeight)  // 宽384，高按内容自适应
+    .addBmp(qrBmp, x, y)
+    .addText("字段行", textSize, x, y)  // y为文字基线位置
     .getBitmap();
 
-// 批次标签（printBatchLabel）：普通纸（热敏），不依赖黑标
-BitmapData data = new BitmapData(label, 15, false);  // 参数2=浓度(1~20), 参数3=普通纸时isAlignCenter
-Printer.print(data, 8, 24, "batch_label", false);    // top=8, forwardMorePaper=24
+// 普通纸（热敏）：打完额外走纸 96 点方便撕纸
+BitmapData data = new BitmapData(label, 15, false);
+Printer.print(data, 8, 96, "generic_label", false);
 
-// 机器二维码标签（printMachineQR）：标签纸模式，保持不变
-BitmapData qrData = new BitmapData(label, 15, 0);    // 参数3=标签纸时left
-Printer.print(qrData, 16, "machine_qr", false);
+// 黑标标签纸：黑标模式定位，逐张出纸
+BitmapData qrData = new BitmapData(label, 15, 0);
+Printer.print(qrData, 8, "generic_label", false);
 ```
 
 #### PrintResult 枚举（回调状态）
 
 | 值 | 说明 |
 |----|------|
-| `PRINT_OK` | 打印完成 → 标签纸模式应继续调用 `checkBlack()`；普通纸（批次标签）模式无需此步骤 |
+| `PRINT_OK` | 打印完成（多张连打直接继续下一张，无需任何走纸调用） |
 | `NO_PAPER` | 缺纸 |
 | `PRINTER_CLOSED` | 打印机未连接 |
 | `SEND_DATA_FAILED` | 数据发送失败 |
 | `PRINT_FAILED` | 未知失败 |
 | `BLACK_FLAG_NOT_FOUND` | 未检测到黑标/缝标（打印时） |
-| `PREPARE_LABEL_OK` | 标签就绪完成 → 可调用 `print()` |
-| `PREPARE_LABEL_BLACK_FLAG_NOT_FOUND` | 标签就绪时未检测到黑标 |
-| `PREPARE_LABEL_PRINTER_CLOSED` | 标签就绪时打印机未连接 |
-| `PREPARE_LABEL_SEND_DATA_FAILED` | 标签就绪时数据发送失败 |
-| `PREPARE_LABEL_NO_PAPER` | 标签就绪时缺纸 |
-| `PREPARE_LABEL_FAILED` | 标签就绪时未知失败 |
+
+> `PREPARE_LABEL_*` 系列为已删除的 `prepareToPrintLabel`/`checkBlack` 接口的回调状态，
+> 保留在状态映射表里仅为兼容，正常流程不会再出现。
 
 #### Capacitor Plugin（`PrintPlugin`）JS 调用
 
@@ -237,31 +215,17 @@ await PrintPlugin.addListener('printStatus', (e) => {
         // 'connected' | 'failed' | 'closed'
     }
     if (e.status) {
-        // PrintResult 枚举值字符串，如 'PRINT_OK', 'PREPARE_LABEL_OK' 等
+        // PrintResult 枚举值字符串，如 'PRINT_OK'
     }
 });
 
 await PrintPlugin.connect();
 // → 等待 printStatus: connection=connected
 
-// 批次标签：普通纸（热敏），不依赖黑标，无需 prepareToPrintLabel/checkBlack
+// 通用二维码标签：多张连打直接循环，无需走纸调用
 for (let i = 0; i < copies; i++) {
-    await PrintPlugin.printBatchLabel({ batchNo, machineId, productType, date });
+    await PrintPlugin.printLabel({ qrCodeValue, textValue, paperType: 'black_mark' });
     // → 等待 printStatus: status=PRINT_OK
-}
-
-// 机器二维码标签：标签纸模式，仍需 prepareToPrintLabel + 每张 checkBlack（流程见上）
-await PrintPlugin.prepareToPrintLabel();
-// → 等待 printStatus: status=PREPARE_LABEL_OK
-
-for (let i = 0; i < copies; i++) {
-    await PrintPlugin.printMachineQR({ machineId });
-    // → 等待 printStatus: status=PRINT_OK
-
-    if (i < copies - 1) {
-        await PrintPlugin.checkBlack();  // 走纸到下一张起始位
-        // → 等待 printStatus: status=PREPARE_LABEL_OK
-    }
 }
 ```
 
@@ -279,7 +243,7 @@ for (let i = 0; i < copies; i++) {
 
 **异步回调保护**：连接 Handler（103 回调）和 printCallback 均在入口处检查 `destroyed`，销毁后不再调用 `notifyListeners`。
 
-**打印任务线程**：`printBatchLabel` / `printMachineQR` 提交到 `printExecutor`（`newSingleThreadExecutor`）执行，不使用裸 `Thread`。任务在位图生成前和调用 `Printer.print()` 前各检查一次 `destroyed`，提前退出。
+**打印任务线程**：`printLabel` 及原生桥打印提交到 `printExecutor`（`newSingleThreadExecutor`）执行，不使用裸 `Thread`。任务在位图生成前和调用 `Printer.print()` 前各检查一次 `destroyed`，提前退出。原生桥另有静态 `nativePrintExecutor` 处理 JS 注入路径的打印请求。
 
 **`handleOnPause()` / `handleOnResume()` 保活控制**：
 - `handleOnPause()`：若当前已连接或连接中，关闭打印机（熄灭绿色指示灯），并记录 `wasConnectedBeforePause = true`
@@ -295,23 +259,23 @@ printExecutor.shutdownNow() // 2. 中断队列中尚未开始和正在执行的�
 Printer.close(activity)    // 3. 最后断开打印机连接（会触发异步 103，已被 destroyed 拦截）
 ```
 
-#### H5 壳子（厂商壳阶段）调用方式
+#### H5 壳子（厂商壳，历史阶段）
+
+> X8 厂商壳（PDAJsBridge）适配器已于 2026-08-21 随设备退役删除，当前 App 只运行自研
+> Capacitor 壳。以下仅作历史记录：
 
 ```js
-// 标签纸打印（绝对坐标，画布 384×280）
+// 标签打印（绝对坐标，画布 384×280）
 PDAJsBridge.SendControlCommand(JSON.stringify({
     name: 'printBmpLabel',
     width: 384, height: 280, top: 8, concentration: 18,
     data: [
-        { printType: 1, text: 'M05260604030012', desiredWidth: 300, desiredHeight: 40, displayCode: false, left: 0, top: 0 },
-        { printType: 0, text: '批次码：M05260604030012', textSize: 24, x: 0, y: 60 }
+        { printType: 2, text: 'M12', desiredWidth: 208, desiredHeight: 208, displayCode: false, left: 88, top: 8 },
+        { printType: 0, text: '机 器：M12', textSize: 24, x: 8, y: 240 }
     ]
 }));
 
-// 每张打印完 PRINT_OK 后调用（走纸到下一张）
-PDAJsBridge.SendControlCommand(JSON.stringify({ name: 'checkBlack' }));
-
-// printType: 0=文字, 1=一维码, 2=二维码, 3=图片(base64)
+// printType: 0=文字, 2=二维码, 3=图片(base64)
 ```
 
 ---

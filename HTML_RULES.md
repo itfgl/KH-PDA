@@ -14,8 +14,8 @@
 <script type="module" src="plugins.js"></script>
 ```
 
-**原因**：`plugins.js` 由 Vite 以 **IIFE 格式**构建，所有导出挂到 `window.*`。  
-IIFE 本身不是 ES Module，用 `type="module"` 加载会导致全局变量失效。  
+**原因**：`plugins.js` 由 Vite 以 **IIFE 格式**构建，所有导出挂到 `window.*`。
+IIFE 本身不是 ES Module，用 `type="module"` 加载会导致全局变量失效。
 如需 ESM 格式，需同步修改 `vite.config.js` 的 `formats: ['es']`，并处理代码分割问题（当前未实施）。
 
 ---
@@ -42,29 +42,24 @@ tag.messages[0].records                              // 数据结构不同
 NFC.write({ records: [ { tnf, type, id, payload } ] }) // 已替换为 writeNdef/writeMifareRaw
 ```
 
-**原因**：`@capgo/capacitor-nfc` 已被替换为自研 `KaihangNfcPlugin.java`（支持 MifareUltralight 原始读写）。  
+**原因**：`@capgo/capacitor-nfc` 已被替换为自研 `KaihangNfcPlugin.java`（支持 MifareUltralight 原始读写）。
 原因和详细说明见 `NFC_RULES.md`。
 
 ---
 
-## 3. 打印前禁止调用 prepareToPrintLabel()
+## 3. 打印直接调用，无需走纸定位
 
 ```js
-// ✅ 正确 —— 直接打印
-await PrintPlugin.printBatchLabel({ batchNo, machineId, productType, date });
+// ✅ 正确 —— 直接打印（黑标纸由 SDK 自身定位，普通纸连续走纸）
+await PrintPlugin.printLabel({ qrCodeValue, textValue, paperType });
 
-// ❌ 错误 —— 每次打印前调 prepareToPrintLabel() 会多出一张空白标签
-await PrintPlugin.prepareToPrintLabel();  // ← 删掉这行
-await PrintPlugin.printBatchLabel({ ... });
+// ❌ prepareToPrintLabel() / checkBlack() 接口已删除（2026-08-21）
+// 曾经每次打印前调用会多走一张空白标签；黑标定位已交给 SDK 黑标模式自身完成
 ```
 
-**原因**：`prepareToPrintLabel()` 作用是走纸定位到标签起始位（标签纸模式才需要）。  
-打印机 `connect()` 时已内部执行过一次定位，之后调用会再走一张，浪费标签。  
-`prepareToPrintLabel()` 只应在以下情况手动调用：
-- 更换标签纸后重新定位
-- 打印机断线重连后
-
-> **批次标签（`printBatchLabel`）现已改为普通纸（热敏）打印**：不依赖黑标定位，打印完成（`PRINT_OK`）后**不需要**调用 `checkBlack()`，详见 `RESPONSIBILITIES.md`。机器二维码标签（`printMachineQR`）仍走标签纸模式，本节规则对其依然适用。
+**历史**：早期版本打印前调 `prepareToPrintLabel()` 做黑标定位，导致每张标签前多出一张空白。
+现已从打印流程移除该调用，并连同 `prepareToPrintLabel` / `checkBlack` 原生接口一并删除。
+更换标签纸后的重新定位由打印机自身上电校准完成，无需 App 干预。
 
 ---
 
@@ -79,7 +74,7 @@ import { BrowserMultiFormatReader } from '@zxing/browser'; // 在 HTML 中无效
 await import('@zxing/browser');                             // IIFE 格式不支持动态 import
 ```
 
-**原因**：IIFE 格式不支持代码分割，`@zxing/browser` 已静态打包进 `plugins.js`（这是它体积大的原因）。  
+**原因**：IIFE 格式不支持代码分割，`@zxing/browser` 已静态打包进 `plugins.js`（这是它体积大的原因）。
 如要优化体积，需将 `vite.config.js` 改为 ESM 格式并处理相关兼容性，当前暂不实施。
 
 ---
@@ -94,6 +89,14 @@ const { KaihangNfc, ScanPlugin, PrintPlugin } = window;
 // 确保 <script src="plugins.js"> 在业务代码 <script> 之前
 ```
 
+**plugins.js 当前提供的全局变量**（2026-08-21 精简后）：
+- 插件：`ScanPlugin` / `PrintPlugin` / `KaihangNfc` / `UpdatePlugin` / `ClientConfigPlugin`
+- 相机扫码：`ZXingReader`
+- 元信息：`BUILD_TIME` / `BRIDGE_MODE`
+- 服务端 API：`API`（登录/设置/角色路由；业务打印走动作表，不再经此模块）
+
+已删除：`Printer` / `Scanner` / `NFC` / `Machine` / `Events`（src/modules 业务模块已随动作表方案退役）。
+
 ---
 
 ## 变更记录
@@ -104,4 +107,6 @@ const { KaihangNfc, ScanPlugin, PrintPlugin } = window;
 | 2026-06-04 | 去掉打印前的 prepareToPrintLabel()，修复空白标签 |
 | 2026-06-04 | 实现相机扫码（BarcodeDetector 优先，ZXing 降级） |
 | 2026-06-04 | ZXing 回归 IIFE 静态打包，放弃 ESM 懒加载（兼容性优先） |
-| 2026-06-13 | 批次标签（printBatchLabel）改为普通纸（热敏）打印，不再黑标定位/checkBlack；机器二维码（printMachineQR）保持标签纸模式不变 |
+| 2026-06-13 | 批次标签改为普通纸（热敏）打印，不再黑标定位/checkBlack |
+| 2026-08-20 | 打印全面二维码化，删除一维码批次标签 printBatchLabel 与机器二维码 printMachineQR |
+| 2026-08-21 | 删除 prepareToPrintLabel/checkBlack 接口；删除 src/modules 业务模块（Printer/Scanner/NFC/Machine/Events）与 X8 壳适配器，plugins.js 只保留插件代理 + ZXing + API |
