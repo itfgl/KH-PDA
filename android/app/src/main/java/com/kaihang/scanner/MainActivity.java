@@ -43,6 +43,11 @@ public class MainActivity extends BridgeActivity {
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
+    // 断网页（纯展示）：仅在主页面加载失败时替换白屏为提示页，用户点「重试」才重新加载。
+    // 无定时器、无自动 reload——失败回调每轮导航最多展示一次，正常页面永远不受影响
+    private static final String ERROR_PAGE_BASE_URL = "https://__kh_native_error_page__/";
+    private boolean pageErrorShown = false;
+    private String lastErrorUrl = "";
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -158,6 +163,10 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                if (isErrorPageUrl(url)) {
+                    return; // 断网页自身加载：不注入业务 runtime
+                }
+                pageErrorShown = false; // 新导航开始：重置断网页标记
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
             }
 
@@ -166,11 +175,15 @@ public class MainActivity extends BridgeActivity {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
                     String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
+                    if (isErrorPageUrl(failingUrl)) {
+                        return;
+                    }
                     String description = error != null && error.getDescription() != null
                         ? error.getDescription().toString()
                         : "unknown";
                     appendNativeLog("页面加载失败: " + description + " @ " + failingUrl);
                     setNativePageReadyState("error", description);
+                    showErrorPageOnce(failingUrl, description);
                 }
             }
 
@@ -181,9 +194,13 @@ public class MainActivity extends BridgeActivity {
                     int statusCode = errorResponse != null ? errorResponse.getStatusCode() : 0;
                     String reason = errorResponse != null ? safe(errorResponse.getReasonPhrase()) : "";
                     String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
+                    if (isErrorPageUrl(failingUrl)) {
+                        return;
+                    }
                     String detail = "HTTP " + statusCode + (reason.isEmpty() ? "" : (" " + reason));
                     appendNativeLog("页面 HTTP 异常: " + detail + " @ " + failingUrl);
                     setNativePageReadyState("error", detail);
+                    showErrorPageOnce(failingUrl, detail);
                 }
             }
 
@@ -309,6 +326,73 @@ public class MainActivity extends BridgeActivity {
             || message.contains("Warning: React")
             || message.contains("validateDOMNesting")
             || message.contains("defaultProps");
+    }
+
+    private boolean isErrorPageUrl(String url) {
+        return url != null && url.startsWith(ERROR_PAGE_BASE_URL);
+    }
+
+    /** 断网页只展示一次：同一轮导航的重复失败回调（定制 ROM 可能连发）不重复加载 */
+    private void showErrorPageOnce(String failingUrl, String detail) {
+        if (pageErrorShown) {
+            return;
+        }
+        pageErrorShown = true;
+        lastErrorUrl = failingUrl == null ? "" : failingUrl.trim();
+        if (bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+        String host = lastErrorUrl;
+        int schemeIdx = host.indexOf("://");
+        if (schemeIdx >= 0) host = host.substring(schemeIdx + 3);
+        int slashIdx = host.indexOf('/');
+        if (slashIdx > 0) host = host.substring(0, slashIdx);
+        String html =
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            + "<style>"
+            + "body{margin:0;font-family:sans-serif;background:#f8fafc;color:#0f172a;"
+            + "display:flex;align-items:center;justify-content:center;min-height:100vh}"
+            + ".card{background:#fff;border-radius:18px;padding:32px 26px;max-width:86%;"
+            + "box-shadow:0 10px 30px rgba(15,23,42,.10);text-align:center}"
+            + ".icon{font-size:44px;line-height:1;margin-bottom:14px}"
+            + "h1{font-size:19px;margin:0 0 10px}"
+            + ".desc{font-size:14px;color:#64748b;line-height:1.7;margin:0 0 20px;word-break:break-all}"
+            + "button{border:none;border-radius:12px;padding:13px 38px;font-size:16px;"
+            + "font-weight:700;background:#1570ef;color:#fff}"
+            + "button:active{background:#175cd3}"
+            + "</style></head><body><div class='card'>"
+            + "<div class='icon'>&#128268;</div>"
+            + "<h1>网页打不开</h1>"
+            + "<p class='desc'>服务器：" + escapeHtml(host) + "</p>"
+            + "<button onclick=\"KaihangNativeBridge&&KaihangNativeBridge.retryLoadPage&&KaihangNativeBridge.retryLoadPage()\">重新加载</button>"
+            + "</div></body></html>";
+        appendNativeLog("显示断网页: " + lastErrorUrl + (detail == null || detail.trim().isEmpty() ? "" : ("（" + detail + "）")));
+        bridge.getWebView().loadDataWithBaseURL(ERROR_PAGE_BASE_URL, html, "text/html", "utf-8", null);
+    }
+
+    /** 断网页「重新加载」按钮：重新加载失败前的业务页（用户主动触发，无自动逻辑） */
+    private void retryLoadFromErrorPage() {
+        if (bridge == null || bridge.getWebView() == null) {
+            return;
+        }
+        String url = lastErrorUrl;
+        if (url == null || url.trim().isEmpty() || isErrorPageUrl(url)) {
+            url = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
+        }
+        appendNativeLog("断网页点击重新加载: " + url);
+        pageErrorShown = false;
+        lastErrorUrl = "";
+        bridge.getWebView().loadUrl(url);
+    }
+
+    private String escapeHtml(String value) {
+        return safe(value)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;");
     }
 
     private boolean handleNavigation(WebView view, String url) {
@@ -622,6 +706,9 @@ public class MainActivity extends BridgeActivity {
         String url = safe(targetUrl);
         if (url.isEmpty() && view != null) {
             url = safe(view.getUrl());
+        }
+        if (isErrorPageUrl(url)) {
+            return; // 断网页：不注入业务 runtime
         }
         if (view != null && isRuntimeReuseEnabled() && trigger != InjectionTrigger.MANUAL && trigger != InjectionTrigger.PAGE_STARTED) {
             probeReusableRuntime(view, url, trigger);
@@ -1026,6 +1113,11 @@ public class MainActivity extends BridgeActivity {
         @Override
         public boolean shouldPreviewPrint() {
             return deviceCapabilitiesResolved && !pdaPrinterAvailable;
+        }
+
+        @Override
+        public void retryLoadFromErrorPage() {
+            MainActivity.this.retryLoadFromErrorPage();
         }
 
         @Override
