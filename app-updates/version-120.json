@@ -1,0 +1,12 @@
+{
+  "versionCode": 120,
+  "versionName": "1.2.111",
+  "apkFileName": "kaihang-scanner-v1.2.111-120.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.111-120.apk",
+  "changelog": "回退到 118 版本代码",
+  "releasedAt": "2026-08-21",
+  "notes": [
+    "Android 版本提升到 1.2.111 (120)",
+    "回退到 118 版本代码"
+  ]
+}
