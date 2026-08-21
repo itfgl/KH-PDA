@@ -43,10 +43,12 @@ public class MainActivity extends BridgeActivity {
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
-    // 页面加载失败自动重试：间隔递增（3s/5s/10s/…封顶 30s），重新加载成功即停止；
+    // 页面加载失败自动重试：间隔递增（3s/5s/10s/…封顶 30s），最多 5 次后停止自动重试（防循环）；
     // 失败时展示原生错误页（提示+立即重试按钮）。仅当页面从未渲染出内容才允许触发——
-    // 已显示内容的页面收到错误回调只记日志，绝不替换，防止定制 ROM 误报导致无限重载
+    // 已显示内容的页面收到错误回调只记日志，绝不替换。不设看门狗：慢加载（弱网首屏 >20s
+    // 属正常）会被定时器误杀形成"杀→重载→再杀"循环导致 ANR，失败交由错误回调判定即可
     private static final String ERROR_PAGE_BASE_URL = "https://__kh_native_error_page__/";
+    private static final int MAX_AUTO_RETRY = 5;
     private Runnable pendingPageRetry = null;
     private int pageRetryAttempt = 0;
     private boolean pageRetryFlashing = false;
@@ -54,8 +56,6 @@ public class MainActivity extends BridgeActivity {
     private String lastErrorUrl = "";
     private boolean pageCommitted = false;
     private boolean pageFinished = false;
-    // 加载看门狗：onPageStarted 后 20 秒内没有 commit/ready 视为挂起（服务器无响应时不触发错误回调）
-    private Runnable pageLoadWatchdog = null;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -177,7 +177,6 @@ public class MainActivity extends BridgeActivity {
                 pageCommitted = false;
                 pageFinished = false;
                 cancelPageAutoRetry();
-                armPageLoadWatchdog(url);
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
             }
 
@@ -186,7 +185,6 @@ public class MainActivity extends BridgeActivity {
                 super.onPageCommitVisible(view, url);
                 if (!isErrorPageUrl(url)) {
                     pageCommitted = true;
-                    feedPageLoadWatchdog(); // 收到内容：挂起风险解除
                 }
             }
 
@@ -194,10 +192,7 @@ public class MainActivity extends BridgeActivity {
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
                 if (!isErrorPageUrl(url)) {
-                    // 导航已结束（成功或失败）：失败场景错误回调先于此触发并已处理；
-                    // 此处主要用于兼容不触发 commit 回调的 ROM——喂狗防止慢页面被看门狗误杀
                     pageFinished = true;
-                    feedPageLoadWatchdog();
                 }
             }
 
@@ -333,7 +328,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         cancelPageAutoRetry();
-        feedPageLoadWatchdog();
         try {
             stopNativeScan();
         } catch (Exception ignored) {}
@@ -371,12 +365,11 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * 页面加载失败统一入口：展示原生错误页 + 按递增间隔自动重试（3s/5s/10s/…封顶 30s）。
+     * 页面加载失败统一入口：展示原生错误页 + 按递增间隔自动重试（最多 5 次）。
      * 核心守卫：只有页面从未渲染出内容、导航也未结束才允许触发——
      * 已有内容的页面收到错误回调（含定制 ROM 误报）只记日志，绝不替换，避免无限重载卡死。
      */
     private void handlePageLoadFailure(String failingUrl, String detail) {
-        feedPageLoadWatchdog();
         if (pageCommitted || pageFinished) {
             appendNativeLog("页面已有内容或导航已结束，忽略加载失败回调: " + safe(detail));
             return;
@@ -398,6 +391,11 @@ public class MainActivity extends BridgeActivity {
     private void schedulePageAutoRetry(String failingUrl) {
         cancelPageAutoRetry();
         if (bridge == null || bridge.getWebView() == null || failingUrl == null || failingUrl.trim().isEmpty()) {
+            return;
+        }
+        if (pageRetryAttempt >= MAX_AUTO_RETRY) {
+            appendNativeLog("已自动重试 " + MAX_AUTO_RETRY + " 次仍失败，暂停自动重试；可点错误页按钮手动重试");
+            stopRetryDotFlashing();
             return;
         }
         final WebView webView = bridge.getWebView();
@@ -447,34 +445,7 @@ public class MainActivity extends BridgeActivity {
             mainHandler.removeCallbacks(pendingPageRetry);
             pendingPageRetry = null;
         }
-        feedPageLoadWatchdog();
         stopRetryDotFlashing();
-    }
-
-    /** 加载看门狗：服务器无响应时不触发错误回调，靠 20 秒无 commit 判定挂起 */
-    private void armPageLoadWatchdog(String url) {
-        feedPageLoadWatchdog();
-        if (isErrorPageUrl(url)) return;
-        final String watchedUrl = url;
-        pageLoadWatchdog = () -> {
-            pageLoadWatchdog = null;
-            if (bridge == null || bridge.getWebView() == null) return;
-            String current = safe(bridge.getWebView().getUrl());
-            if (!watchedUrl.equals(current) && !current.isEmpty()) return; // 已跳转别处
-            if ("ready".equals(nativePageReadyState)) return;
-            if (pageCommitted || pageFinished) return; // 内容已到/导航已结束（race 兜底）
-            appendNativeLog("页面加载超时（20 秒无响应），按失败处理: " + watchedUrl);
-            setNativePageReadyState("error", "加载超时");
-            handlePageLoadFailure(watchedUrl, "服务器长时间无响应");
-        };
-        mainHandler.postDelayed(pageLoadWatchdog, 20000L);
-    }
-
-    private void feedPageLoadWatchdog() {
-        if (pageLoadWatchdog != null) {
-            mainHandler.removeCallbacks(pageLoadWatchdog);
-            pageLoadWatchdog = null;
-        }
     }
 
     /** 重试中状态点闪烁（红色↔灰交替），提示用户正在自动重连 */
@@ -533,7 +504,7 @@ public class MainActivity extends BridgeActivity {
             + "<h1>网页暂时打不开</h1>"
             + "<p class='desc'>服务器：" + escapeHtml(host) + "</p>"
             + (safeDetail.isEmpty() ? "" : "<p class='desc'>原因：" + safeDetail + "</p>")
-            + "<p class='retrying'><span class='spin'></span>正在自动重试，恢复后会自动进入</p>"
+            + "<p class='retrying'><span class='spin'></span>网络恢复后会自动重连，也可立即重试</p>"
             + "<button onclick=\"KaihangNativeBridge&&KaihangNativeBridge.retryLoadPage&&KaihangNativeBridge.retryLoadPage()\">立即重试</button>"
             + "</div></body></html>";
         bridge.getWebView().loadDataWithBaseURL(ERROR_PAGE_BASE_URL, html, "text/html", "utf-8", null);
@@ -1026,6 +997,12 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         WebView webView = bridge.getWebView();
+        // 错误页上没有业务 runtime，注入无意义且会叠加 evaluateJavascript 风暴——转为重试加载业务页
+        if (isErrorPageUrl(safe(webView.getUrl()))) {
+            appendNativeLog("当前为错误提示页，重新初始化转为重试加载业务页");
+            retryPageNow();
+            return;
+        }
         setNativePageReadyState("loading", "manual init");
         injectClientTypeHeader(webView, true);
         String command = forceRefresh
