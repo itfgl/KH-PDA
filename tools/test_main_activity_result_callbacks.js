@@ -18,10 +18,17 @@ assert.match(method, /requestCode\s*==\s*REQUEST_CAMERA_SCAN/, 'camera scan resu
 assert.match(method, /requestCode\s*!=\s*REQUEST_EXPORT_LOGS/, 'log export result branch must be retained');
 assert.equal((method.match(/super\.onActivityResult\s*\(/g) || []).length, 1, 'super callback must run once');
 
-const chooserMethodStart = source.indexOf('private Uri[] extractFileChooserUris(');
-const chooserMethodEnd = source.indexOf('\n    private ', chooserMethodStart + 1);
+// 文件选择结果解析已拆分到 ImageUploadHelper，行为断言跟随迁移
+const helperSource = fs.readFileSync(
+  path.resolve(__dirname, '../android/app/src/main/java/com/kaihang/scanner/ImageUploadHelper.java'),
+  'utf8',
+);
+const chooserMethodStart = helperSource.indexOf('static Uri[] extractFileChooserUris(');
+const chooserMethodEnd = helperSource.indexOf('\n    /**', chooserMethodStart + 1) > 0
+  ? helperSource.indexOf('\n    /**', chooserMethodStart + 1)
+  : helperSource.indexOf('\n    private static ', chooserMethodStart + 1);
 assert.ok(chooserMethodStart >= 0 && chooserMethodEnd > chooserMethodStart, 'file chooser URI extractor must be present');
-const chooserMethod = source.slice(chooserMethodStart, chooserMethodEnd);
+const chooserMethod = helperSource.slice(chooserMethodStart, chooserMethodEnd);
 assert.match(chooserMethod, /getClipData\s*\(/, 'multi-file results must be read from Intent ClipData');
 assert.match(chooserMethod, /getItemCount\s*\(/, 'all ClipData items must be enumerated');
 assert.match(chooserMethod, /getData\s*\(/, 'single-file Intent data must remain supported');

@@ -127,8 +127,34 @@ public class PrintPlugin extends Plugin {
         String message = (source == null || source.trim().isEmpty() ? "unknown" : source)
             + " | "
             + (detail == null ? "" : detail);
-        android.util.Log.d("PrintPlugin", message);
+        debugLog(message);
         emitNativeStatus("PRINT_LAYOUT", message);
+    }
+
+    /**
+     * logcat 调试输出统一入口：受「详细运行日志」开关控制（默认关），
+     * 与 appendNativeLog 同规则，生产环境不落 logcat。
+     */
+    private static void debugLog(String message) {
+        if (!isVerboseLoggingEnabled()) return;
+        android.util.Log.d("PrintPlugin", message);
+    }
+
+    // verbose 开关 5 秒缓存：打印回调/诊断可能高频触发，避免每次全量读 SharedPreferences
+    private static volatile boolean cachedVerboseLogs = false;
+    private static volatile long cachedVerboseLogsAt = 0L;
+    /** 插件 Context 弱引用（load() 时设置），供静态 debugLog 读取日志开关配置 */
+    private static volatile java.lang.ref.WeakReference<android.content.Context> pluginContext = null;
+
+    private static boolean isVerboseLoggingEnabled() {
+        long now = System.currentTimeMillis();
+        if (now - cachedVerboseLogsAt > 5000L) {
+            android.content.Context ctx = pluginContext != null ? pluginContext.get() : null;
+            cachedVerboseLogs = ctx != null
+                && ClientConfigPlugin.getSavedConfig(ctx).optBoolean("enableVerboseLogs", false);
+            cachedVerboseLogsAt = now;
+        }
+        return cachedVerboseLogs;
     }
 
     private static final class BuiltLabel {
@@ -438,7 +464,7 @@ public class PrintPlugin extends Plugin {
             },
             (result, feedbackBytes, flag) -> {
                 if (destroyed) return;
-                android.util.Log.d("PrintPlugin", "printCallback: " + result.name() + " flag=" + flag);
+                debugLog("printCallback: " + result.name() + " flag=" + flag);
                 JSObject data = new JSObject();
                 data.put("status", result.name());
                 if (flag != null) data.put("flag", flag);
@@ -1178,6 +1204,12 @@ public class PrintPlugin extends Plugin {
     // ── 生命周期 ──────────────────────────────────────────────────────────────
 
     @Override
+    public void load() {
+        super.load();
+        pluginContext = new java.lang.ref.WeakReference<>(getContext());
+    }
+
+    @Override
     protected void handleOnPause() {
         super.handleOnPause();
         // App 进后台时关闭打印机，熄灭绿色连接指示灯
@@ -1185,7 +1217,7 @@ public class PrintPlugin extends Plugin {
             wasConnectedBeforePause = true;
             isConnected  = false;
             isConnecting = false;
-            android.util.Log.d("PrintPlugin", "onPause: closing printer");
+            debugLog("onPause: closing printer");
             Printer.close(getActivity());
         }
     }
@@ -1196,7 +1228,7 @@ public class PrintPlugin extends Plugin {
         // App 回到前台时自动重连（仅限之前已连接过的情况）
         if (wasConnectedBeforePause && !destroyed) {
             wasConnectedBeforePause = false;
-            android.util.Log.d("PrintPlugin", "onResume: reconnecting printer");
+            debugLog("onResume: reconnecting printer");
             doConnect();
         }
     }
@@ -1211,6 +1243,8 @@ public class PrintPlugin extends Plugin {
         wasConnectedBeforePause = false;
         // 中断位图生成 / 打印任务
         printExecutor.shutdownNow();
+        // 中断原生桥打印队列（静态线程池，同样需要随销毁关闭，避免线程残留）
+        nativePrintExecutor.shutdownNow();
         // 关闭打印机连接
         Printer.close(getActivity());
     }

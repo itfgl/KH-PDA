@@ -5,6 +5,8 @@ import android.net.Uri;
 
 final class ClientRuntimeScriptBuilder {
     private static final String CORE_ASSET_PATH = "runtime/client-runtime.core.js";
+    private static final String PRINT_ASSET_PATH = "runtime/client-runtime.print.js";
+    private static final String DIAGNOSTICS_ASSET_PATH = "runtime/client-runtime.diagnostics.js";
     private static final String ACTION_EVENTS_ASSET_PATH = "runtime/client-runtime.action-events.js";
     private static final String NOCOBASE_EVENTS_ASSET_PATH = "runtime/client-runtime.nocobase-events.js";
     private static final String BOOTSTRAP_ASSET_PATH = "runtime/client-runtime.bootstrap.js";
@@ -57,6 +59,8 @@ final class ClientRuntimeScriptBuilder {
         script.append("defaultStorageAppName:").append(js(defaultStorageAppName));
         script.append("};})();");
         script.append(readAsset(context, CORE_ASSET_PATH));
+        script.append(readAsset(context, PRINT_ASSET_PATH));
+        script.append(readAsset(context, DIAGNOSTICS_ASSET_PATH));
         script.append(readAsset(context, ACTION_EVENTS_ASSET_PATH));
         script.append(readAsset(context, NOCOBASE_EVENTS_ASSET_PATH));
         script.append(readAsset(context, BOOTSTRAP_ASSET_PATH));

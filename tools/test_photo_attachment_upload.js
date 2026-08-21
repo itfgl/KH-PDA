@@ -28,11 +28,15 @@ assert.match(main, /MediaStore\.ACTION_IMAGE_CAPTURE/, 'capture requests must la
 assert.match(main, /MediaStore\.EXTRA_OUTPUT/, 'camera must write a full-size image to a content Uri');
 assert.match(main, /compressAndFinishFileChooser\(result, "拍照"\)/, 'captured Uri must be optimized before returning to the web attachment input');
 assert.match(main, /compressAndFinishFileChooser\(result, "选择文件"\)/, 'ordinary selected images must use the same optimization pipeline');
-assert.match(main, /FileChooserParams\.parseResult/, 'ordinary file selection must remain supported');
-assert.match(main, /IMAGE_COMPRESSION_MIN_BYTES\s*=\s*500L \* 1024L/, 'small images must bypass compression');
-assert.match(main, /IMAGE_COMPRESSION_MAX_LONG_EDGE\s*=\s*2560/, 'large images must be bounded to the configured long edge');
-assert.match(main, /IMAGE_COMPRESSION_JPEG_QUALITY\s*=\s*88/, 'photo uploads must use the visually lossless JPEG quality');
-assert.match(main, /compressedBytes >= originalBytes/, 'compression must fall back when output is not smaller');
-assert.match(main, /applyExifOrientation/, 'native compression must correct EXIF orientation');
+
+// 图片压缩与选择结果解析已拆分到 ImageUploadHelper，行为断言跟随迁移
+const helperPath = path.resolve(__dirname, '../android/app/src/main/java/com/kaihang/scanner/ImageUploadHelper.java');
+const helper = fs.readFileSync(helperPath, 'utf8');
+assert.match(helper, /FileChooserParams\.parseResult/, 'ordinary file selection must remain supported');
+assert.match(helper, /COMPRESSION_MIN_BYTES\s*=\s*500L \* 1024L/, 'small images must bypass compression');
+assert.match(helper, /COMPRESSION_MAX_LONG_EDGE\s*=\s*2560/, 'large images must be bounded to the configured long edge');
+assert.match(helper, /COMPRESSION_JPEG_QUALITY\s*=\s*88/, 'photo uploads must use the visually lossless JPEG quality');
+assert.match(helper, /compressedBytes >= originalBytes/, 'compression must fall back when output is not smaller');
+assert.match(helper, /applyExifOrientation/, 'native compression must correct EXIF orientation');
 
 console.log('photo attachment upload: existing upload interception and native source chooser checks passed');

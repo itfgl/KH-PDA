@@ -24,22 +24,11 @@ public class MainActivity extends BridgeActivity {
     private static final String DEFAULT_SERVER_BASE = "http://192.168.2.60:8080";
     private static final String DEFAULT_UPDATE_BASE = "http://192.168.2.138:9000";
     private static final long SCAN_RELEASE_TIMEOUT_MS = 8000L;
-    private static final int NATIVE_CONTROL_MARGIN_END_DP = 18;
-    private static final int NATIVE_CONTROL_MARGIN_BOTTOM_DP = 24;
-    private static final int NATIVE_STATUS_DOT_OFFSET_END_DP = 2;
-    private static final int NATIVE_STATUS_DOT_OFFSET_BOTTOM_DP = 46;
-    private static final int NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP = 68;
     private static final int REQUEST_EXPORT_LOGS = 8421;
     private static final int REQUEST_CAMERA_SCAN = 8422;
     private static final int REQUEST_CAMERA_UPLOAD = 8423;
     private static final int REQUEST_FILE_CHOOSER = 8424;
-    private static final long IMAGE_COMPRESSION_MIN_BYTES = 500L * 1024L;
-    private static final int IMAGE_COMPRESSION_MAX_LONG_EDGE = 2560;
-    private static final int IMAGE_COMPRESSION_JPEG_QUALITY = 88;
-    private android.widget.ImageButton nativeControlButton;
-    private android.widget.Button nativeScanButton;
-    private android.view.View nativeStatusDot;
-    private android.widget.FrameLayout nativeControlOverlay;
+    private NativeControlOverlay nativeControlOverlay;
     private final java.util.List<String> nativeLogLines = new java.util.ArrayList<>();
     private final android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
     private Runnable pendingScanRelease;
@@ -53,25 +42,9 @@ public class MainActivity extends BridgeActivity {
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
     private int nativePrintBridgeCallCount = 0;
-    private int nativeControlMarginEndPx = -1;
-    private int nativeControlMarginBottomPx = -1;
-    private float nativeControlDragDownRawX = 0f;
-    private float nativeControlDragDownRawY = 0f;
-    private int nativeControlDragStartEndPx = 0;
-    private int nativeControlDragStartBottomPx = 0;
-    private boolean nativeControlDragging = false;
-    private int nativeControlTouchSlopPx = 0;
-    // 悬浮球闲置半藏：1.5 秒无交互滑向最近的屏幕边缘，保留 45% 可见；任意触碰即滑回
-    private boolean nativeControlDocked = false;
-    private Runnable nativeControlDockRunnable = null;
-    private static final long NATIVE_CONTROL_DOCK_DELAY_MS = 1500L;
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
-
-    private interface CombinedLogCallback {
-        void onReady(String text);
-    }
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -155,7 +128,7 @@ public class MainActivity extends BridgeActivity {
         WebView webView = bridge.getWebView();
         configureInAppNavigation(webView);
         attachNativeWebBridge(webView);
-        ensureNativeControlButton();
+        nativeControlOverlay = NativeControlOverlay.attach(this, nativeControlHost);
 
         String launchUrl = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
         webView.post(() -> {
@@ -545,37 +518,58 @@ public class MainActivity extends BridgeActivity {
     }
 
     private Uri[] extractFileChooserUris(Intent data) {
-        java.util.ArrayList<Uri> uris = new java.util.ArrayList<>();
-        java.util.HashSet<String> seen = new java.util.HashSet<>();
-        android.content.ClipData clipData = data == null ? null : data.getClipData();
-        int clipCount = clipData == null ? 0 : clipData.getItemCount();
-        for (int index = 0; index < clipCount; index++) {
-            Uri uri = clipData.getItemAt(index).getUri();
-            if (uri != null && seen.add(uri.toString())) {
-                uris.add(uri);
-            }
-        }
-        Uri dataUri = data == null ? null : data.getData();
-        if (dataUri != null && seen.add(dataUri.toString())) {
-            uris.add(dataUri);
-        }
-        if (uris.isEmpty()) {
-            Uri[] parsed = WebChromeClient.FileChooserParams.parseResult(RESULT_OK, data);
-            if (parsed != null) {
-                for (Uri uri : parsed) {
-                    if (uri != null && seen.add(uri.toString())) {
-                        uris.add(uri);
-                    }
-                }
-            }
-        }
-        appendNativeLog(
-            "文件选择结果: clipCount=" + clipCount
-                + ", dataUri=" + (dataUri != null)
-                + ", resolved=" + uris.size()
-        );
-        return uris.isEmpty() ? null : uris.toArray(new Uri[0]);
+        return ImageUploadHelper.extractFileChooserUris(this, data, imageUploadLogger);
     }
+
+    private final ImageUploadHelper.Logger imageUploadLogger = new ImageUploadHelper.Logger() {
+        @Override
+        public void appendLog(String message) {
+            appendNativeLog(message);
+        }
+
+        @Override
+        public void appendVerboseLog(String message) {
+            appendVerboseNativeLog(message);
+        }
+    };
+
+    private final NativeControlOverlay.Host nativeControlHost = new NativeControlOverlay.Host() {
+        @Override
+        public boolean isCameraScanEntryAvailable() {
+            return MainActivity.this.isCameraScanEntryAvailable();
+        }
+
+        @Override
+        public void onFabClick(android.view.View anchor) {
+            if (!"ready".equals(nativePageReadyState)) {
+                appendNativeLog("点击悬浮球: 页面未就绪，先尝试重新初始化，同时保持原生菜单可用");
+                triggerRuntimeInitialization(true);
+                android.widget.Toast.makeText(MainActivity.this, "网页未就绪，可直接打开设置或检查更新", android.widget.Toast.LENGTH_SHORT).show();
+            }
+            showNativeControlMenu(anchor);
+        }
+
+        @Override
+        public void onScanClick() {
+            if (nativeScanActive && !isCameraScanEntryAvailable()) {
+                appendNativeLog("点击原生扫码按钮: 停扫");
+                stopNativeScan();
+            } else {
+                appendNativeLog("点击原生扫码按钮: 扫码");
+                triggerPreferredScan();
+            }
+        }
+
+        @Override
+        public void appendLog(String message) {
+            appendNativeLog(message);
+        }
+
+        @Override
+        public void appendVerboseLog(String message) {
+            appendVerboseNativeLog(message);
+        }
+    };
 
     private void compressAndFinishFileChooser(Uri[] result, String sourceLabel) {
         android.webkit.ValueCallback<Uri[]> callback = pendingFileChooserCallback;
@@ -592,7 +586,7 @@ public class MainActivity extends BridgeActivity {
             for (int index = 0; index < result.length; index++) {
                 Uri original = result[index];
                 try {
-                    prepared[index] = prepareImageForUpload(original);
+                    prepared[index] = ImageUploadHelper.prepareImageForUpload(this, original, imageUploadLogger);
                 } catch (Exception error) {
                     prepared[index] = original;
                     appendNativeLog(sourceLabel + "图片优化失败，使用原文件: " + safe(error.getMessage()));
@@ -602,185 +596,10 @@ public class MainActivity extends BridgeActivity {
         }, "kh-image-upload-compression").start();
     }
 
-    private Uri prepareImageForUpload(Uri sourceUri) throws java.io.IOException {
-        if (sourceUri == null) {
-            return null;
-        }
-        String mimeType = safe(getContentResolver().getType(sourceUri)).toLowerCase(java.util.Locale.ROOT);
-        String pathHint = safe(sourceUri.getLastPathSegment()).toLowerCase(java.util.Locale.ROOT);
-        boolean isJpeg = mimeType.equals("image/jpeg") || pathHint.endsWith(".jpg") || pathHint.endsWith(".jpeg");
-        boolean isPng = mimeType.equals("image/png") || pathHint.endsWith(".png");
-        boolean isCompressibleImage = isJpeg
-            || isPng
-            || mimeType.equals("image/webp")
-            || mimeType.equals("image/heic")
-            || mimeType.equals("image/heif")
-            || pathHint.endsWith(".webp")
-            || pathHint.endsWith(".heic")
-            || pathHint.endsWith(".heif");
-        if (!isCompressibleImage) {
-            return sourceUri;
-        }
-
-        long originalBytes = resolveContentLength(sourceUri);
-        if (originalBytes >= 0 && originalBytes < IMAGE_COMPRESSION_MIN_BYTES) {
-            appendVerboseNativeLog("图片小于压缩阈值，直接上传: bytes=" + originalBytes);
-            return sourceUri;
-        }
-
-        android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        try (java.io.InputStream input = getContentResolver().openInputStream(sourceUri)) {
-            if (input == null) throw new java.io.IOException("无法读取图片");
-            android.graphics.BitmapFactory.decodeStream(input, null, bounds);
-        }
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
-            return sourceUri;
-        }
-        int sourceLongEdge = Math.max(bounds.outWidth, bounds.outHeight);
-        if (isPng && sourceLongEdge <= IMAGE_COMPRESSION_MAX_LONG_EDGE) {
-            return sourceUri;
-        }
-
-        android.graphics.BitmapFactory.Options decodeOptions = new android.graphics.BitmapFactory.Options();
-        decodeOptions.inSampleSize = 1;
-        while (sourceLongEdge / (decodeOptions.inSampleSize * 2) > IMAGE_COMPRESSION_MAX_LONG_EDGE) {
-            decodeOptions.inSampleSize *= 2;
-        }
-        android.graphics.Bitmap bitmap;
-        try (java.io.InputStream input = getContentResolver().openInputStream(sourceUri)) {
-            if (input == null) throw new java.io.IOException("无法读取图片像素");
-            bitmap = android.graphics.BitmapFactory.decodeStream(input, null, decodeOptions);
-        }
-        if (bitmap == null) {
-            return sourceUri;
-        }
-
-        android.graphics.Bitmap transformed = applyExifOrientation(bitmap, sourceUri);
-        if (transformed != bitmap) bitmap.recycle();
-        android.graphics.Bitmap resized = resizeBitmapToLongEdge(transformed, IMAGE_COMPRESSION_MAX_LONG_EDGE);
-        if (resized != transformed) transformed.recycle();
-
-        java.io.File outputDir = new java.io.File(getCacheDir(), "photo-uploads/compressed");
-        if (!outputDir.exists() && !outputDir.mkdirs()) {
-            resized.recycle();
-            throw new java.io.IOException("无法创建图片压缩缓存目录");
-        }
-        boolean preservePng = isPng || resized.hasAlpha();
-        java.io.File outputFile = java.io.File.createTempFile("upload_", preservePng ? ".png" : ".jpg", outputDir);
-        boolean encoded;
-        try (java.io.FileOutputStream output = new java.io.FileOutputStream(outputFile)) {
-            encoded = resized.compress(
-                preservePng ? android.graphics.Bitmap.CompressFormat.PNG : android.graphics.Bitmap.CompressFormat.JPEG,
-                preservePng ? 100 : IMAGE_COMPRESSION_JPEG_QUALITY,
-                output
-            );
-            output.flush();
-        } finally {
-            resized.recycle();
-        }
-        if (!encoded) {
-            outputFile.delete();
-            return sourceUri;
-        }
-        long compressedBytes = outputFile.length();
-        if (originalBytes >= 0 && compressedBytes >= originalBytes) {
-            outputFile.delete();
-            appendVerboseNativeLog("图片优化后未变小，继续使用原文件: before=" + originalBytes + ", after=" + compressedBytes);
-            return sourceUri;
-        }
-        Uri outputUri = androidx.core.content.FileProvider.getUriForFile(
-            this,
-            getPackageName() + ".fileprovider",
-            outputFile
-        );
-        appendNativeLog(
-            "上传图片已优化: before=" + originalBytes
-                + ", after=" + compressedBytes
-                + ", bounds=" + bounds.outWidth + "x" + bounds.outHeight
-                + ", format=" + (preservePng ? "PNG" : "JPEG")
-        );
-        return outputUri;
-    }
-
-    private long resolveContentLength(Uri uri) {
-        try (android.content.res.AssetFileDescriptor descriptor = getContentResolver().openAssetFileDescriptor(uri, "r")) {
-            return descriptor == null ? -1L : descriptor.getLength();
-        } catch (Exception ignored) {
-            return -1L;
-        }
-    }
-
-    private android.graphics.Bitmap applyExifOrientation(android.graphics.Bitmap source, Uri uri) {
-        int orientation = android.media.ExifInterface.ORIENTATION_NORMAL;
-        try (java.io.InputStream input = getContentResolver().openInputStream(uri)) {
-            if (input != null) {
-                android.media.ExifInterface exif = new android.media.ExifInterface(input);
-                orientation = exif.getAttributeInt(
-                    android.media.ExifInterface.TAG_ORIENTATION,
-                    android.media.ExifInterface.ORIENTATION_NORMAL
-                );
-            }
-        } catch (Exception ignored) {}
-        android.graphics.Matrix matrix = new android.graphics.Matrix();
-        switch (orientation) {
-            case android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
-                matrix.setScale(-1f, 1f);
-                break;
-            case android.media.ExifInterface.ORIENTATION_ROTATE_180:
-                matrix.setRotate(180f);
-                break;
-            case android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL:
-                matrix.setScale(1f, -1f);
-                break;
-            case android.media.ExifInterface.ORIENTATION_TRANSPOSE:
-                matrix.setRotate(90f);
-                matrix.postScale(-1f, 1f);
-                break;
-            case android.media.ExifInterface.ORIENTATION_ROTATE_90:
-                matrix.setRotate(90f);
-                break;
-            case android.media.ExifInterface.ORIENTATION_TRANSVERSE:
-                matrix.setRotate(-90f);
-                matrix.postScale(-1f, 1f);
-                break;
-            case android.media.ExifInterface.ORIENTATION_ROTATE_270:
-                matrix.setRotate(-90f);
-                break;
-            default:
-                return source;
-        }
-        try {
-            return android.graphics.Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), matrix, true);
-        } catch (Exception ignored) {
-            return source;
-        }
-    }
-
-    private android.graphics.Bitmap resizeBitmapToLongEdge(android.graphics.Bitmap source, int maxLongEdge) {
-        int width = source.getWidth();
-        int height = source.getHeight();
-        int longEdge = Math.max(width, height);
-        if (longEdge <= maxLongEdge) {
-            return source;
-        }
-        float scale = (float) maxLongEdge / (float) longEdge;
-        int targetWidth = Math.max(1, Math.round(width * scale));
-        int targetHeight = Math.max(1, Math.round(height * scale));
-        return android.graphics.Bitmap.createScaledBitmap(source, targetWidth, targetHeight, true);
-    }
-
     private void handleRuntimeInjection(WebView view, String targetUrl, InjectionTrigger trigger) {
         String url = safe(targetUrl);
         if (url.isEmpty() && view != null) {
             url = safe(view.getUrl());
-        }
-        if (!shouldInjectForTrigger(trigger)) {
-            appendVerboseNativeLog("跳过自动注入: mode=" + getCurrentInjectionMode() + ", trigger=" + trigger + ", url=" + url);
-            if (trigger != InjectionTrigger.MANUAL) {
-                setNativePageReadyState("loading", url);
-            }
-            return;
         }
         if (view != null && isRuntimeReuseEnabled() && trigger != InjectionTrigger.MANUAL && trigger != InjectionTrigger.PAGE_STARTED) {
             probeReusableRuntime(view, url, trigger);
@@ -798,9 +617,6 @@ public class MainActivity extends BridgeActivity {
                     view.post(() -> injectClientTypeHeader(view, false));
                 } else {
                     view.postDelayed(() -> injectClientTypeHeader(view, false), 40);
-                }
-                if ("commit_loaded".equals(getCurrentInjectionMode()) && trigger == InjectionTrigger.PAGE_COMMIT_VISIBLE) {
-                    scheduleInjectionRecoveryCheck(view, url, 1200L);
                 }
             }
             return;
@@ -827,7 +643,7 @@ public class MainActivity extends BridgeActivity {
                 continueRuntimeInjection(view, resolvedUrl, trigger);
                 return;
             }
-            appendVerboseNativeLog("复用已注入 runtime: mode=" + getCurrentInjectionMode() + ", trigger=" + trigger + ", url=" + resolvedUrl);
+            appendVerboseNativeLog("复用已注入 runtime: trigger=" + trigger + ", url=" + resolvedUrl);
             setNativePageReadyState("loading", resolvedUrl);
             view.post(() -> view.evaluateJavascript(
                 "window.__khClientRuntime&&window.__khClientRuntime.bootOnce&&window.__khClientRuntime.bootOnce()" +
@@ -835,35 +651,7 @@ public class MainActivity extends BridgeActivity {
                     ".catch(function(err){window.log&&window.log('复用 runtime 刷新失败: '+String(err&&err.message||err||'unknown'),'warn');});",
                 null
             ));
-            if ("commit_loaded".equals(getCurrentInjectionMode()) && trigger == InjectionTrigger.PAGE_COMMIT_VISIBLE) {
-                scheduleInjectionRecoveryCheck(view, resolvedUrl, 1200L);
-            }
         });
-    }
-
-    private void scheduleInjectionRecoveryCheck(WebView view, String expectedUrl, long delayMs) {
-        if (view == null) {
-            return;
-        }
-        view.postDelayed(() -> {
-            if (bridge == null || bridge.getWebView() != view) {
-                return;
-            }
-            String latestUrl = safe(view.getUrl());
-            if (!safe(expectedUrl).equals(latestUrl)) {
-                return;
-            }
-            if ("ready".equals(nativePageReadyState)) {
-                return;
-            }
-            appendNativeLog("稳妥模式兜底: commit 后页面仍未就绪，自动补一次强制初始化 @" + latestUrl);
-            injectClientTypeHeader(view, true);
-        }, Math.max(200L, delayMs));
-    }
-
-    // 注入时机固定激进模式：定制 ROM 只在该模式下可靠注入，任何页面事件都全量注入
-    private boolean shouldInjectForTrigger(InjectionTrigger trigger) {
-        return true;
     }
 
     private boolean isRuntimeReuseEnabled() {
@@ -896,291 +684,6 @@ public class MainActivity extends BridgeActivity {
         }, 350);
     }
 
-    private void ensureNativeControlButton() {
-        if (nativeControlButton != null) {
-            return;
-        }
-        android.view.ViewGroup root = findViewById(android.R.id.content);
-        if (root == null) {
-            return;
-        }
-        android.widget.FrameLayout container = new android.widget.FrameLayout(this);
-        android.widget.FrameLayout.LayoutParams containerParams = new android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-        );
-        container.setLayoutParams(containerParams);
-        container.setClickable(false);
-        container.setFocusable(false);
-        nativeControlOverlay = container;
-        nativeControlTouchSlopPx = android.view.ViewConfiguration.get(this).getScaledTouchSlop();
-
-        nativeControlButton = new android.widget.ImageButton(this);
-        nativeControlButton.setImageResource(android.R.drawable.ic_menu_manage);
-        nativeControlButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-        nativeControlButton.setBackground(buildNativeFabBackground());
-        nativeControlButton.setColorFilter(android.graphics.Color.WHITE);
-        nativeControlButton.setContentDescription("客户端工具");
-        int size = dp(56);
-        android.widget.FrameLayout.LayoutParams fabParams = new android.widget.FrameLayout.LayoutParams(size, size);
-        nativeControlButton.setLayoutParams(fabParams);
-        nativeControlButton.setElevation(dp(10));
-        nativeControlButton.setOnClickListener(v -> {
-            if (!"ready".equals(nativePageReadyState)) {
-                appendNativeLog("点击悬浮球: 页面未就绪，先尝试重新初始化，同时保持原生菜单可用");
-                triggerRuntimeInitialization(true);
-                android.widget.Toast.makeText(this, "网页未就绪，可直接打开设置或检查更新", android.widget.Toast.LENGTH_SHORT).show();
-            }
-            showNativeControlMenu(v);
-        });
-        nativeControlButton.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case android.view.MotionEvent.ACTION_DOWN:
-                    undockNativeControl();
-                    nativeControlDragDownRawX = event.getRawX();
-                    nativeControlDragDownRawY = event.getRawY();
-                    nativeControlDragStartEndPx = getNativeControlMarginEndPx();
-                    nativeControlDragStartBottomPx = getNativeControlMarginBottomPx();
-                    nativeControlDragging = false;
-                    return true;
-                case android.view.MotionEvent.ACTION_MOVE:
-                    float deltaX = event.getRawX() - nativeControlDragDownRawX;
-                    float deltaY = event.getRawY() - nativeControlDragDownRawY;
-                    if (!nativeControlDragging) {
-                        nativeControlDragging = Math.hypot(deltaX, deltaY) > nativeControlTouchSlopPx;
-                    }
-                    if (nativeControlDragging) {
-                        int nextEnd = Math.round(nativeControlDragStartEndPx - deltaX);
-                        int nextBottom = Math.round(nativeControlDragStartBottomPx - deltaY);
-                        updateNativeControlAnchor(nextEnd, nextBottom);
-                    }
-                    return true;
-                case android.view.MotionEvent.ACTION_CANCEL:
-                    nativeControlDragging = false;
-                    return true;
-                case android.view.MotionEvent.ACTION_UP:
-                    boolean handledAsClick = !nativeControlDragging;
-                    nativeControlDragging = false;
-                    scheduleNativeControlDock();
-                    if (handledAsClick) {
-                        v.performClick();
-                    }
-                    return true;
-                default:
-                    return false;
-            }
-        });
-
-        nativeStatusDot = new android.view.View(this);
-        android.widget.FrameLayout.LayoutParams dotParams = new android.widget.FrameLayout.LayoutParams(dp(12), dp(12));
-        nativeStatusDot.setLayoutParams(dotParams);
-        nativeStatusDot.setElevation(dp(12));
-        nativeStatusDot.setBackground(buildStatusDotBackground("#98A2B3"));
-
-        nativeScanButton = new android.widget.Button(this);
-        nativeScanButton.setText("扫码");
-        nativeScanButton.setTextSize(14);
-        nativeScanButton.setTextColor(android.graphics.Color.WHITE);
-        nativeScanButton.setAllCaps(false);
-        nativeScanButton.setBackground(buildNativeCapsuleBackground(false));
-        nativeScanButton.setVisibility(android.view.View.GONE);
-        nativeScanButton.setElevation(dp(8));
-        android.widget.FrameLayout.LayoutParams scanParams = new android.widget.FrameLayout.LayoutParams(
-            android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
-            dp(44)
-        );
-        nativeScanButton.setLayoutParams(scanParams);
-        nativeScanButton.setPadding(dp(18), 0, dp(18), 0);
-        nativeScanButton.setOnClickListener(v -> {
-            if (nativeScanActive && !isCameraScanEntryAvailable()) {
-                appendNativeLog("点击原生扫码按钮: 停扫");
-                stopNativeScan();
-            } else {
-                appendNativeLog("点击原生扫码按钮: 扫码");
-                triggerPreferredScan();
-            }
-        });
-
-        container.addView(nativeStatusDot);
-        container.addView(nativeScanButton);
-        container.addView(nativeControlButton);
-        root.addView(container);
-        container.bringToFront();
-        nativeStatusDot.bringToFront();
-        nativeScanButton.bringToFront();
-        nativeControlButton.bringToFront();
-        updateNativeControlPositions();
-        updateNativeStatusDot();
-        // 布局完成后启动首次闲置计时
-        nativeControlButton.post(() -> scheduleNativeControlDock());
-    }
-
-    private int getNativeControlMarginEndPx() {
-        if (nativeControlMarginEndPx < 0) {
-            nativeControlMarginEndPx = dp(NATIVE_CONTROL_MARGIN_END_DP);
-        }
-        return nativeControlMarginEndPx;
-    }
-
-    private int getNativeControlMarginBottomPx() {
-        if (nativeControlMarginBottomPx < 0) {
-            nativeControlMarginBottomPx = dp(NATIVE_CONTROL_MARGIN_BOTTOM_DP);
-        }
-        return nativeControlMarginBottomPx;
-    }
-
-    private void updateNativeControlAnchor(int marginEndPx, int marginBottomPx) {
-        nativeControlMarginEndPx = clampNativeControlHorizontalMargin(marginEndPx);
-        nativeControlMarginBottomPx = clampNativeControlVerticalMargin(marginBottomPx);
-        updateNativeControlPositions();
-    }
-
-    private int clampNativeControlHorizontalMargin(int requestedPx) {
-        int overlayWidth = nativeControlOverlay != null ? nativeControlOverlay.getWidth() : 0;
-        int buttonWidth = nativeControlButton != null ? nativeControlButton.getWidth() : 0;
-        if (overlayWidth <= 0) {
-            overlayWidth = getResources().getDisplayMetrics().widthPixels;
-        }
-        if (buttonWidth <= 0) {
-            buttonWidth = dp(56);
-        }
-        int maxMargin = Math.max(0, overlayWidth - buttonWidth);
-        return Math.max(0, Math.min(requestedPx, maxMargin));
-    }
-
-    private int clampNativeControlVerticalMargin(int requestedPx) {
-        int overlayHeight = nativeControlOverlay != null ? nativeControlOverlay.getHeight() : 0;
-        int buttonHeight = nativeControlButton != null ? nativeControlButton.getHeight() : 0;
-        if (overlayHeight <= 0) {
-            overlayHeight = getResources().getDisplayMetrics().heightPixels;
-        }
-        if (buttonHeight <= 0) {
-            buttonHeight = dp(56);
-        }
-        int maxMargin = Math.max(0, overlayHeight - buttonHeight);
-        return Math.max(0, Math.min(requestedPx, maxMargin));
-    }
-
-    private void updateNativeControlPositions() {
-        if (nativeControlButton == null || nativeScanButton == null || nativeStatusDot == null) {
-            return;
-        }
-        int end = getNativeControlMarginEndPx();
-        int bottom = getNativeControlMarginBottomPx();
-
-        android.widget.FrameLayout.LayoutParams fabParams =
-            (android.widget.FrameLayout.LayoutParams) nativeControlButton.getLayoutParams();
-        fabParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
-        fabParams.setMargins(0, 0, end, bottom);
-        nativeControlButton.setLayoutParams(fabParams);
-
-        android.widget.FrameLayout.LayoutParams scanParams =
-            (android.widget.FrameLayout.LayoutParams) nativeScanButton.getLayoutParams();
-        scanParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
-        scanParams.setMargins(0, 0, end, bottom + dp(NATIVE_SCAN_BUTTON_OFFSET_BOTTOM_DP));
-        nativeScanButton.setLayoutParams(scanParams);
-
-        android.widget.FrameLayout.LayoutParams dotParams =
-            (android.widget.FrameLayout.LayoutParams) nativeStatusDot.getLayoutParams();
-        dotParams.gravity = android.view.Gravity.END | android.view.Gravity.BOTTOM;
-        dotParams.setMargins(0, 0, end + dp(NATIVE_STATUS_DOT_OFFSET_END_DP), bottom + dp(NATIVE_STATUS_DOT_OFFSET_BOTTOM_DP));
-        nativeStatusDot.setLayoutParams(dotParams);
-    }
-
-    /** 闲置自动半藏：滑向最近的屏幕左右边缘，露出 45%，状态点跟随平移 */
-    private void dockNativeControl() {
-        if (nativeControlButton == null || nativeControlDocked || nativeControlOverlay == null) {
-            return;
-        }
-        int overlayWidth = nativeControlOverlay.getWidth();
-        int btnWidth = nativeControlButton.getWidth() > 0 ? nativeControlButton.getWidth() : dp(56);
-        if (overlayWidth <= 0 || btnWidth <= 0) {
-            return;
-        }
-        float visible = btnWidth * 0.45f;
-        int left = nativeControlButton.getLeft();
-        boolean nearRight = (left + btnWidth / 2f) >= overlayWidth / 2f;
-        float targetLeft = nearRight ? overlayWidth - visible : visible - btnWidth;
-        float translation = targetLeft - left;
-        nativeControlDocked = true;
-        nativeControlButton.animate().translationX(translation).setDuration(220).start();
-        if (nativeStatusDot != null) {
-            nativeStatusDot.animate().translationX(translation).setDuration(220).start();
-        }
-        appendVerboseNativeLog("悬浮球已半藏至" + (nearRight ? "右侧" : "左侧") + "边缘，点击可唤回");
-    }
-
-    /** 唤回：滑回原位并重置闲置计时 */
-    private void undockNativeControl() {
-        cancelNativeControlDockTimer();
-        if (!nativeControlDocked) {
-            return;
-        }
-        nativeControlDocked = false;
-        if (nativeControlButton != null) {
-            nativeControlButton.animate().translationX(0f).setDuration(180).start();
-        }
-        if (nativeStatusDot != null) {
-            nativeStatusDot.animate().translationX(0f).setDuration(180).start();
-        }
-    }
-
-    private void scheduleNativeControlDock() {
-        cancelNativeControlDockTimer();
-        if (nativeControlButton == null) {
-            return;
-        }
-        nativeControlDockRunnable = this::dockNativeControl;
-        nativeControlButton.postDelayed(nativeControlDockRunnable, NATIVE_CONTROL_DOCK_DELAY_MS);
-    }
-
-    private void cancelNativeControlDockTimer() {
-        if (nativeControlDockRunnable != null && nativeControlButton != null) {
-            nativeControlButton.removeCallbacks(nativeControlDockRunnable);
-        }
-        nativeControlDockRunnable = null;
-    }
-
-    private android.graphics.drawable.Drawable buildNativeFabBackground() {
-        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        background.setColor(android.graphics.Color.parseColor("#111827"));
-        return background;
-    }
-
-    private android.graphics.drawable.Drawable buildStatusDotBackground(String color) {
-        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        background.setColor(android.graphics.Color.parseColor(color));
-        background.setStroke(dp(2), android.graphics.Color.WHITE);
-        return background;
-    }
-
-    private android.graphics.drawable.Drawable buildNativeCapsuleBackground(boolean active) {
-        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
-        background.setCornerRadius(dp(22));
-        background.setColor(android.graphics.Color.parseColor(active ? "#B42318" : "#1570EF"));
-        return background;
-    }
-
-    private void updateNativeStatusDot() {
-        if (nativeStatusDot == null) {
-            return;
-        }
-        String color = "#98A2B3";
-        String description = "页面初始化中";
-        if ("ready".equals(nativePageReadyState)) {
-            color = "#12B76A";
-            description = "页面已就绪";
-        } else if ("error".equals(nativePageReadyState)) {
-            color = "#F04438";
-            description = "页面初始化异常";
-        }
-        nativeStatusDot.setBackground(buildStatusDotBackground(color));
-        nativeStatusDot.setContentDescription(description);
-    }
-
     private void setNativePageReadyState(String state, String detail) {
         String normalized = safe(state).trim().toLowerCase(java.util.Locale.ROOT);
         if (!"ready".equals(normalized) && !"error".equals(normalized)) {
@@ -1188,14 +691,12 @@ public class MainActivity extends BridgeActivity {
         }
         boolean changed = !normalized.equals(nativePageReadyState);
         nativePageReadyState = normalized;
-        updateNativeStatusDot();
+        if (nativeControlOverlay != null) {
+            nativeControlOverlay.setPageReadyState(normalized);
+        }
         if (changed) {
             appendNativeLog("页面状态: " + normalized + (safe(detail).isEmpty() ? "" : (" - " + detail)));
         }
-    }
-
-    private int dp(int value) {
-        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 
     private void showNativeControlMenu(android.view.View anchor) {
@@ -1206,7 +707,11 @@ public class MainActivity extends BridgeActivity {
         menu.getMenu().add(0, 4, 3, "原生配置");
         menu.getMenu().add(0, 5, 4, "检查更新");
         menu.getMenu().add(0, 6, 5, "日志");
-        menu.setOnDismissListener(menu1 -> scheduleNativeControlDock());
+        menu.setOnDismissListener(menu1 -> {
+            if (nativeControlOverlay != null) {
+                nativeControlOverlay.scheduleDock();
+            }
+        });
         menu.setOnMenuItemClickListener(item -> {
             int id = item.getItemId();
             if (id == 1) {
@@ -1435,25 +940,19 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void updateNativeScanActionVisibility() {
-        if (nativeScanButton == null) return;
-        boolean showCameraButton = isCameraScanEntryAvailable();
-        nativeScanButton.setVisibility(showCameraButton ? android.view.View.VISIBLE : android.view.View.GONE);
-        if (showCameraButton) {
-            nativeScanButton.setText("相机扫码");
-            nativeScanButton.setBackground(buildNativeCapsuleBackground(false));
-            nativeScanButton.bringToFront();
-        } else {
-            setNativeScanActive(false);
+        if (nativeControlOverlay == null) return;
+        if (!isCameraScanEntryAvailable()) {
+            nativeScanActive = false;
         }
+        nativeControlOverlay.updateScanButtonVisibility();
     }
 
     private void setNativeScanActive(boolean active) {
         nativeScanActive = active;
-        if (nativeScanButton == null) {
+        if (nativeControlOverlay == null) {
             return;
         }
-        nativeScanButton.setText(isCameraScanEntryAvailable() ? "相机扫码" : (active ? "停扫" : "扫码"));
-        nativeScanButton.setBackground(buildNativeCapsuleBackground(active));
+        nativeControlOverlay.setScanActive(active);
     }
 
     private final class NativeWebBridge {
@@ -1721,7 +1220,11 @@ public class MainActivity extends BridgeActivity {
                 );
                 appendNativeLog(values.buildSaveSummary());
                 toast("配置已保存，应用即将重启");
-                nativeControlButton.postDelayed(() -> ClientConfigPlugin.restartApp(MainActivity.this), 300);
+                if (nativeControlOverlay != null) {
+                    nativeControlOverlay.postOnFab(() -> ClientConfigPlugin.restartApp(MainActivity.this), 300);
+                } else {
+                    mainHandler.postDelayed(() -> ClientConfigPlugin.restartApp(MainActivity.this), 300);
+                }
             }
         });
     }
@@ -1742,81 +1245,39 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
-    private void showNativeLogDialog() {
-        android.widget.TextView content = new android.widget.TextView(this);
-        content.setTextSize(12);
-        content.setTextColor(android.graphics.Color.parseColor("#101828"));
-        content.setTypeface(android.graphics.Typeface.MONOSPACE);
-        content.setPadding(dp(12), dp(12), dp(12), dp(12));
-        content.setText("正在加载日志...");
-
-        android.widget.ScrollView scrollView = new android.widget.ScrollView(this);
-        scrollView.addView(content);
-
-        androidx.appcompat.app.AlertDialog dialog = new androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("运行日志")
-            .setView(scrollView)
-            .setPositiveButton("关闭", null)
-            .setNegativeButton("导出 TXT", null)
-            .setNeutralButton("清空", null)
-            .create();
-        dialog.setOnShowListener(d -> {
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> clearCombinedLogs(content));
-            dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_NEGATIVE).setOnClickListener(v -> exportCombinedLogs());
-        });
-        dialog.show();
-        loadCombinedLogs(content);
-    }
-
-    private void loadCombinedLogs(android.widget.TextView targetView) {
-        collectCombinedLogs(text -> runOnUiThread(() -> targetView.setText(text)));
-    }
-
-    private void collectCombinedLogs(CombinedLogCallback callback) {
-        String nativeLogs = nativeLogLines.isEmpty() ? "(暂无原生日志)" : android.text.TextUtils.join("\n", nativeLogLines);
-        if (bridge == null || bridge.getWebView() == null) {
-            callback.onReady("== 原生日志 ==\n" + nativeLogs + "\n\n== 网页日志 ==\n(网页不可用)");
-            return;
+    private final NativeLogDialog.Host nativeLogHost = new NativeLogDialog.Host() {
+        @Override
+        public String getNativeLogsText() {
+            return nativeLogLines.isEmpty() ? "(暂无原生日志)" : android.text.TextUtils.join("\n", nativeLogLines);
         }
-        String script = "(function(){try{var raw=(window.localStorage&&window.localStorage.getItem('KH_FLOATING_LOGS'))||'[]';window.__khLastLogRaw=raw;return raw;}catch(e){return JSON.stringify([{text:'读取网页日志失败: '+String(e&&e.message||e||'unknown'),type:'err'}]);}})();";
-        bridge.getWebView().evaluateJavascript(script, value -> {
-            StringBuilder text = new StringBuilder();
-            text.append("== 原生日志 ==\n").append(nativeLogs).append("\n\n== 网页日志 ==\n");
-            try {
-                String json = decodeJsString(value);
-                org.json.JSONArray array = new org.json.JSONArray(json);
-                if (array.length() == 0) {
-                    text.append("(暂无网页日志)");
-                } else {
-                    for (int i = 0; i < array.length(); i++) {
-                        org.json.JSONObject item = array.optJSONObject(i);
-                        if (item == null) continue;
-                        text.append(item.optString("text", "")).append('\n');
-                    }
-                }
-            } catch (Exception e) {
-                text.append("读取网页日志失败: ").append(e.getMessage());
-            }
-            callback.onReady(text.toString());
-        });
-    }
 
-    private void clearCombinedLogs(android.widget.TextView targetView) {
-        nativeLogLines.clear();
-        if (bridge == null || bridge.getWebView() == null) {
-            targetView.setText("原生日志已清空；网页当前不可用，网页日志未清理");
-            return;
+        @Override
+        public void clearNativeLogs() {
+            nativeLogLines.clear();
         }
-        String script = "(function(){try{var kh=window.__khClientRuntime;if(kh&&kh.clearFloatingLogs){kh.clearFloatingLogs();}else if(window.localStorage){window.localStorage.removeItem('KH_FLOATING_LOGS');}window.__khLastLogRaw='[]';window.__khLastLogSnapshot=[];return true;}catch(e){return false;}})();";
-        bridge.getWebView().evaluateJavascript(script, value -> runOnUiThread(() -> {
-            boolean webCleared = "true".equalsIgnoreCase(safe(value).replace("\"", "").trim());
-            targetView.setText(webCleared ? "原生和网页日志已清空" : "原生日志已清空，网页日志清理失败");
-        }));
-    }
 
-    private void exportCombinedLogs() {
-        appendNativeLog("准备导出运行日志");
-        collectCombinedLogs(text -> runOnUiThread(() -> {
+        @Override
+        public WebView getWebView() {
+            return bridge == null ? null : bridge.getWebView();
+        }
+
+        @Override
+        public void appendLog(String message) {
+            appendNativeLog(message);
+        }
+
+        @Override
+        public void toast(String message) {
+            MainActivity.this.toast(message);
+        }
+
+        @Override
+        public void runOnUiThread(Runnable action) {
+            MainActivity.this.runOnUiThread(action);
+        }
+
+        @Override
+        public void requestExportLogs(String text) {
             pendingLogExportText = text;
             String timestamp = new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", java.util.Locale.US).format(new java.util.Date());
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
@@ -1830,32 +1291,12 @@ public class MainActivity extends BridgeActivity {
                 appendNativeLog("打开日志保存界面失败: " + e.getMessage());
                 toast("无法打开文件保存界面");
             }
-        }));
-    }
-
-    private String decodeJsString(String value) {
-        if (value == null || "null".equals(value)) {
-            return "[]";
         }
-        try {
-            Object decoded = new org.json.JSONTokener(value).nextValue();
-            if (decoded instanceof String) {
-                return (String) decoded;
-            }
-        } catch (Exception ignored) {}
-        String raw = value;
-        if (raw.startsWith("\"") && raw.endsWith("\"") && raw.length() >= 2) {
-            raw = raw.substring(1, raw.length() - 1);
-        }
-        raw = raw
-            .replace("\\\\", "\\")
-            .replace("\\\"", "\"")
-            .replace("\\n", "\n")
-            .replace("\\r", "\r")
-            .replace("\\t", "\t");
-        return raw;
-    }
+    };
 
+    private void showNativeLogDialog() {
+        NativeLogDialog.show(this, nativeLogHost);
+    }
     private String normalizeBaseUrl(String value, String fallback) {
         String raw = safe(value).trim();
         if (raw.isEmpty()) {
