@@ -44,10 +44,15 @@ public class MainActivity extends BridgeActivity {
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
     // 页面加载失败自动重试：间隔递增（3s/5s/10s/…封顶 30s），重新加载成功即停止；
-    // 状态点闪烁提示用户正在重试，点击 WebView 也可立即重试
+    // 失败时展示原生错误页（提示+倒计时+立即重试按钮），状态点闪烁提示，点击屏幕可立即重试
+    private static final String ERROR_PAGE_BASE_URL = "https://__kh_native_error_page__/";
     private Runnable pendingPageRetry = null;
     private int pageRetryAttempt = 0;
     private boolean pageRetryFlashing = false;
+    private String lastErrorDetail = "";
+    private String lastErrorUrl = "";
+    // 加载看门狗：onPageStarted 后 20 秒内没有 commit/ready 视为挂起（服务器无响应时不触发错误回调）
+    private Runnable pageLoadWatchdog = null;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -164,8 +169,20 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
+                if (isErrorPageUrl(url)) {
+                    return; // 错误页自身加载：不打断重试链，也不注入 runtime
+                }
                 cancelPageAutoRetry();
+                armPageLoadWatchdog(url);
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
+            }
+
+            @Override
+            public void onPageCommitVisible(WebView view, String url) {
+                super.onPageCommitVisible(view, url);
+                if (!isErrorPageUrl(url)) {
+                    feedPageLoadWatchdog(); // 收到内容：挂起风险解除
+                }
             }
 
             @Override
@@ -173,12 +190,15 @@ public class MainActivity extends BridgeActivity {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
                     String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
+                    if (isErrorPageUrl(failingUrl)) {
+                        return;
+                    }
                     String description = error != null && error.getDescription() != null
                         ? error.getDescription().toString()
                         : "unknown";
                     appendNativeLog("页面加载失败: " + description + " @ " + failingUrl);
                     setNativePageReadyState("error", description);
-                    schedulePageAutoRetry(failingUrl);
+                    handlePageLoadFailure(failingUrl, description);
                 }
             }
 
@@ -189,10 +209,13 @@ public class MainActivity extends BridgeActivity {
                     int statusCode = errorResponse != null ? errorResponse.getStatusCode() : 0;
                     String reason = errorResponse != null ? safe(errorResponse.getReasonPhrase()) : "";
                     String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
+                    if (isErrorPageUrl(failingUrl)) {
+                        return;
+                    }
                     String detail = "HTTP " + statusCode + (reason.isEmpty() ? "" : (" " + reason));
                     appendNativeLog("页面 HTTP 异常: " + detail + " @ " + failingUrl);
                     setNativePageReadyState("error", detail);
-                    schedulePageAutoRetry(failingUrl);
+                    handlePageLoadFailure(failingUrl, detail);
                 }
             }
 
@@ -283,8 +306,8 @@ public class MainActivity extends BridgeActivity {
             // 后台期间重试计时被取消：回到前台若页面仍处于失败态，重新拉起重试
             if ("error".equals(nativePageReadyState) && pendingPageRetry == null && bridge != null && bridge.getWebView() != null) {
                 String url = safe(bridge.getWebView().getUrl());
-                if (url.isEmpty()) {
-                    url = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
+                if (url.isEmpty() || isErrorPageUrl(url)) {
+                    url = !lastErrorUrl.isEmpty() ? lastErrorUrl : buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
                 }
                 schedulePageAutoRetry(url);
             }
@@ -294,6 +317,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onDestroy() {
         cancelPageAutoRetry();
+        feedPageLoadWatchdog();
         try {
             stopNativeScan();
         } catch (Exception ignored) {}
@@ -331,10 +355,21 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * 页面加载失败自动重试：网页打不开（断网/服务器重启）时不再卡死白屏，
-     * 按递增间隔自动重新加载（3s/5s/10s/…封顶 30s），加载成功即停止。
-     * 状态点闪烁提示重试中；点击屏幕任意处可立即重试。
+     * 页面加载失败统一入口：展示原生错误页 + 按递增间隔自动重试（3s/5s/10s/…封顶 30s）。
+     * 网页打不开（断网/服务器重启）时不再卡死白屏；重试成功页面自动恢复。
      */
+    private void handlePageLoadFailure(String failingUrl, String detail) {
+        feedPageLoadWatchdog();
+        lastErrorUrl = failingUrl == null ? "" : failingUrl.trim();
+        lastErrorDetail = detail == null ? "" : detail.trim();
+        showErrorPage(lastErrorUrl, lastErrorDetail);
+        schedulePageAutoRetry(lastErrorUrl);
+    }
+
+    private boolean isErrorPageUrl(String url) {
+        return url != null && url.startsWith(ERROR_PAGE_BASE_URL);
+    }
+
     private void schedulePageAutoRetry(String failingUrl) {
         cancelPageAutoRetry();
         if (bridge == null || bridge.getWebView() == null || failingUrl == null || failingUrl.trim().isEmpty()) {
@@ -344,7 +379,7 @@ public class MainActivity extends BridgeActivity {
         final String retryUrl = failingUrl.trim();
         long[] delays = {3000L, 5000L, 10000L, 30000L};
         long delayMs = delays[Math.min(pageRetryAttempt, delays.length - 1)];
-        appendNativeLog("网页打不开，" + (delayMs / 1000) + " 秒后自动重试（第 " + (pageRetryAttempt + 1) + " 次），点击屏幕可立即重试");
+        appendNativeLog("网页打不开，" + (delayMs / 1000) + " 秒后自动重试（第 " + (pageRetryAttempt + 1) + " 次）");
         startRetryDotFlashing();
         pendingPageRetry = () -> {
             pendingPageRetry = null;
@@ -359,12 +394,54 @@ public class MainActivity extends BridgeActivity {
         mainHandler.postDelayed(pendingPageRetry, delayMs);
     }
 
+    /** 立即重试（错误页按钮/点击屏幕触发），不占重试名额判断直接拉起 */
+    private void retryPageNow() {
+        if (bridge == null || bridge.getWebView() == null) return;
+        String url = lastErrorUrl;
+        if (url == null || url.trim().isEmpty()) {
+            url = safe(bridge.getWebView().getUrl());
+        }
+        if (url.isEmpty() || isErrorPageUrl(url)) {
+            url = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
+        }
+        appendNativeLog("立即重试加载: " + url);
+        cancelPageAutoRetry();
+        pageRetryAttempt++;
+        bridge.getWebView().loadUrl(url);
+    }
+
     private void cancelPageAutoRetry() {
         if (pendingPageRetry != null) {
             mainHandler.removeCallbacks(pendingPageRetry);
             pendingPageRetry = null;
         }
+        feedPageLoadWatchdog();
         stopRetryDotFlashing();
+    }
+
+    /** 加载看门狗：服务器无响应时不触发错误回调，靠 20 秒无 commit 判定挂起 */
+    private void armPageLoadWatchdog(String url) {
+        feedPageLoadWatchdog();
+        if (isErrorPageUrl(url)) return;
+        final String watchedUrl = url;
+        pageLoadWatchdog = () -> {
+            pageLoadWatchdog = null;
+            if (bridge == null || bridge.getWebView() == null) return;
+            String current = safe(bridge.getWebView().getUrl());
+            if (!watchedUrl.equals(current) && !current.isEmpty()) return; // 已跳转别处
+            if ("ready".equals(nativePageReadyState)) return;
+            appendNativeLog("页面加载超时（20 秒无响应），按失败处理: " + watchedUrl);
+            setNativePageReadyState("error", "加载超时");
+            handlePageLoadFailure(watchedUrl, "服务器长时间无响应");
+        };
+        mainHandler.postDelayed(pageLoadWatchdog, 20000L);
+    }
+
+    private void feedPageLoadWatchdog() {
+        if (pageLoadWatchdog != null) {
+            mainHandler.removeCallbacks(pageLoadWatchdog);
+            pageLoadWatchdog = null;
+        }
     }
 
     /** 重试中状态点闪烁（红色↔灰交替），提示用户正在自动重连 */
@@ -389,20 +466,60 @@ public class MainActivity extends BridgeActivity {
 
     private boolean pageRetryFlashTick = false;
 
+    /** 原生错误页：中文提示 + 失败原因 + 服务器地址 + 立即重试按钮（自动重试由原生驱动） */
+    private void showErrorPage(String failingUrl, String detail) {
+        if (bridge == null || bridge.getWebView() == null) return;
+        String safeUrl = escapeHtml(failingUrl == null ? "" : failingUrl);
+        String safeDetail = escapeHtml(detail == null ? "" : detail);
+        String host = safeUrl;
+        int schemeIdx = host.indexOf("://");
+        if (schemeIdx >= 0) host = host.substring(schemeIdx + 3);
+        int slashIdx = host.indexOf('/');
+        if (slashIdx > 0) host = host.substring(0, slashIdx);
+        String html =
+            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
+            + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            + "<style>"
+            + "body{margin:0;font-family:sans-serif;background:#f8fafc;color:#0f172a;"
+            + "display:flex;align-items:center;justify-content:center;min-height:100vh}"
+            + ".card{background:#fff;border-radius:18px;padding:32px 26px;max-width:86%;"
+            + "box-shadow:0 10px 30px rgba(15,23,42,.10);text-align:center}"
+            + ".icon{font-size:44px;line-height:1;margin-bottom:14px}"
+            + "h1{font-size:19px;margin:0 0 10px}"
+            + ".desc{font-size:14px;color:#64748b;line-height:1.7;margin:0 0 6px;word-break:break-all}"
+            + ".spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;"
+            + "border-top-color:#1570ef;border-radius:50%;margin-right:6px;"
+            + "animation:khspin 0.9s linear infinite;vertical-align:-2px}"
+            + "@keyframes khspin{to{transform:rotate(360deg)}}"
+            + ".retrying{font-size:13px;color:#1570ef;margin:14px 0 18px}"
+            + "button{border:none;border-radius:12px;padding:13px 38px;font-size:16px;"
+            + "font-weight:700;background:#1570ef;color:#fff}"
+            + "button:active{background:#175cd3}"
+            + "</style></head><body><div class='card'>"
+            + "<div class='icon'>&#128268;</div>"
+            + "<h1>网页暂时打不开</h1>"
+            + "<p class='desc'>服务器：" + escapeHtml(host) + "</p>"
+            + (safeDetail.isEmpty() ? "" : "<p class='desc'>原因：" + safeDetail + "</p>")
+            + "<p class='retrying'><span class='spin'></span>正在自动重试，恢复后会自动进入</p>"
+            + "<button onclick=\"KaihangNativeBridge&&KaihangNativeBridge.retryLoadPage&&KaihangNativeBridge.retryLoadPage()\">立即重试</button>"
+            + "</div></body></html>";
+        bridge.getWebView().loadDataWithBaseURL(ERROR_PAGE_BASE_URL, html, "text/html", "utf-8", null);
+    }
+
+    private String escapeHtml(String value) {
+        return safe(value)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace("\"", "&quot;")
+            .replace("'", "&#39;");
+    }
+
     /** 重试等待期间点击屏幕 → 立即重试加载（不用干等下一个重试周期） */
     private void attachPageRetryTapTrigger(WebView webView) {
         webView.setOnTouchListener((v, event) -> {
             if (pendingPageRetry != null && event.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
-                if (bridge != null && bridge.getWebView() != null) {
-                    String url = safe(bridge.getWebView().getUrl());
-                    String target = url.isEmpty()
-                        ? buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE))
-                        : url;
-                    appendNativeLog("点击屏幕，立即重试加载: " + target);
-                    pageRetryAttempt++;
-                    cancelPageAutoRetry();
-                    bridge.getWebView().loadUrl(target);
-                }
+                retryPageNow();
             }
             return false;
         });
@@ -719,6 +836,9 @@ public class MainActivity extends BridgeActivity {
         String url = safe(targetUrl);
         if (url.isEmpty() && view != null) {
             url = safe(view.getUrl());
+        }
+        if (isErrorPageUrl(url)) {
+            return; // 原生错误页：不注入业务 runtime
         }
         if (view != null && isRuntimeReuseEnabled() && trigger != InjectionTrigger.MANUAL && trigger != InjectionTrigger.PAGE_STARTED) {
             probeReusableRuntime(view, url, trigger);
@@ -1131,6 +1251,11 @@ public class MainActivity extends BridgeActivity {
         @Override
         public boolean shouldPreviewPrint() {
             return deviceCapabilitiesResolved && !pdaPrinterAvailable;
+        }
+
+        @Override
+        public void retryPageNow() {
+            MainActivity.this.retryPageNow();
         }
 
         @Override

@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 113,
+  "currentVersionCode": 114,
   "releases": [
+    {
+      "versionCode": 114,
+      "versionName": "1.2.105",
+      "apkFileName": "kaihang-scanner-v1.2.105-114.apk",
+      "changelog": "网页打不开时自动重试，不用再手动重开软件",
+      "releasedAt": "2026-08-21",
+      "notes": [
+        "Android 版本提升到 1.2.105 (114)",
+        "网页打不开时自动重试，不用再手动重开软件"
+      ]
+    },
     {
       "versionCode": 113,
       "versionName": "1.2.104",
@@ -1315,7 +1326,7 @@
   ],
   "pending": {
     "notes": [
-      "网页打不开时自动重试，不用再手动重开软件"
+      "网页打不开时显示提示页，自动重试直到恢复"
     ]
   }
 }
