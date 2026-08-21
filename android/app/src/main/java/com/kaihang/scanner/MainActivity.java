@@ -44,13 +44,16 @@ public class MainActivity extends BridgeActivity {
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
     // 页面加载失败自动重试：间隔递增（3s/5s/10s/…封顶 30s），重新加载成功即停止；
-    // 失败时展示原生错误页（提示+倒计时+立即重试按钮），状态点闪烁提示，点击屏幕可立即重试
+    // 失败时展示原生错误页（提示+立即重试按钮）。仅当页面从未渲染出内容才允许触发——
+    // 已显示内容的页面收到错误回调只记日志，绝不替换，防止定制 ROM 误报导致无限重载
     private static final String ERROR_PAGE_BASE_URL = "https://__kh_native_error_page__/";
     private Runnable pendingPageRetry = null;
     private int pageRetryAttempt = 0;
     private boolean pageRetryFlashing = false;
     private String lastErrorDetail = "";
     private String lastErrorUrl = "";
+    private boolean pageCommitted = false;
+    private boolean pageFinished = false;
     // 加载看门狗：onPageStarted 后 20 秒内没有 commit/ready 视为挂起（服务器无响应时不触发错误回调）
     private Runnable pageLoadWatchdog = null;
 
@@ -136,7 +139,6 @@ public class MainActivity extends BridgeActivity {
         WebView webView = bridge.getWebView();
         configureInAppNavigation(webView);
         attachNativeWebBridge(webView);
-        attachPageRetryTapTrigger(webView);
         nativeControlOverlay = NativeControlOverlay.attach(this, nativeControlHost);
 
         String launchUrl = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
@@ -172,6 +174,8 @@ public class MainActivity extends BridgeActivity {
                 if (isErrorPageUrl(url)) {
                     return; // 错误页自身加载：不打断重试链，也不注入 runtime
                 }
+                pageCommitted = false;
+                pageFinished = false;
                 cancelPageAutoRetry();
                 armPageLoadWatchdog(url);
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
@@ -181,7 +185,19 @@ public class MainActivity extends BridgeActivity {
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
                 if (!isErrorPageUrl(url)) {
+                    pageCommitted = true;
                     feedPageLoadWatchdog(); // 收到内容：挂起风险解除
+                }
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (!isErrorPageUrl(url)) {
+                    // 导航已结束（成功或失败）：失败场景错误回调先于此触发并已处理；
+                    // 此处主要用于兼容不触发 commit 回调的 ROM——喂狗防止慢页面被看门狗误杀
+                    pageFinished = true;
+                    feedPageLoadWatchdog();
                 }
             }
 
@@ -303,8 +319,8 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("页面恢复，检查打印连接");
             PrintPlugin.connectNative(MainActivity.this);
             refreshRuntimeAfterResume();
-            // 后台期间重试计时被取消：回到前台若页面仍处于失败态，重新拉起重试
-            if ("error".equals(nativePageReadyState) && pendingPageRetry == null && bridge != null && bridge.getWebView() != null) {
+            // 后台期间重试计时被取消：回到前台若页面仍处于失败态（且确实没有内容），重新拉起重试
+            if ("error".equals(nativePageReadyState) && !pageCommitted && pendingPageRetry == null && bridge != null && bridge.getWebView() != null) {
                 String url = safe(bridge.getWebView().getUrl());
                 if (url.isEmpty() || isErrorPageUrl(url)) {
                     url = !lastErrorUrl.isEmpty() ? lastErrorUrl : buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
@@ -356,12 +372,21 @@ public class MainActivity extends BridgeActivity {
 
     /**
      * 页面加载失败统一入口：展示原生错误页 + 按递增间隔自动重试（3s/5s/10s/…封顶 30s）。
-     * 网页打不开（断网/服务器重启）时不再卡死白屏；重试成功页面自动恢复。
+     * 核心守卫：只有页面从未渲染出内容、导航也未结束才允许触发——
+     * 已有内容的页面收到错误回调（含定制 ROM 误报）只记日志，绝不替换，避免无限重载卡死。
      */
     private void handlePageLoadFailure(String failingUrl, String detail) {
         feedPageLoadWatchdog();
+        if (pageCommitted || pageFinished) {
+            appendNativeLog("页面已有内容或导航已结束，忽略加载失败回调: " + safe(detail));
+            return;
+        }
         lastErrorUrl = failingUrl == null ? "" : failingUrl.trim();
         lastErrorDetail = detail == null ? "" : detail.trim();
+        // 重置导航标志：失败导航自身的 onFinish 会在错误回调后触发并置位 pageFinished，
+        // 不重置会让重试误判"页面已恢复"而取消
+        pageCommitted = false;
+        pageFinished = false;
         showErrorPage(lastErrorUrl, lastErrorDetail);
         schedulePageAutoRetry(lastErrorUrl);
     }
@@ -387,6 +412,13 @@ public class MainActivity extends BridgeActivity {
                 stopRetryDotFlashing();
                 return;
             }
+            if (pageCommitted) {
+                // 页面已自行恢复（如错误回调后内容仍到达）：不重载，直接结束重试
+                appendNativeLog("页面已恢复，取消本次自动重试");
+                cancelPageAutoRetry();
+                return;
+            }
+            pageFinished = false; // 进入新一轮加载尝试，清掉上一轮失败导航的结束标记
             appendNativeLog("自动重试加载: " + retryUrl);
             pageRetryAttempt++;
             webView.loadUrl(retryUrl);
@@ -430,6 +462,7 @@ public class MainActivity extends BridgeActivity {
             String current = safe(bridge.getWebView().getUrl());
             if (!watchedUrl.equals(current) && !current.isEmpty()) return; // 已跳转别处
             if ("ready".equals(nativePageReadyState)) return;
+            if (pageCommitted || pageFinished) return; // 内容已到/导航已结束（race 兜底）
             appendNativeLog("页面加载超时（20 秒无响应），按失败处理: " + watchedUrl);
             setNativePageReadyState("error", "加载超时");
             handlePageLoadFailure(watchedUrl, "服务器长时间无响应");
@@ -513,16 +546,6 @@ public class MainActivity extends BridgeActivity {
             .replace(">", "&gt;")
             .replace("\"", "&quot;")
             .replace("'", "&#39;");
-    }
-
-    /** 重试等待期间点击屏幕 → 立即重试加载（不用干等下一个重试周期） */
-    private void attachPageRetryTapTrigger(WebView webView) {
-        webView.setOnTouchListener((v, event) -> {
-            if (pendingPageRetry != null && event.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
-                retryPageNow();
-            }
-            return false;
-        });
     }
 
     private boolean handleNavigation(WebView view, String url) {
