@@ -1,0 +1,13 @@
+{
+  "versionCode": 110,
+  "versionName": "1.2.101",
+  "apkFileName": "kaihang-scanner-v1.2.101-110.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.101-110.apk",
+  "changelog": "修复退出应用重进后无法打印的问题",
+  "releasedAt": "2026-08-21",
+  "notes": [
+    "Android 版本提升到 1.2.101 (110)",
+    "修复退出应用重进后无法打印的问题",
+    "修复动作核对结果误报异常的问题"
+  ]
+}
