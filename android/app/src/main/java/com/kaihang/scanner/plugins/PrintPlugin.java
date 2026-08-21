@@ -1243,8 +1243,9 @@ public class PrintPlugin extends Plugin {
         wasConnectedBeforePause = false;
         // 中断位图生成 / 打印任务
         printExecutor.shutdownNow();
-        // 中断原生桥打印队列（静态线程池，同样需要随销毁关闭，避免线程残留）
-        nativePrintExecutor.shutdownNow();
+        // 注意：nativePrintExecutor 是静态池，生命周期跟随进程而非 Activity；
+        // Activity 销毁重建（退出重进）后若被 shutdown，后续打印任务会全部
+        // 抛 RejectedExecutionException 导致打印失效，因此不能在此关闭
         // 关闭打印机连接
         Printer.close(getActivity());
     }
