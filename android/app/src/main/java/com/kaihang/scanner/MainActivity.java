@@ -40,6 +40,9 @@ public class MainActivity extends BridgeActivity {
     private String nativePageReadyState = "loading";
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
+    // 兜底探测去重：防止"探测失败→注入→再探测"无限循环压死主线程（打开即卡死根因）
+    private String lastProbeUrl = "";
+    private long lastProbeAtMs = 0L;
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
@@ -862,6 +865,20 @@ public class MainActivity extends BridgeActivity {
             continueRuntimeInjection(null, expectedUrl, trigger);
             return;
         }
+        // 探测失败会走 force 重注，force 又会安排下一次探测——若不拦截会形成
+        // "探测失败→全量注入→再探测→再注入" 的无限循环，定制 ROM 上注入一直
+        // 静默失败时每次循环都注入 160KB 脚本，主线程被压死导致打开即卡死（ANR）。
+        // 此闸门：同一 URL 的兜底探测 5 秒内只允许触发一次完整注入链
+        String probeUrl = safe(view.getUrl());
+        if (probeUrl.isEmpty()) probeUrl = safe(expectedUrl);
+        long now = System.currentTimeMillis();
+        boolean sameUrlProbedRecently = probeUrl.equals(lastProbeUrl) && (now - lastProbeAtMs) < 5000L;
+        if (sameUrlProbedRecently && trigger == InjectionTrigger.PAGE_LOADED) {
+            appendVerboseNativeLog("跳过兜底探测（同 URL 5 秒内已探测）: " + probeUrl);
+            return;
+        }
+        lastProbeUrl = probeUrl;
+        lastProbeAtMs = now;
         String probeScript =
             "(function(){var kh=window.__khClientRuntime;" +
             "return !!(kh&&kh.bootOnce&&window.KaihangAppReady" +
@@ -899,6 +916,16 @@ public class MainActivity extends BridgeActivity {
         long now = System.currentTimeMillis();
         boolean sameUrlRecently = url.equals(lastInjectedUrl) && (now - lastInjectAtMs) < 1200L;
         if (sameUrlRecently && !force) {
+            return;
+        }
+        // force 全量注入同样节流：同 URL 5 秒内不重复注入 160KB 脚本。
+        // 保留 1200ms 内兜底重注能力（首次注入静默失败的自救），但拒绝 1200ms~5s 窗口的重复全量注入
+        boolean sameUrlForceRecently = url.equals(lastInjectedUrl)
+            && lastInjectAtMs > 0L
+            && (now - lastInjectAtMs) >= 1200L
+            && (now - lastInjectAtMs) < 5000L;
+        if (force && sameUrlForceRecently) {
+            appendVerboseNativeLog("跳过 force 全量注入（同 URL 5 秒内已注入）: " + url);
             return;
         }
         setNativePageReadyState("loading", url);
