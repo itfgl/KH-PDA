@@ -1,5 +1,7 @@
 (()=>{var khRuntimeValues=window.__khRuntimeValues||{};
-if(kh.isFeatureEnabled('enableNetworkHeaderPatch',true)){patchFetch();patchXhr();}else{kh.pushLog('网络请求头 patch 已关闭','warn');}
+var kh=window.__khClientRuntime;
+if(!kh)return;
+if(!kh.isFeatureEnabled('enableNetworkHeaderPatch',true)){kh.pushLog('网络请求头 patch 已关闭','warn');}
 if(khRuntimeValues.shouldBootstrap){
 try{
 var storages=[window.localStorage,window.sessionStorage].filter(Boolean);
