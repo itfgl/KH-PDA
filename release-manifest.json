@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 112,
+  "currentVersionCode": 113,
   "releases": [
+    {
+      "versionCode": 113,
+      "versionName": "1.2.104",
+      "apkFileName": "kaihang-scanner-v1.2.104-113.apk",
+      "changelog": "运行日志更干净：过滤网页框架自身的海量告警",
+      "releasedAt": "2026-08-21",
+      "notes": [
+        "Android 版本提升到 1.2.104 (113)",
+        "运行日志更干净：过滤网页框架自身的海量告警",
+        "优化内部代码结构，功能不变"
+      ]
+    },
     {
       "versionCode": 112,
       "versionName": "1.2.103",
@@ -1300,11 +1312,5 @@
         "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
       ]
     }
-  ],
-  "pending": {
-    "notes": [
-      "运行日志更干净：过滤网页框架自身的海量告警",
-      "优化内部代码结构，功能不变"
-    ]
-  }
+  ]
 }
