@@ -1,0 +1,12 @@
+{
+  "versionCode": 114,
+  "versionName": "1.2.105",
+  "apkFileName": "kaihang-scanner-v1.2.105-114.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.105-114.apk",
+  "changelog": "网页打不开时自动重试，不用再手动重开软件",
+  "releasedAt": "2026-08-21",
+  "notes": [
+    "Android 版本提升到 1.2.105 (114)",
+    "网页打不开时自动重试，不用再手动重开软件"
+  ]
+}

@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 118,
+  "currentVersionCode": 119,
   "releases": [
+    {
+      "versionCode": 119,
+      "versionName": "1.2.110",
+      "apkFileName": "kaihang-scanner-v1.2.110-119.apk",
+      "changelog": "回滚网页重试功能，恢复打开即卡死前的稳定版本",
+      "releasedAt": "2026-08-21",
+      "notes": [
+        "Android 版本提升到 1.2.110 (119)",
+        "回滚网页重试功能，恢复打开即卡死前的稳定版本"
+      ]
+    },
     {
       "versionCode": 118,
       "versionName": "1.2.109",
@@ -1370,7 +1381,7 @@
   ],
   "pending": {
     "notes": [
-      "回滚网页重试功能，恢复打开即卡死前的稳定版本"
+      "回退到 118 版本代码"
     ]
   }
 }

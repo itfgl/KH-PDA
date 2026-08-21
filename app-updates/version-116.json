@@ -1,0 +1,12 @@
+{
+  "versionCode": 116,
+  "versionName": "1.2.107",
+  "apkFileName": "kaihang-scanner-v1.2.107-116.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.107-116.apk",
+  "changelog": "修复页面可能被反复重载导致卡死的问题",
+  "releasedAt": "2026-08-21",
+  "notes": [
+    "Android 版本提升到 1.2.107 (116)",
+    "修复页面可能被反复重载导致卡死的问题"
+  ]
+}
