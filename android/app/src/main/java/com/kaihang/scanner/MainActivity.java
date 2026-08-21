@@ -288,7 +288,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     /**
-     * 框架噪音过滤：NocoBase/React 框架包（vendors-*/umi.js）自身的高频告警不计入运行日志。
+     * 框架噪音过滤：NocoBase 与 React 框架包（vendors-* 和 umi.js）自身的高频告警不计入运行日志。
      * 这类告警每页数百条（React prop 告警、FlowModel 派发日志、antd 警告、[object Object] 调试输出），
      * 与本 App 无关且会淹没真正有用的日志；业务代码来源的消息不过滤。
      */
