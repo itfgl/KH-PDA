@@ -33,7 +33,6 @@ final class ClientRuntimeScriptBuilder {
         String khRole = uri != null ? safe(uri.getQueryParameter("kh_role")) : "";
         String khApp = uri != null ? safe(uri.getQueryParameter("kh_app")) : defaultStorageAppName;
         String khPaper = uri != null ? safe(uri.getQueryParameter("kh_paper")) : "";
-        String khLayout = uri != null ? safe(uri.getQueryParameter("kh_layout")) : "";
         String redirect = uri != null ? safe(uri.getQueryParameter("redirect")) : "";
         boolean shouldBootstrap = uri != null
             && !khToken.isEmpty()
@@ -53,7 +52,6 @@ final class ClientRuntimeScriptBuilder {
         script.append("khRole:").append(js(khRole)).append(",");
         script.append("khApp:").append(js(khApp)).append(",");
         script.append("khPaper:").append(js(khPaper)).append(",");
-        script.append("khLayout:").append(js(khLayout)).append(",");
         script.append("redirect:").append(js(redirect)).append(",");
         script.append("nocobaseStoragePrefix:").append(js(nocobaseStoragePrefix)).append(",");
         script.append("defaultStorageAppName:").append(js(defaultStorageAppName));

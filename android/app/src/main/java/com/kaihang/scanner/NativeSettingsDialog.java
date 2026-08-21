@@ -30,7 +30,6 @@ final class NativeSettingsDialog {
         final String serverBase;
         final String updateBase;
         final String paperType;
-        final String layout;
         final String injectionMode;
         final boolean enableFloatingLogs;
         final boolean enableVerboseLogs;
@@ -45,7 +44,6 @@ final class NativeSettingsDialog {
             String serverBase,
             String updateBase,
             String paperType,
-            String layout,
             String injectionMode,
             boolean enableFloatingLogs,
             boolean enableVerboseLogs,
@@ -59,7 +57,6 @@ final class NativeSettingsDialog {
             this.serverBase = serverBase;
             this.updateBase = updateBase;
             this.paperType = paperType;
-            this.layout = layout;
             this.injectionMode = injectionMode;
             this.enableFloatingLogs = enableFloatingLogs;
             this.enableVerboseLogs = enableVerboseLogs;
@@ -104,7 +101,6 @@ final class NativeSettingsDialog {
         EditText serverInput = createUrlInput(activity, config.optString("serverBase", defaultServerBase));
         EditText updateInput = createUrlInput(activity, config.optString("updateBase", defaultUpdateBase));
         Spinner paperSpinner = createSpinner(activity, new String[]{"普通热敏纸", "黑标标签纸"});
-        Spinner layoutSpinner = createSpinner(activity, new String[]{"标准排版", "紧凑排版", "大字排版"});
         // 高级选项（仅排障用）：默认收起。注入时机已固定激进模式，不再提供切换
         TextView advancedToggle = createSectionLabel(activity, "高级选项（仅排障用）▸");
         LinearLayout advancedBox = new LinearLayout(activity);
@@ -124,8 +120,6 @@ final class NativeSettingsDialog {
         SwitchCompat actionObserverSwitch = createSwitchRow(activity, advancedBox, "页面动作 observer", "默认开。条件显示按钮等场景依赖，请勿关闭");
         SwitchCompat runtimeReuseSwitch = createSwitchRow(activity, advancedBox, "同页复用 runtime", "默认开。避免重复注入大段脚本，性能优化，请勿关闭");
         paperSpinner.setSelection("black_mark".equals(config.optString("paperType", "thermal")) ? 1 : 0);
-        String layoutPreset = config.optString("layoutPreset", "standard");
-        layoutSpinner.setSelection("compact".equals(layoutPreset) ? 1 : ("large".equals(layoutPreset) ? 2 : 0));
         floatingLogsSwitch.setChecked(config.optBoolean("enableFloatingLogs", false));
         verboseLogsSwitch.setChecked(config.optBoolean("enableVerboseLogs", false));
         networkPatchSwitch.setChecked(config.optBoolean("enableNetworkHeaderPatch", true));
@@ -141,8 +135,6 @@ final class NativeSettingsDialog {
         root.addView(updateInput);
         root.addView(createSectionLabel(activity, "纸张类型"));
         root.addView(paperSpinner);
-        root.addView(createSectionLabel(activity, "排版预设"));
-        root.addView(layoutSpinner);
         root.addView(advancedToggle);
         root.addView(advancedBox);
         createDetailToggle(activity, advancedBox);
@@ -168,7 +160,6 @@ final class NativeSettingsDialog {
                 serverInput.setText(defaultServerBase);
                 updateInput.setText(defaultUpdateBase);
                 paperSpinner.setSelection(0);
-                layoutSpinner.setSelection(0);
                 // 日志等调试项默认关，功能项默认开
                 floatingLogsSwitch.setChecked(false);
                 verboseLogsSwitch.setChecked(false);
@@ -195,7 +186,6 @@ final class NativeSettingsDialog {
                 serverBase,
                 updateBase,
                 paperSpinner.getSelectedItemPosition() == 1 ? "black_mark" : "thermal",
-                layoutSpinner.getSelectedItemPosition() == 1 ? "compact" : (layoutSpinner.getSelectedItemPosition() == 2 ? "large" : "standard"),
                 "aggressive",
                 floatingLogsSwitch.isChecked(),
                 verboseLogsSwitch.isChecked(),

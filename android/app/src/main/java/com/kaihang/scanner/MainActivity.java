@@ -1515,7 +1515,6 @@ public class MainActivity extends BridgeActivity {
                     payload.optString("serverBase", null),
                     payload.optString("updateBase", null),
                     payload.optString("paperType", null),
-                    payload.optString("layoutPreset", null),
                     payload.optString("injectionMode", null),
                     payload.has("enableFloatingLogs") ? payload.optBoolean("enableFloatingLogs") : current.optBoolean("enableFloatingLogs", true),
                     payload.has("enableVerboseLogs") ? payload.optBoolean("enableVerboseLogs") : current.optBoolean("enableVerboseLogs", true),
@@ -1584,7 +1583,6 @@ public class MainActivity extends BridgeActivity {
                 String qrCodeValue = payload.optString("qrCodeValue", "");
                 String textValue = payload.optString("textValue", "");
                 String paperType = payload.optString("paperType", "thermal");
-                String layoutPreset = payload.optString("layoutPreset", "standard");
                 int qrSize = payload.optInt("qrSize", 0);
                 String qrAlign = payload.optString("qrAlign", "center");
                 int textColumns = payload.optInt("textColumns", 1);
@@ -1597,7 +1595,6 @@ public class MainActivity extends BridgeActivity {
                         + ": qrcode=" + safe(qrCodeValue)
                         + ", text=" + compactText
                         + ", paperType=" + safe(paperType)
-                        + ", layout=" + safe(layoutPreset)
                         + ", qrSize=" + qrSize
                         + ", qrAlign=" + safe(qrAlign)
                         + ", textColumns=" + textColumns
@@ -1612,7 +1609,6 @@ public class MainActivity extends BridgeActivity {
                             MainActivity.this,
                             qrCodeValue,
                             textValue,
-                            layoutPreset,
                             qrSize,
                             qrAlign,
                             textColumns,
@@ -1627,7 +1623,6 @@ public class MainActivity extends BridgeActivity {
                     qrCodeValue,
                     textValue,
                     paperType,
-                    layoutPreset,
                     qrSize,
                     qrAlign,
                     textColumns,
@@ -1646,14 +1641,12 @@ public class MainActivity extends BridgeActivity {
                 org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
                 String qrCodeValue = payload.optString("qrCodeValue", "");
                 String textValue = payload.optString("textValue", "");
-                String layoutPreset = payload.optString("layoutPreset", "standard");
                 int qrSize = payload.optInt("qrSize", 0);
                 String qrAlign = payload.optString("qrAlign", "center");
                 int textColumns = payload.optInt("textColumns", 1);
                 String textStylesJson = payload.optString("textStyles", "");
                 appendNativeLog(
                     "无打印机，生成标签预览: qrcode=" + safe(qrCodeValue)
-                        + ", layout=" + safe(layoutPreset)
                         + ", qrSize=" + qrSize
                         + ", qrAlign=" + safe(qrAlign)
                         + ", textColumns=" + textColumns
@@ -1666,7 +1659,6 @@ public class MainActivity extends BridgeActivity {
                         MainActivity.this,
                         qrCodeValue,
                         textValue,
-                        layoutPreset,
                         qrSize,
                         qrAlign,
                         textColumns,

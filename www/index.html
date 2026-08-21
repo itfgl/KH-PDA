@@ -230,14 +230,6 @@
           <option value="black_mark">黑标标签纸</option>
         </select>
       </div>
-      <div class="field">
-        <label>排版预设</label>
-        <select id="settings-layout-preset">
-          <option value="standard">标准排版</option>
-          <option value="compact">紧凑排版</option>
-          <option value="large">大字排版</option>
-        </select>
-      </div>
       <div class="btn-row" style="margin-top:14px;">
         <button class="btn btn-blue" id="save-settings-btn" onclick="saveSettingsOverlay()">保存</button>
         <button class="btn btn-gray" onclick="closeSettingsOverlay()">取消</button>
@@ -254,10 +246,6 @@
 
   function getPaperTypeLabel(value = API.getPrintPaperType()) {
     return value === 'black_mark' ? '黑标标签纸' : '普通热敏纸';
-  }
-
-  function getLayoutPresetLabel(value = API.getPrintLayoutPreset()) {
-    return ({ standard: '标准排版', compact: '紧凑排版', large: '大字排版' }[value] || value || '标准排版');
   }
 
   function setStatus(id, msg, type = '') {
@@ -277,11 +265,9 @@
     const server = document.getElementById('settings-server-base');
     const update = document.getElementById('settings-update-base');
     const paper = document.getElementById('settings-paper-type');
-    const layout = document.getElementById('settings-layout-preset');
     if (server) server.value = API.getServerBase();
     if (update) update.value = API.getUpdateBase();
     if (paper) paper.value = API.getPrintPaperType();
-    if (layout) layout.value = API.getPrintLayoutPreset();
   }
 
   function renderSummary() {
@@ -290,7 +276,7 @@
     const buildText = 'build: ' + (window.BUILD_TIME ? new Date(window.BUILD_TIME).toLocaleString('zh-CN') : '—');
     document.getElementById('summary-server').textContent = API.getServerBase();
     document.getElementById('summary-update').textContent = API.getUpdateBase();
-    document.getElementById('summary-print').textContent = `${getPaperTypeLabel()} / ${getLayoutPresetLabel()}`;
+    document.getElementById('summary-print').textContent = getPaperTypeLabel();
     document.getElementById('summary-user').textContent = user ? (user.display_name || user.nickname || user.username || user.email || '已登录') : '未登录';
     document.getElementById('summary-role').textContent = role || '—';
     document.getElementById('summary-page').textContent = user ? API.getRolePageUrl(role) : '—';
@@ -322,7 +308,6 @@
     API.setServerBase(serverBase);
     API.setUpdateBase(updateBase);
     API.setPrintPaperType(document.getElementById('settings-paper-type').value);
-    API.setPrintLayoutPreset(document.getElementById('settings-layout-preset').value);
     renderSummary();
     if (showMessage) setStatus('settings-status', '配置已保存', 'ok');
     return true;

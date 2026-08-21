@@ -112,18 +112,13 @@ export const PrintPlugin = {
   },
 
   /**
-   * 通用标签：
+   * 通用标签（固定标准档布局）：
    * - qrCodeValue: 二维码内容
    * - textValue: 多行正文
    */
-  async printLabel({ qrCodeValue = '', textValue = '', paperType = 'thermal', layoutPreset = 'standard' }) {
-    const preset = String(layoutPreset || '').trim().toLowerCase();
+  async printLabel({ qrCodeValue = '', textValue = '', paperType = 'thermal' }) {
     const isBlackMark = String(paperType || '').trim().toLowerCase() === 'black_mark';
-    const layout = preset === 'compact'
-      ? { qrWidth: 184, qrHeight: 184, qrLeft: 100, textSize: 22, lineHeight: 28, minHeight: 244, textLeft: 8 }
-      : preset === 'large'
-        ? { qrWidth: 232, qrHeight: 232, qrLeft: 76, textSize: 26, lineHeight: 34, minHeight: 308, textLeft: 8 }
-        : { qrWidth: 208, qrHeight: 208, qrLeft: 88, textSize: 24, lineHeight: 32, minHeight: 280, textLeft: 8 };
+    const layout = { qrWidth: 208, qrHeight: 208, qrLeft: 88, textSize: 24, lineHeight: 32, minHeight: 280, textLeft: 8 };
     const lines = String(textValue || '').replace(/\r/g, '').split('\n');
     const data = [];
     if (qrCodeValue) {

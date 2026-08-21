@@ -42,7 +42,6 @@ public class PrintPlugin extends Plugin {
     private static final int BATCH_EXTRA_FEED = 96;
     private static final String PAPER_THERMAL = "thermal";
     private static final String PAPER_BLACK_MARK = "black_mark";
-    private static final String LAYOUT_STANDARD = "standard";
     private static final long NATIVE_CONNECT_TIMEOUT_MS = 8000L;
     private static final Object nativeConnectionLock = new Object();
     private static boolean nativeConnected = false;
@@ -262,7 +261,7 @@ public class PrintPlugin extends Plugin {
         }
     }
 
-    public static void printLabelNative(Context context, Activity activity, String qrCodeValue, String textValue, String paperType, String layoutPreset, int qrSize, String qrAlign, int textColumns, String textStylesJson) {
+    public static void printLabelNative(Context context, Activity activity, String qrCodeValue, String textValue, String paperType, int qrSize, String qrAlign, int textColumns, String textStylesJson) {
         if (context == null || activity == null) return;
         connectNative(activity);
         nativePrintExecutor.execute(() -> {
@@ -276,7 +275,6 @@ public class PrintPlugin extends Plugin {
                     context,
                     qrCodeValue,
                     textValue,
-                    layoutPreset,
                     qrSize,
                     qrAlign,
                     textColumns,
@@ -299,7 +297,6 @@ public class PrintPlugin extends Plugin {
         Activity activity,
         String qrCodeValue,
         String textValue,
-        String layoutPreset,
         int qrSize,
         String qrAlign,
         int textColumns,
@@ -311,7 +308,6 @@ public class PrintPlugin extends Plugin {
                 BuiltLabel builtLabel = buildPortablePreviewLabel(
                     qrCodeValue,
                     textValue,
-                    layoutPreset,
                     qrSize,
                     qrAlign,
                     textColumns,
@@ -528,12 +524,6 @@ public class PrintPlugin extends Plugin {
         return PAPER_BLACK_MARK.equalsIgnoreCase(String.valueOf(value).trim()) ? PAPER_BLACK_MARK : PAPER_THERMAL;
     }
 
-    private static String normalizeLayoutPreset(String value) {
-        String preset = String.valueOf(value).trim().toLowerCase(Locale.ROOT);
-        if ("compact".equals(preset) || "large".equals(preset)) return preset;
-        return LAYOUT_STANDARD;
-    }
-
     /** 标签画布与二维码尺寸常量 */
     private static final class GenericLabelLayout {
         static final int LABEL_WIDTH = 384;
@@ -543,11 +533,10 @@ public class PrintPlugin extends Plugin {
         static final int QR_MAX_SIZE = LABEL_WIDTH;
     }
 
+    /** 通用标签固定布局（标准档）：字号 24 / 行高 32 / 最小高 280 */
     private static final class LegacyGenericLayout {
         final int qrWidth;
         final int qrHeight;
-        final int qrLeft;
-        final int bodyTop;
         final int textSize;
         final int lineHeight;
         final int minHeight;
@@ -557,8 +546,6 @@ public class PrintPlugin extends Plugin {
         LegacyGenericLayout(
             int qrWidth,
             int qrHeight,
-            int qrLeft,
-            int bodyTop,
             int textSize,
             int lineHeight,
             int minHeight,
@@ -567,8 +554,6 @@ public class PrintPlugin extends Plugin {
         ) {
             this.qrWidth = qrWidth;
             this.qrHeight = qrHeight;
-            this.qrLeft = qrLeft;
-            this.bodyTop = bodyTop;
             this.textSize = textSize;
             this.lineHeight = lineHeight;
             this.minHeight = minHeight;
@@ -597,24 +582,15 @@ public class PrintPlugin extends Plugin {
         return qrSize;
     }
 
-    private static LegacyGenericLayout getLegacyGenericLayout(String preset, Integer qrSize) {
+    private static LegacyGenericLayout getLegacyGenericLayout(Integer qrSize) {
         int resolvedQrSize = resolveRequestedQrSize(qrSize);
-        int qrLeft = resolveCenteredMediaLeft(resolvedQrSize);
-        switch (normalizeLayoutPreset(preset)) {
-            case "compact":
-                return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, qrLeft, 216, 22, 28, 244, 8, 32);
-            case "large":
-                return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, qrLeft, 264, 26, 34, 308, 8, 28);
-            default:
-                return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, qrLeft, 240, 24, 32, 280, 8, 30);
-        }
+        return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, 24, 32, 280, 8, 30);
     }
 
     private static BuiltLabel buildLegacyGenericLabel(
         Context context,
         String qrCodeValue,
         String textValue,
-        String layoutPreset,
         Integer qrSize,
         String qrAlign,
         Integer textColumns,
@@ -629,7 +605,7 @@ public class PrintPlugin extends Plugin {
         }
 
         int columns = normalizeTextColumns(textColumns);
-        LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset, qrSize);
+        LegacyGenericLayout layout = getLegacyGenericLayout(qrSize);
         Bitmap qr = null;
         if (!safeQrCodeValue.isEmpty()) {
             qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
@@ -706,7 +682,6 @@ public class PrintPlugin extends Plugin {
         if (label == null) throw new IllegalStateException("label bitmap null");
         String diagnostic =
             "legacyGeneric=true"
-                + ", layoutPreset=" + normalizeLayoutPreset(layoutPreset)
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
@@ -722,7 +697,6 @@ public class PrintPlugin extends Plugin {
     private static BuiltLabel buildPortablePreviewLabel(
         String qrCodeValue,
         String textValue,
-        String layoutPreset,
         Integer qrSize,
         String qrAlign,
         Integer textColumns,
@@ -736,7 +710,7 @@ public class PrintPlugin extends Plugin {
         }
 
         int columns = normalizeTextColumns(textColumns);
-        LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset, qrSize);
+        LegacyGenericLayout layout = getLegacyGenericLayout(qrSize);
         Bitmap qr = safeQrCodeValue.isEmpty()
             ? null
             : createPortableCode(safeQrCodeValue, BarcodeFormat.QR_CODE, layout.qrWidth, layout.qrHeight);
@@ -814,7 +788,6 @@ public class PrintPlugin extends Plugin {
 
         String diagnostic =
             "portablePreview=true"
-                + ", layoutPreset=" + normalizeLayoutPreset(layoutPreset)
                 + ", qr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
                 + ", lines=" + plan.rows.size()
@@ -1191,7 +1164,6 @@ public class PrintPlugin extends Plugin {
         String qrCodeValue = getCallString(call, "qrCodeValue");
         String textValue = getCallString(call, "textValue");
         String paperType = normalizePaperType(getCallString(call, "paperType"));
-        String layoutPreset = getCallString(call, "layoutPreset");
         Integer qrSize = getCallOptionalInt(call, "qrSize");
         String qrAlign = getCallString(call, "qrAlign");
         Integer textColumns = getCallOptionalInt(call, "textColumns");
@@ -1209,7 +1181,6 @@ public class PrintPlugin extends Plugin {
                     getContext(),
                     qrCodeValue,
                     textValue,
-                    layoutPreset,
                     qrSize,
                     qrAlign,
                     textColumns,

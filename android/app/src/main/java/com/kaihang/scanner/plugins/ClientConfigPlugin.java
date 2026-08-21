@@ -15,7 +15,6 @@ public class ClientConfigPlugin extends Plugin {
     private static final String KEY_SERVER_BASE = "server_base";
     private static final String KEY_UPDATE_BASE = "update_base";
     private static final String KEY_PAPER_TYPE = "paper_type";
-    private static final String KEY_LAYOUT_PRESET = "layout_preset";
     private static final String KEY_INJECTION_MODE = "injection_mode";
     private static final String KEY_ENABLE_FLOATING_LOGS = "enable_floating_logs";
     private static final String KEY_ENABLE_VERBOSE_LOGS = "enable_verbose_logs";
@@ -47,7 +46,6 @@ public class ClientConfigPlugin extends Plugin {
         String serverBase,
         String updateBase,
         String paperType,
-        String layoutPreset,
         String injectionMode,
         Boolean enableFloatingLogs,
         Boolean enableVerboseLogs,
@@ -63,7 +61,6 @@ public class ClientConfigPlugin extends Plugin {
         JSObject current = readConfig(context);
         // 字符串字段传 null（未携带）时保留现值，允许两个设置面板只保存各自负责的字段
         String normalizedPaperType = normalizePaperType(paperType != null ? paperType : current.optString("paperType", "thermal"));
-        String normalizedLayoutPreset = normalizeLayoutPreset(layoutPreset != null ? layoutPreset : current.optString("layoutPreset", "standard"));
         String normalizedInjectionMode = normalizeInjectionMode(injectionMode != null ? injectionMode : current.optString("injectionMode", "aggressive"));
 
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
@@ -71,7 +68,6 @@ public class ClientConfigPlugin extends Plugin {
             .putString(KEY_SERVER_BASE, normalizedServerBase)
             .putString(KEY_UPDATE_BASE, normalizedUpdateBase)
             .putString(KEY_PAPER_TYPE, normalizedPaperType)
-            .putString(KEY_LAYOUT_PRESET, normalizedLayoutPreset)
             .putString(KEY_INJECTION_MODE, normalizedInjectionMode)
             .putBoolean(KEY_ENABLE_FLOATING_LOGS, enableFloatingLogs != null ? enableFloatingLogs : current.optBoolean("enableFloatingLogs", true))
             .putBoolean(KEY_ENABLE_VERBOSE_LOGS, enableVerboseLogs != null ? enableVerboseLogs : current.optBoolean("enableVerboseLogs", true))
@@ -109,7 +105,6 @@ public class ClientConfigPlugin extends Plugin {
             call.getString("serverBase"),
             call.getString("updateBase"),
             call.getString("paperType"),
-            call.getString("layoutPreset"),
             call.getString("injectionMode"),
             call.getBoolean("enableFloatingLogs", current.optBoolean("enableFloatingLogs", true)),
             call.getBoolean("enableVerboseLogs", current.optBoolean("enableVerboseLogs", true)),
@@ -133,7 +128,6 @@ public class ClientConfigPlugin extends Plugin {
         String serverBase = normalizeBaseUrl(prefs.getString(KEY_SERVER_BASE, ""), DEFAULT_SERVER_BASE);
         String updateBase = normalizeBaseUrl(prefs.getString(KEY_UPDATE_BASE, ""), DEFAULT_UPDATE_BASE);
         String paperType = normalizePaperType(prefs.getString(KEY_PAPER_TYPE, "thermal"));
-        String layoutPreset = normalizeLayoutPreset(prefs.getString(KEY_LAYOUT_PRESET, "standard"));
         String injectionMode = normalizeInjectionMode(prefs.getString(KEY_INJECTION_MODE, "aggressive"));
         // 日志默认全关：生产环境零记录，调试人员在原生配置里手动打开
         boolean enableFloatingLogs = prefs.getBoolean(KEY_ENABLE_FLOATING_LOGS, false);
@@ -149,7 +143,6 @@ public class ClientConfigPlugin extends Plugin {
         data.put("serverBase", serverBase);
         data.put("updateBase", updateBase);
         data.put("paperType", paperType);
-        data.put("layoutPreset", layoutPreset);
         data.put("injectionMode", injectionMode);
         data.put("enableFloatingLogs", enableFloatingLogs);
         data.put("enableVerboseLogs", enableVerboseLogs);
@@ -170,12 +163,6 @@ public class ClientConfigPlugin extends Plugin {
 
     private static String normalizePaperType(String value) {
         return "black_mark".equalsIgnoreCase(value == null ? "" : value.trim()) ? "black_mark" : "thermal";
-    }
-
-    private static String normalizeLayoutPreset(String value) {
-        String raw = value == null ? "" : value.trim().toLowerCase();
-        if ("compact".equals(raw) || "large".equals(raw)) return raw;
-        return "standard";
     }
 
     // 注入时机固定激进模式：定制 ROM 只在该模式下可靠注入，不再提供其他选项
