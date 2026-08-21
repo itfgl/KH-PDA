@@ -46,19 +46,6 @@ public class MainActivity extends BridgeActivity {
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
-    // 页面加载失败自动重试：间隔递增（3s/5s/10s/…封顶 30s），最多 5 次后停止自动重试（防循环）；
-    // 失败时展示原生错误页（提示+立即重试按钮）。仅当页面从未渲染出内容才允许触发——
-    // 已显示内容的页面收到错误回调只记日志，绝不替换。不设看门狗：慢加载（弱网首屏 >20s
-    // 属正常）会被定时器误杀形成"杀→重载→再杀"循环导致 ANR，失败交由错误回调判定即可
-    private static final String ERROR_PAGE_BASE_URL = "https://__kh_native_error_page__/";
-    private static final int MAX_AUTO_RETRY = 5;
-    private Runnable pendingPageRetry = null;
-    private int pageRetryAttempt = 0;
-    private boolean pageRetryFlashing = false;
-    private String lastErrorDetail = "";
-    private String lastErrorUrl = "";
-    private boolean pageCommitted = false;
-    private boolean pageFinished = false;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -174,29 +161,7 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                if (isErrorPageUrl(url)) {
-                    return; // 错误页自身加载：不打断重试链，也不注入 runtime
-                }
-                pageCommitted = false;
-                pageFinished = false;
-                cancelPageAutoRetry();
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
-            }
-
-            @Override
-            public void onPageCommitVisible(WebView view, String url) {
-                super.onPageCommitVisible(view, url);
-                if (!isErrorPageUrl(url)) {
-                    pageCommitted = true;
-                }
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                if (!isErrorPageUrl(url)) {
-                    pageFinished = true;
-                }
             }
 
             @Override
@@ -204,15 +169,11 @@ public class MainActivity extends BridgeActivity {
                 super.onReceivedError(view, request, error);
                 if (request != null && request.isForMainFrame()) {
                     String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
-                    if (isErrorPageUrl(failingUrl)) {
-                        return;
-                    }
                     String description = error != null && error.getDescription() != null
                         ? error.getDescription().toString()
                         : "unknown";
                     appendNativeLog("页面加载失败: " + description + " @ " + failingUrl);
                     setNativePageReadyState("error", description);
-                    handlePageLoadFailure(failingUrl, description);
                 }
             }
 
@@ -223,13 +184,9 @@ public class MainActivity extends BridgeActivity {
                     int statusCode = errorResponse != null ? errorResponse.getStatusCode() : 0;
                     String reason = errorResponse != null ? safe(errorResponse.getReasonPhrase()) : "";
                     String failingUrl = request.getUrl() != null ? request.getUrl().toString() : safe(view != null ? view.getUrl() : "");
-                    if (isErrorPageUrl(failingUrl)) {
-                        return;
-                    }
                     String detail = "HTTP " + statusCode + (reason.isEmpty() ? "" : (" " + reason));
                     appendNativeLog("页面 HTTP 异常: " + detail + " @ " + failingUrl);
                     setNativePageReadyState("error", detail);
-                    handlePageLoadFailure(failingUrl, detail);
                 }
             }
 
@@ -300,7 +257,6 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onPause() {
-        cancelPageAutoRetry();
         try {
             PrintPlugin.closeNative(this);
             appendNativeLog("页面暂停，关闭原生打印连接");
@@ -317,20 +273,11 @@ public class MainActivity extends BridgeActivity {
             appendNativeLog("页面恢复，检查打印连接");
             PrintPlugin.connectNative(MainActivity.this);
             refreshRuntimeAfterResume();
-            // 后台期间重试计时被取消：回到前台若页面仍处于失败态（且确实没有内容），重新拉起重试
-            if ("error".equals(nativePageReadyState) && !pageCommitted && pendingPageRetry == null && bridge != null && bridge.getWebView() != null) {
-                String url = safe(bridge.getWebView().getUrl());
-                if (url.isEmpty() || isErrorPageUrl(url)) {
-                    url = !lastErrorUrl.isEmpty() ? lastErrorUrl : buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
-                }
-                schedulePageAutoRetry(url);
-            }
         }, 200L);
     }
 
     @Override
     public void onDestroy() {
-        cancelPageAutoRetry();
         try {
             stopNativeScan();
         } catch (Exception ignored) {}
@@ -365,161 +312,6 @@ public class MainActivity extends BridgeActivity {
             || message.contains("Warning: React")
             || message.contains("validateDOMNesting")
             || message.contains("defaultProps");
-    }
-
-    /**
-     * 页面加载失败统一入口：展示原生错误页 + 按递增间隔自动重试（最多 5 次）。
-     * 核心守卫：只有页面从未渲染出内容、导航也未结束才允许触发——
-     * 已有内容的页面收到错误回调（含定制 ROM 误报）只记日志，绝不替换，避免无限重载卡死。
-     */
-    private void handlePageLoadFailure(String failingUrl, String detail) {
-        if (pageCommitted || pageFinished) {
-            appendNativeLog("页面已有内容或导航已结束，忽略加载失败回调: " + safe(detail));
-            return;
-        }
-        lastErrorUrl = failingUrl == null ? "" : failingUrl.trim();
-        lastErrorDetail = detail == null ? "" : detail.trim();
-        // 重置导航标志：失败导航自身的 onFinish 会在错误回调后触发并置位 pageFinished，
-        // 不重置会让重试误判"页面已恢复"而取消
-        pageCommitted = false;
-        pageFinished = false;
-        showErrorPage(lastErrorUrl, lastErrorDetail);
-        schedulePageAutoRetry(lastErrorUrl);
-    }
-
-    private boolean isErrorPageUrl(String url) {
-        return url != null && url.startsWith(ERROR_PAGE_BASE_URL);
-    }
-
-    private void schedulePageAutoRetry(String failingUrl) {
-        cancelPageAutoRetry();
-        if (bridge == null || bridge.getWebView() == null || failingUrl == null || failingUrl.trim().isEmpty()) {
-            return;
-        }
-        if (pageRetryAttempt >= MAX_AUTO_RETRY) {
-            appendNativeLog("已自动重试 " + MAX_AUTO_RETRY + " 次仍失败，暂停自动重试；可点错误页按钮手动重试");
-            stopRetryDotFlashing();
-            return;
-        }
-        final WebView webView = bridge.getWebView();
-        final String retryUrl = failingUrl.trim();
-        long[] delays = {3000L, 5000L, 10000L, 30000L};
-        long delayMs = delays[Math.min(pageRetryAttempt, delays.length - 1)];
-        appendNativeLog("网页打不开，" + (delayMs / 1000) + " 秒后自动重试（第 " + (pageRetryAttempt + 1) + " 次）");
-        startRetryDotFlashing();
-        pendingPageRetry = () -> {
-            pendingPageRetry = null;
-            if (bridge == null || bridge.getWebView() != webView) {
-                stopRetryDotFlashing();
-                return;
-            }
-            if (pageCommitted) {
-                // 页面已自行恢复（如错误回调后内容仍到达）：不重载，直接结束重试
-                appendNativeLog("页面已恢复，取消本次自动重试");
-                cancelPageAutoRetry();
-                return;
-            }
-            pageFinished = false; // 进入新一轮加载尝试，清掉上一轮失败导航的结束标记
-            appendNativeLog("自动重试加载: " + retryUrl);
-            pageRetryAttempt++;
-            webView.loadUrl(retryUrl);
-        };
-        mainHandler.postDelayed(pendingPageRetry, delayMs);
-    }
-
-    /** 立即重试（错误页按钮/点击屏幕触发），不占重试名额判断直接拉起 */
-    private void retryPageNow() {
-        if (bridge == null || bridge.getWebView() == null) return;
-        String url = lastErrorUrl;
-        if (url == null || url.trim().isEmpty()) {
-            url = safe(bridge.getWebView().getUrl());
-        }
-        if (url.isEmpty() || isErrorPageUrl(url)) {
-            url = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
-        }
-        appendNativeLog("立即重试加载: " + url);
-        cancelPageAutoRetry();
-        pageRetryAttempt++;
-        bridge.getWebView().loadUrl(url);
-    }
-
-    private void cancelPageAutoRetry() {
-        if (pendingPageRetry != null) {
-            mainHandler.removeCallbacks(pendingPageRetry);
-            pendingPageRetry = null;
-        }
-        stopRetryDotFlashing();
-    }
-
-    /** 重试中状态点闪烁（红色↔灰交替），提示用户正在自动重连 */
-    private void startRetryDotFlashing() {
-        if (pageRetryFlashing || nativeControlOverlay == null) return;
-        pageRetryFlashing = true;
-        mainHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (!pageRetryFlashing || nativeControlOverlay == null) return;
-                // 用 error↔loading 交替实现闪烁；setPageReadyState 内部会转发给状态点
-                nativeControlOverlay.setPageReadyState(pageRetryFlashTick ? "loading" : "error");
-                pageRetryFlashTick = !pageRetryFlashTick;
-                mainHandler.postDelayed(this, 600L);
-            }
-        }, 600L);
-    }
-
-    private void stopRetryDotFlashing() {
-        pageRetryFlashing = false;
-    }
-
-    private boolean pageRetryFlashTick = false;
-
-    /** 原生错误页：中文提示 + 失败原因 + 服务器地址 + 立即重试按钮（自动重试由原生驱动） */
-    private void showErrorPage(String failingUrl, String detail) {
-        if (bridge == null || bridge.getWebView() == null) return;
-        String safeUrl = escapeHtml(failingUrl == null ? "" : failingUrl);
-        String safeDetail = escapeHtml(detail == null ? "" : detail);
-        String host = safeUrl;
-        int schemeIdx = host.indexOf("://");
-        if (schemeIdx >= 0) host = host.substring(schemeIdx + 3);
-        int slashIdx = host.indexOf('/');
-        if (slashIdx > 0) host = host.substring(0, slashIdx);
-        String html =
-            "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-            + "<meta name='viewport' content='width=device-width,initial-scale=1'>"
-            + "<style>"
-            + "body{margin:0;font-family:sans-serif;background:#f8fafc;color:#0f172a;"
-            + "display:flex;align-items:center;justify-content:center;min-height:100vh}"
-            + ".card{background:#fff;border-radius:18px;padding:32px 26px;max-width:86%;"
-            + "box-shadow:0 10px 30px rgba(15,23,42,.10);text-align:center}"
-            + ".icon{font-size:44px;line-height:1;margin-bottom:14px}"
-            + "h1{font-size:19px;margin:0 0 10px}"
-            + ".desc{font-size:14px;color:#64748b;line-height:1.7;margin:0 0 6px;word-break:break-all}"
-            + ".spin{display:inline-block;width:14px;height:14px;border:2px solid #cbd5e1;"
-            + "border-top-color:#1570ef;border-radius:50%;margin-right:6px;"
-            + "animation:khspin 0.9s linear infinite;vertical-align:-2px}"
-            + "@keyframes khspin{to{transform:rotate(360deg)}}"
-            + ".retrying{font-size:13px;color:#1570ef;margin:14px 0 18px}"
-            + "button{border:none;border-radius:12px;padding:13px 38px;font-size:16px;"
-            + "font-weight:700;background:#1570ef;color:#fff}"
-            + "button:active{background:#175cd3}"
-            + "</style></head><body><div class='card'>"
-            + "<div class='icon'>&#128268;</div>"
-            + "<h1>网页暂时打不开</h1>"
-            + "<p class='desc'>服务器：" + escapeHtml(host) + "</p>"
-            + (safeDetail.isEmpty() ? "" : "<p class='desc'>原因：" + safeDetail + "</p>")
-            + "<p class='retrying'><span class='spin'></span>网络恢复后会自动重连，也可立即重试</p>"
-            + "<button onclick=\"KaihangNativeBridge&&KaihangNativeBridge.retryLoadPage&&KaihangNativeBridge.retryLoadPage()\">立即重试</button>"
-            + "</div></body></html>";
-        bridge.getWebView().loadDataWithBaseURL(ERROR_PAGE_BASE_URL, html, "text/html", "utf-8", null);
-    }
-
-    private String escapeHtml(String value) {
-        return safe(value)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-            .replace("'", "&#39;");
     }
 
     private boolean handleNavigation(WebView view, String url) {
@@ -834,9 +626,6 @@ public class MainActivity extends BridgeActivity {
         if (url.isEmpty() && view != null) {
             url = safe(view.getUrl());
         }
-        if (isErrorPageUrl(url)) {
-            return; // 原生错误页：不注入业务 runtime
-        }
         if (view != null && isRuntimeReuseEnabled() && trigger != InjectionTrigger.MANUAL && trigger != InjectionTrigger.PAGE_STARTED) {
             probeReusableRuntime(view, url, trigger);
             return;
@@ -951,14 +740,6 @@ public class MainActivity extends BridgeActivity {
         }
         boolean changed = !normalized.equals(nativePageReadyState);
         nativePageReadyState = normalized;
-        if ("ready".equals(normalized)) {
-            // 页面真正就绪：终止自动重试（含闪烁），并清零重试计数
-            cancelPageAutoRetry();
-            pageRetryAttempt = 0;
-        }
-        if (pageRetryFlashing) {
-            return; // 重试闪烁期间不覆盖闪烁视觉
-        }
         if (nativeControlOverlay != null) {
             nativeControlOverlay.setPageReadyState(normalized);
         }
@@ -1024,12 +805,6 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         WebView webView = bridge.getWebView();
-        // 错误页上没有业务 runtime，注入无意义且会叠加 evaluateJavascript 风暴——转为重试加载业务页
-        if (isErrorPageUrl(safe(webView.getUrl()))) {
-            appendNativeLog("当前为错误提示页，重新初始化转为重试加载业务页");
-            retryPageNow();
-            return;
-        }
         setNativePageReadyState("loading", "manual init");
         injectClientTypeHeader(webView, true);
         String command = forceRefresh
@@ -1278,11 +1053,6 @@ public class MainActivity extends BridgeActivity {
         @Override
         public boolean shouldPreviewPrint() {
             return deviceCapabilitiesResolved && !pdaPrinterAvailable;
-        }
-
-        @Override
-        public void retryPageNow() {
-            MainActivity.this.retryPageNow();
         }
 
         @Override

@@ -1,7 +1,49 @@
 {
-  "currentVersionCode": 112,
-  "currentVersionFile": "version-112.json",
+  "currentVersionCode": 118,
+  "currentVersionFile": "version-118.json",
   "releases": [
+    {
+      "versionCode": 118,
+      "versionName": "1.2.109",
+      "apkFileName": "kaihang-scanner-v1.2.109-118.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-118.json"
+    },
+    {
+      "versionCode": 117,
+      "versionName": "1.2.108",
+      "apkFileName": "kaihang-scanner-v1.2.108-117.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-117.json"
+    },
+    {
+      "versionCode": 116,
+      "versionName": "1.2.107",
+      "apkFileName": "kaihang-scanner-v1.2.107-116.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-116.json"
+    },
+    {
+      "versionCode": 115,
+      "versionName": "1.2.106",
+      "apkFileName": "kaihang-scanner-v1.2.106-115.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-115.json"
+    },
+    {
+      "versionCode": 114,
+      "versionName": "1.2.105",
+      "apkFileName": "kaihang-scanner-v1.2.105-114.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-114.json"
+    },
+    {
+      "versionCode": 113,
+      "versionName": "1.2.104",
+      "apkFileName": "kaihang-scanner-v1.2.104-113.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-113.json"
+    },
     {
       "versionCode": 112,
       "versionName": "1.2.103",

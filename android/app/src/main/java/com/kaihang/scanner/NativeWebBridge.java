@@ -35,9 +35,6 @@ final class NativeWebBridge {
         /** 设备能力已探测完成且无原生打印机 → 打印转预览 */
         boolean shouldPreviewPrint();
 
-        /** 错误页「立即重试」按钮：重新加载失败前的业务页面 */
-        void retryPageNow();
-
         void appendLog(String message);
 
         void toast(String message);
@@ -134,12 +131,6 @@ final class NativeWebBridge {
     public boolean connectPrinter() {
         activity.runOnUiThread(() -> PrintPlugin.connectNative(activity));
         return true;
-    }
-
-    /** 原生错误页「立即重试」按钮调用：拉起业务页加载 */
-    @JavascriptInterface
-    public void retryLoadPage() {
-        activity.runOnUiThread(host::retryPageNow);
     }
 
     @JavascriptInterface
