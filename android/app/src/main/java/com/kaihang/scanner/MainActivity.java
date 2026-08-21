@@ -1733,7 +1733,6 @@ public class MainActivity extends BridgeActivity {
                     values.serverBase,
                     values.updateBase,
                     values.paperType,
-                    values.layout,
                     values.injectionMode,
                     values.enableFloatingLogs,
                     values.enableVerboseLogs,

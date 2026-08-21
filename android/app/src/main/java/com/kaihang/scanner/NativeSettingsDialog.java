@@ -72,7 +72,6 @@ final class NativeSettingsDialog {
             return "已保存原生设置: serverBase=" + serverBase
                 + ", updateBase=" + updateBase
                 + ", paperType=" + paperType
-                + ", layout=" + layout
                 + ", injectionMode=" + injectionMode
                 + ", floatingLogs=" + enableFloatingLogs
                 + ", verboseLogs=" + enableVerboseLogs
