@@ -126,21 +126,6 @@ public class PrintPlugin extends Plugin {
         return Bitmap.createBitmap(bitmap, left, top, croppedWidth, croppedHeight);
     }
 
-    private static Bitmap normalizeBarcodeBitmap(Bitmap barcode, int targetWidth, int targetHeight) {
-        if (barcode == null) return null;
-        Bitmap cropped = cropBitmapToContent(barcode);
-        if (cropped == null) return barcode;
-        if (cropped.getWidth() == targetWidth && cropped.getHeight() == targetHeight) {
-            return cropped;
-        }
-        return Bitmap.createScaledBitmap(
-            cropped,
-            Math.max(1, targetWidth),
-            Math.max(1, targetHeight),
-            false
-        );
-    }
-
     private static void emitPrintDiagnostic(String source, String detail) {
         String message = (source == null || source.trim().isEmpty() ? "unknown" : source)
             + " | "
@@ -255,7 +240,6 @@ public class PrintPlugin extends Plugin {
 
     private static BuiltLabel buildUnifiedLabel(
         Context context,
-        String barcodeValue,
         String qrCodeValue,
         String textValue,
         String layoutPreset,
@@ -266,24 +250,15 @@ public class PrintPlugin extends Plugin {
         String diagnosticSource
     ) {
         if (context == null) throw new IllegalArgumentException("context is required");
-        String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
         String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
         String safeTextValue = textValue == null ? "" : textValue;
-        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
-            throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
+        if (safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
+            throw new IllegalArgumentException("printLabel requires qrCodeValue or textValue");
         }
 
         int columns = normalizeTextColumns(textColumns);
         GenericLabelLayout layout = getGenericLabelLayout(layoutPreset, qrSize);
-        Bitmap barcode = null;
         Bitmap qr = null;
-        String rawBarcodeSize = "null";
-        if (!safeBarcodeValue.isEmpty()) {
-            barcode = BarcodeCreater.createBarcode(context, safeBarcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
-            if (barcode == null) throw new IllegalStateException("barcode bitmap null");
-            rawBarcodeSize = bitmapSize(barcode);
-            barcode = normalizeBarcodeBitmap(barcode, layout.barcodeWidth, layout.barcodeHeight);
-        }
         if (!safeQrCodeValue.isEmpty()) {
             qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
             if (qr == null) throw new IllegalStateException("qr bitmap null");
@@ -291,24 +266,18 @@ public class PrintPlugin extends Plugin {
             qr = cropBitmapToContent(qr);
         }
 
-        // 二维码靠左时右侧放字段（是否有一维码不限）；右侧空间不足时字段照常换行
+        // 二维码靠左时右侧放字段；右侧空间不足时字段照常换行
         boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
-        boolean pureQrLabel = barcode == null && qr != null;
+        boolean pureQrLabel = qr != null;
         int bodyTop = 16;
         int qrTop = -1;
-        if (barcode != null) {
-            bodyTop = layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
-        }
         // 二维码实际位图高度：SDK 生成的 QR 可能小于请求尺寸（内容短/版本低），
         // 布局必须按实际高度预留，否则居中模式下二维码与下方字段间出现大片空白
         int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
         int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
         if (qr != null) {
-            // 纯二维码标签：顶部页边距 = 基础 8 点 + 一行高度
-            // 同时存在一维码时：接在一维码之后
-            qrTop = barcode == null
-                ? 8 + layout.lineHeight
-                : layout.barcodeTop + layout.barcodeHeight + layout.mediaGap;
+            // 顶部页边距 = 基础 8 点 + 一行高度
+            qrTop = 8 + layout.lineHeight;
             // 二维码与下方字段零间距紧贴，需要空白由用户在模板里用换行控制
             bodyTop = Math.max(bodyTop, qrTop + qrEffHeight);
         }
@@ -324,21 +293,10 @@ public class PrintPlugin extends Plugin {
                 besideWidth = GenericLabelLayout.LABEL_WIDTH - TEXT_MARGIN - besideX;
             }
         }
-        int barcodeLeft = barcode != null ? resolveCenteredMediaLeft(layout.barcodeWidth) : -1;
-        // 计算媒体内容底部位置（二维码或一维码底部），用于 center 字段紧贴
-        int mediaBottom;
-        if (qr != null && barcode != null) {
-            mediaBottom = Math.max(qrTop + qrEffHeight, layout.barcodeTop + layout.barcodeHeight);
-        } else if (qr != null) {
-            mediaBottom = qrTop + qrEffHeight;
-        } else if (barcode != null) {
-            mediaBottom = layout.barcodeTop + layout.barcodeHeight;
-        } else {
-            mediaBottom = bodyTop;
-        }
-        // 右侧字段区域：上方整个媒体区（有一维码时从一维码顶部起，到二维码底部止），
-        // 字段容量按整个区域高度计算，不再只按二维码高度
-        int besideRegionTop = barcode != null ? layout.barcodeTop : Math.max(qrTop, 0);
+        // 媒体内容底部位置（二维码底部），用于 center 字段紧贴
+        int mediaBottom = qr != null ? qrTop + qrEffHeight : bodyTop;
+        // 右侧字段区域：二维码顶部到二维码底部，字段容量按区域高度计算
+        int besideRegionTop = Math.max(qrTop, 0);
         int besideRegionHeight = Math.max(0, qrTop + qrEffHeight - besideRegionTop);
         int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
 
@@ -375,9 +333,6 @@ public class PrintPlugin extends Plugin {
         placeCenterRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
-        if (barcode != null) {
-            builder.addBmp(barcode, barcodeLeft, layout.barcodeTop);
-        }
         if (qr != null) {
             builder.addBmp(qr, qrLeft, qrTop);
         }
@@ -390,10 +345,6 @@ public class PrintPlugin extends Plugin {
         if (label == null) throw new IllegalStateException("label bitmap null");
         String diagnostic =
             "layoutPreset=" + normalizeLayoutPreset(layoutPreset)
-                + ", requestBarcode=" + layout.barcodeWidth + "x" + layout.barcodeHeight
-                + ", rawBarcode=" + rawBarcodeSize
-                + ", actualBarcode=" + bitmapSize(barcode)
-                + ", barcodeLeft=" + barcodeLeft
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", qrLeft=" + qrLeft
@@ -434,7 +385,7 @@ public class PrintPlugin extends Plugin {
         }
     }
 
-    public static void printLabelNative(Context context, Activity activity, String barcodeValue, String qrCodeValue, String textValue, String paperType, String layoutPreset, int qrSize, String qrAlign, int textColumns, String textStylesJson) {
+    public static void printLabelNative(Context context, Activity activity, String qrCodeValue, String textValue, String paperType, String layoutPreset, int qrSize, String qrAlign, int textColumns, String textStylesJson) {
         if (context == null || activity == null) return;
         connectNative(activity);
         nativePrintExecutor.execute(() -> {
@@ -446,7 +397,6 @@ public class PrintPlugin extends Plugin {
                 String normalizedPaperType = normalizePaperType(paperType);
                 BuiltLabel builtLabel = buildLegacyGenericLabel(
                     context,
-                    barcodeValue,
                     qrCodeValue,
                     textValue,
                     layoutPreset,
@@ -470,7 +420,6 @@ public class PrintPlugin extends Plugin {
     public static void previewLabelNative(
         Context context,
         Activity activity,
-        String barcodeValue,
         String qrCodeValue,
         String textValue,
         String layoutPreset,
@@ -483,7 +432,6 @@ public class PrintPlugin extends Plugin {
         nativePrintExecutor.execute(() -> {
             try {
                 BuiltLabel builtLabel = buildPortablePreviewLabel(
-                    barcodeValue,
                     qrCodeValue,
                     textValue,
                     layoutPreset,
@@ -671,43 +619,8 @@ public class PrintPlugin extends Plugin {
 
     // ── 打印 ──────────────────────────────────────────────────────────────────
 
-    private static List<String> wrapLabeledText(String label, String text, int maxUnitsPerLine) {
-        List<String> lines = new ArrayList<>();
-        String safeText = text == null ? "" : text.trim();
-        String current = label;
-        int units = textUnits(label);
-        for (int i = 0; i < safeText.length(); i++) {
-            char ch = safeText.charAt(i);
-            int next = charUnits(ch);
-            if (units + next > maxUnitsPerLine && !current.equals(label)) {
-                lines.add(current);
-                current = "      " + ch;
-                units = textUnits("      ") + next;
-            } else {
-                current += ch;
-                units += next;
-            }
-        }
-        lines.add(current);
-        return lines;
-    }
-
-    private static int textUnits(String text) {
-        int total = 0;
-        for (int i = 0; i < text.length(); i++) total += charUnits(text.charAt(i));
-        return total;
-    }
-
     private static int charUnits(char ch) {
         return ch <= 0x7f ? 1 : 2;
-    }
-
-    private static String getPrintedLaneLabel(String laneNo) {
-        try {
-            return String.valueOf(Integer.parseInt(laneNo.trim()) - 1);
-        } catch (Exception ignore) {
-            return laneNo == null ? "" : laneNo;
-        }
     }
 
     private static String getCallString(PluginCall call, String key) {
@@ -734,12 +647,6 @@ public class PrintPlugin extends Plugin {
         }
     }
 
-    private static String getPrintedBatchText(String batchNo, String laneNo) {
-        String printedLane = getPrintedLaneLabel(laneNo);
-        if (printedLane == null || printedLane.trim().isEmpty()) return batchNo;
-        return batchNo + "-" + printedLane;
-    }
-
     private static String normalizePaperType(String value) {
         return PAPER_BLACK_MARK.equalsIgnoreCase(String.valueOf(value).trim()) ? PAPER_BLACK_MARK : PAPER_THERMAL;
     }
@@ -752,32 +659,23 @@ public class PrintPlugin extends Plugin {
 
     private static final class GenericLabelLayout {
         static final int LABEL_WIDTH = 384;
-        static final double BARCODE_WIDTH_RATIO = 0.90d;
-        // 默认二维码为原 80% 宽度的一半，即约 40% 画布宽（154 点）
+        // 默认二维码为约 40% 画布宽（154 点）
         static final double QR_WIDTH_RATIO = 0.40d;
         static final int QR_MIN_SIZE = 60;
         static final int QR_MAX_SIZE = LABEL_WIDTH;
-        final int barcodeWidth;
-        final int barcodeHeight;
         final int qrWidth;
         final int qrHeight;
-        final int barcodeTop;
         final int qrTop;
-        final int mediaGap;
         final int textSize;
         final int lineHeight;
         final int minHeight;
         final int wrapUnits;
 
-        GenericLabelLayout(int barcodeWidth, int barcodeHeight, int qrWidth, int qrHeight, int barcodeTop,
-                           int qrTop, int mediaGap, int textSize, int lineHeight, int minHeight, int wrapUnits) {
-            this.barcodeWidth = barcodeWidth;
-            this.barcodeHeight = barcodeHeight;
+        GenericLabelLayout(int qrWidth, int qrHeight, int qrTop,
+                           int textSize, int lineHeight, int minHeight, int wrapUnits) {
             this.qrWidth = qrWidth;
             this.qrHeight = qrHeight;
-            this.barcodeTop = barcodeTop;
             this.qrTop = qrTop;
-            this.mediaGap = mediaGap;
             this.textSize = textSize;
             this.lineHeight = lineHeight;
             this.minHeight = minHeight;
@@ -786,8 +684,6 @@ public class PrintPlugin extends Plugin {
     }
 
     private static final class LegacyGenericLayout {
-        final int barcodeWidth;
-        final int barcodeHeight;
         final int qrWidth;
         final int qrHeight;
         final int qrLeft;
@@ -799,8 +695,6 @@ public class PrintPlugin extends Plugin {
         final int wrapUnits;
 
         LegacyGenericLayout(
-            int barcodeWidth,
-            int barcodeHeight,
             int qrWidth,
             int qrHeight,
             int qrLeft,
@@ -811,8 +705,6 @@ public class PrintPlugin extends Plugin {
             int textLeft,
             int wrapUnits
         ) {
-            this.barcodeWidth = barcodeWidth;
-            this.barcodeHeight = barcodeHeight;
             this.qrWidth = qrWidth;
             this.qrHeight = qrHeight;
             this.qrLeft = qrLeft;
@@ -827,10 +719,6 @@ public class PrintPlugin extends Plugin {
 
     private static int resolveCenteredMediaLeft(int mediaWidth) {
         return Math.max(0, (GenericLabelLayout.LABEL_WIDTH - mediaWidth) / 2);
-    }
-
-    private static int resolveNinetyPercentBarcodeWidth() {
-        return (int) Math.round(GenericLabelLayout.LABEL_WIDTH * GenericLabelLayout.BARCODE_WIDTH_RATIO);
     }
 
     private static int resolveDefaultQrSize() {
@@ -853,11 +741,11 @@ public class PrintPlugin extends Plugin {
         int resolvedQrSize = resolveRequestedQrSize(qrSize);
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new GenericLabelLayout(346, 96, resolvedQrSize, resolvedQrSize, 20, 138, 24, 26, 32, 240, 32);
+                return new GenericLabelLayout(resolvedQrSize, resolvedQrSize, 138, 26, 32, 240, 32);
             case "large":
-                return new GenericLabelLayout(346, 122, resolvedQrSize, resolvedQrSize, 20, 162, 24, 30, 38, 288, 28);
+                return new GenericLabelLayout(resolvedQrSize, resolvedQrSize, 162, 30, 38, 288, 28);
             default:
-                return new GenericLabelLayout(346, 108, resolvedQrSize, resolvedQrSize, 20, 148, 24, 28, 36, 264, 30);
+                return new GenericLabelLayout(resolvedQrSize, resolvedQrSize, 148, 28, 36, 264, 30);
         }
     }
 
@@ -866,17 +754,16 @@ public class PrintPlugin extends Plugin {
         int qrLeft = resolveCenteredMediaLeft(resolvedQrSize);
         switch (normalizeLayoutPreset(preset)) {
             case "compact":
-                return new LegacyGenericLayout(346, 96, resolvedQrSize, resolvedQrSize, qrLeft, 216, 22, 28, 244, 8, 32);
+                return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, qrLeft, 216, 22, 28, 244, 8, 32);
             case "large":
-                return new LegacyGenericLayout(346, 122, resolvedQrSize, resolvedQrSize, qrLeft, 264, 26, 34, 308, 8, 28);
+                return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, qrLeft, 264, 26, 34, 308, 8, 28);
             default:
-                return new LegacyGenericLayout(346, 108, resolvedQrSize, resolvedQrSize, qrLeft, 240, 24, 32, 280, 8, 30);
+                return new LegacyGenericLayout(resolvedQrSize, resolvedQrSize, qrLeft, 240, 24, 32, 280, 8, 30);
         }
     }
 
     private static BuiltLabel buildLegacyGenericLabel(
         Context context,
-        String barcodeValue,
         String qrCodeValue,
         String textValue,
         String layoutPreset,
@@ -887,24 +774,15 @@ public class PrintPlugin extends Plugin {
         String diagnosticSource
     ) {
         if (context == null) throw new IllegalArgumentException("context is required");
-        String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
         String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
         String safeTextValue = textValue == null ? "" : textValue;
-        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
-            throw new IllegalArgumentException("printLabel requires barcodeValue, qrCodeValue or textValue");
+        if (safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
+            throw new IllegalArgumentException("printLabel requires qrCodeValue or textValue");
         }
 
         int columns = normalizeTextColumns(textColumns);
         LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset, qrSize);
-        Bitmap barcode = null;
         Bitmap qr = null;
-        String rawBarcodeSize = "null";
-        if (!safeBarcodeValue.isEmpty()) {
-            barcode = BarcodeCreater.createBarcode(context, safeBarcodeValue, layout.barcodeWidth, layout.barcodeHeight, false, 1);
-            if (barcode == null) throw new IllegalStateException("barcode bitmap null");
-            rawBarcodeSize = bitmapSize(barcode);
-            barcode = normalizeBarcodeBitmap(barcode, layout.barcodeWidth, layout.barcodeHeight);
-        }
         if (!safeQrCodeValue.isEmpty()) {
             qr = BarcodeCreater.createBarcode(context, safeQrCodeValue, layout.qrWidth, layout.qrHeight, false, 2);
             if (qr == null) throw new IllegalStateException("qr bitmap null");
@@ -912,9 +790,9 @@ public class PrintPlugin extends Plugin {
             qr = cropBitmapToContent(qr);
         }
 
-        // 二维码靠左时右侧放字段（是否有一维码不限）
+        // 二维码靠左时右侧放字段
         boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
-        boolean pureQrLabel = barcode == null && qr != null;
+        boolean pureQrLabel = qr != null;
         // 二维码实际位图尺寸参与布局：SDK 生成的 QR 可能小于请求尺寸，按实际值预留
         int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
         int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
@@ -928,14 +806,11 @@ public class PrintPlugin extends Plugin {
         }
         // 二维码顶部页边距：基础上边距再加一行高度
         int qrTopPad = 8 + layout.lineHeight;
-        int mediaBottom = 0;
-        if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
-        if (qr != null) mediaBottom = Math.max(mediaBottom, qrTopPad + qrEffHeight);
-        // 二维码与下方字段零间距紧贴，空白由用户模板控制；一维码标签保持 24
-        int belowGap = qr != null ? 0 : 24;
-        int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
-        // 右侧字段区域：上方整个媒体区（有一维码时从一维码顶部起，到二维码底部止）
-        int besideRegionTop = barcode != null ? 8 : qrTopPad;
+        int mediaBottom = qr != null ? qrTopPad + qrEffHeight : 0;
+        // 二维码与下方字段零间距紧贴，空白由用户模板控制
+        int belowStartY = mediaBottom > 0 ? mediaBottom : 16;
+        // 右侧字段区域：二维码顶部到二维码底部
+        int besideRegionTop = qrTopPad;
         int besideRegionHeight = Math.max(0, qrTopPad + qrEffHeight - besideRegionTop);
         int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
 
@@ -971,9 +846,6 @@ public class PrintPlugin extends Plugin {
         placeCenterRows(plan, labelHeight, layout.lineHeight, layout.textSize);
 
         AbsoluteLayoutBitmap builder = new AbsoluteLayoutBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight);
-        if (barcode != null) {
-            builder.addBmp(barcode, 8, 8);
-        }
         if (qr != null) {
             builder.addBmp(qr, qrLeft, qrTopPad);
         }
@@ -987,9 +859,6 @@ public class PrintPlugin extends Plugin {
         String diagnostic =
             "legacyGeneric=true"
                 + ", layoutPreset=" + normalizeLayoutPreset(layoutPreset)
-                + ", requestBarcode=" + layout.barcodeWidth + "x" + layout.barcodeHeight
-                + ", rawBarcode=" + rawBarcodeSize
-                + ", actualBarcode=" + bitmapSize(barcode)
                 + ", requestQr=" + layout.qrWidth + "x" + layout.qrHeight
                 + ", actualQr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
@@ -1003,7 +872,6 @@ public class PrintPlugin extends Plugin {
     }
 
     private static BuiltLabel buildPortablePreviewLabel(
-        String barcodeValue,
         String qrCodeValue,
         String textValue,
         String layoutPreset,
@@ -1013,27 +881,23 @@ public class PrintPlugin extends Plugin {
         String textStylesJson,
         String diagnosticSource
     ) throws Exception {
-        String safeBarcodeValue = barcodeValue == null ? "" : barcodeValue.trim();
         String safeQrCodeValue = qrCodeValue == null ? "" : qrCodeValue.trim();
         String safeTextValue = textValue == null ? "" : textValue;
-        if (safeBarcodeValue.isEmpty() && safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
-            throw new IllegalArgumentException("preview requires barcodeValue, qrCodeValue or textValue");
+        if (safeQrCodeValue.isEmpty() && safeTextValue.trim().isEmpty()) {
+            throw new IllegalArgumentException("preview requires qrCodeValue or textValue");
         }
 
         int columns = normalizeTextColumns(textColumns);
         LegacyGenericLayout layout = getLegacyGenericLayout(layoutPreset, qrSize);
-        Bitmap barcode = safeBarcodeValue.isEmpty()
-            ? null
-            : createPortableCode(safeBarcodeValue, BarcodeFormat.CODE_128, layout.barcodeWidth, layout.barcodeHeight);
         Bitmap qr = safeQrCodeValue.isEmpty()
             ? null
             : createPortableCode(safeQrCodeValue, BarcodeFormat.QR_CODE, layout.qrWidth, layout.qrHeight);
         // 裁掉二维码位图四周白边（quiet zone），与实纸打印行为一致
         if (qr != null) qr = cropBitmapToContent(qr);
 
-        // 二维码靠左时右侧放字段（是否有一维码不限）
+        // 二维码靠左时右侧放字段
         boolean qrLeftAligned = qr != null && "left".equals(normalizeQrAlign(qrAlign));
-        boolean pureQrLabel = barcode == null && qr != null;
+        boolean pureQrLabel = qr != null;
         // 实际位图尺寸参与布局，与实纸打印保持一致
         int qrEffHeight = qr != null ? qr.getHeight() : layout.qrHeight;
         int qrEffWidth = qr != null ? qr.getWidth() : layout.qrWidth;
@@ -1047,14 +911,11 @@ public class PrintPlugin extends Plugin {
         }
         // 二维码顶部页边距：基础上边距再加一行高度，与实纸打印保持一致
         int qrTopPad = 8 + layout.lineHeight;
-        int mediaBottom = 0;
-        if (barcode != null) mediaBottom = Math.max(mediaBottom, 8 + layout.barcodeHeight);
-        if (qr != null) mediaBottom = Math.max(mediaBottom, qrTopPad + qrEffHeight);
-        // 二维码与下方字段零间距紧贴，与实纸打印保持一致；一维码标签保持 24
-        int belowGap = qr != null ? 0 : 24;
-        int belowStartY = mediaBottom > 0 ? mediaBottom + belowGap : 16;
-        // 右侧字段区域：上方整个媒体区（有一维码时从一维码顶部起，到二维码底部止）
-        int besideRegionTop = barcode != null ? 8 : qrTopPad;
+        int mediaBottom = qr != null ? qrTopPad + qrEffHeight : 0;
+        // 二维码与下方字段零间距紧贴，与实纸打印保持一致
+        int belowStartY = mediaBottom > 0 ? mediaBottom : 16;
+        // 右侧字段区域：二维码顶部到二维码底部
+        int besideRegionTop = qrTopPad;
         int besideRegionHeight = Math.max(0, qrTopPad + qrEffHeight - besideRegionTop);
         int besideRowCapacity = qrLeftAligned ? Math.max(1, besideRegionHeight / layout.lineHeight) : 0;
 
@@ -1092,7 +953,6 @@ public class PrintPlugin extends Plugin {
         Bitmap label = Bitmap.createBitmap(GenericLabelLayout.LABEL_WIDTH, labelHeight, Bitmap.Config.ARGB_8888);
         android.graphics.Canvas canvas = new android.graphics.Canvas(label);
         canvas.drawColor(android.graphics.Color.WHITE);
-        if (barcode != null) canvas.drawBitmap(barcode, 8, 8, null);
         if (qr != null) canvas.drawBitmap(qr, qrLeft, qrTopPad, null);
 
         android.graphics.Paint textPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
@@ -1107,7 +967,6 @@ public class PrintPlugin extends Plugin {
         String diagnostic =
             "portablePreview=true"
                 + ", layoutPreset=" + normalizeLayoutPreset(layoutPreset)
-                + ", barcode=" + bitmapSize(barcode)
                 + ", qr=" + bitmapSize(qr)
                 + ", label=" + bitmapSize(label)
                 + ", lines=" + plan.rows.size()
@@ -1481,66 +1340,6 @@ public class PrintPlugin extends Plugin {
     }
 
     /**
-     * 批次标签（一维码）
-     * 布局 384×644：条码放大，文字略缩小；机器/日期分行；品类支持换行；
-     * 穴号/周期/栏号依次紧随其后；批次间额外走纸明显加大。
-     */
-    @PluginMethod
-    public void printBatchLabel(PluginCall call) {
-        String batchNo     = getCallString(call, "batchNo");
-        String machineId   = getCallString(call, "machineId");
-        String productType = getCallString(call, "productType");
-        String cavityNo    = getCallString(call, "cavityNo");
-        String date        = getCallString(call, "date");
-        String periodLabel = getCallString(call, "periodLabel");
-        String laneNo      = getCallString(call, "laneNo");
-        Integer textColumns = getCallOptionalInt(call, "textColumns");
-
-        if (batchNo.isEmpty()) { call.reject("batchNo is required"); return; }
-
-        printExecutor.execute(() -> {
-            if (destroyed) { call.reject("printer destroyed"); return; }
-            try {
-                List<String> productLines = wrapLabeledText("品类：", productType, 18);
-                String printedBatchText = getPrintedBatchText(batchNo, laneNo);
-                String printedLaneLabel = getPrintedLaneLabel(laneNo);
-                List<String> lines = new ArrayList<>();
-                lines.add("批次：" + printedBatchText);
-                if (!machineId.trim().isEmpty()) lines.add("机器：" + machineId.trim());
-                if (!date.trim().isEmpty()) lines.add("日期：" + date.trim());
-                lines.addAll(productLines);
-                if (!cavityNo.trim().isEmpty()) lines.add("穴号：" + cavityNo.trim());
-                if (!periodLabel.trim().isEmpty()) lines.add("周期：" + periodLabel.trim());
-                if (!printedLaneLabel.trim().isEmpty()) lines.add("栏号：" + printedLaneLabel.trim());
-                BuiltLabel builtLabel = buildUnifiedLabel(
-                    getContext(),
-                    batchNo,
-                    "",
-                    String.join("\n", lines),
-                    LAYOUT_STANDARD,
-                    null,
-                    null,
-                    textColumns,
-                    null,
-                    "printBatchLabel"
-                );
-                emitPrintDiagnostic(
-                    "printBatchLabel",
-                    builtLabel.diagnostic + ", batchNo=" + batchNo + ", productLines=" + productLines.size()
-                );
-
-                if (destroyed) { call.reject("printer destroyed"); return; }
-                android.util.Log.d("PrintPlugin", "printBatchLabel → Printer.print()");
-                printBuiltLabel(builtLabel.label, PAPER_THERMAL, "batch_" + batchNo);
-                call.resolve();
-            } catch (Exception e) {
-                android.util.Log.e("PrintPlugin", "printBatchLabel crash", e);
-                call.reject("printBatchLabel error: " + e.getMessage(), e);
-            }
-        });
-    }
-
-    /**
      * 机器二维码标签
      * 二维码约占 384 点纸宽的 60%，居中显示，下方打印机器编号和时间。
      * QR 内容格式：machineId（仅机器编号）
@@ -1562,7 +1361,6 @@ public class PrintPlugin extends Plugin {
                     .format(new Date());
                 BuiltLabel builtLabel = buildUnifiedLabel(
                     getContext(),
-                    "",
                     machineId,
                     "机 器：" + machineId + "\n打印：" + printTime,
                     "large",
@@ -1585,7 +1383,6 @@ public class PrintPlugin extends Plugin {
 
     /**
      * 通用标签：
-     * - barcodeValue: 一维码内容
      * - qrCodeValue: 二维码内容
      * - textValue: 多行正文，支持换行
      * - qrSize: 二维码边长（打印点数），可选，缺省约 154 点（画布宽 40%）
@@ -1594,7 +1391,6 @@ public class PrintPlugin extends Plugin {
      */
     @PluginMethod
     public void printLabel(PluginCall call) {
-        String barcodeValue = getCallString(call, "barcodeValue");
         String qrCodeValue = getCallString(call, "qrCodeValue");
         String textValue = getCallString(call, "textValue");
         String paperType = normalizePaperType(getCallString(call, "paperType"));
@@ -1604,8 +1400,8 @@ public class PrintPlugin extends Plugin {
         Integer textColumns = getCallOptionalInt(call, "textColumns");
         String textStylesJson = getCallString(call, "textStyles");
 
-        if (barcodeValue.isEmpty() && qrCodeValue.isEmpty() && textValue.trim().isEmpty()) {
-            call.reject("printLabel requires barcodeValue, qrCodeValue or textValue");
+        if (qrCodeValue.isEmpty() && textValue.trim().isEmpty()) {
+            call.reject("printLabel requires qrCodeValue or textValue");
             return;
         }
 
@@ -1614,7 +1410,6 @@ public class PrintPlugin extends Plugin {
             try {
                 BuiltLabel builtLabel = buildLegacyGenericLabel(
                     getContext(),
-                    barcodeValue,
                     qrCodeValue,
                     textValue,
                     layoutPreset,

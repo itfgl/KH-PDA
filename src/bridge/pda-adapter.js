@@ -34,46 +34,6 @@ function _send(cmd) {
   window.PDAJsBridge.SendControlCommand(JSON.stringify(cmd));
 }
 
-function wrapLabeledText(label, text, maxUnitsPerLine) {
-  const safeText = String(text || '').trim();
-  const lines = [];
-  let current = label;
-  let units = textUnits(label);
-  for (const ch of safeText) {
-    const next = charUnits(ch);
-    if (units + next > maxUnitsPerLine && current !== label) {
-      lines.push(current);
-      current = '      ' + ch;
-      units = textUnits('      ') + next;
-    } else {
-      current += ch;
-      units += next;
-    }
-  }
-  lines.push(current);
-  return lines;
-}
-
-function textUnits(text) {
-  let total = 0;
-  for (const ch of text) total += charUnits(ch);
-  return total;
-}
-
-function charUnits(ch) {
-  return ch.charCodeAt(0) <= 0x7f ? 1 : 2;
-}
-
-function getPrintedLaneLabel(laneNo) {
-  const parsed = Number.parseInt(laneNo, 10);
-  return Number.isFinite(parsed) ? String(parsed - 1) : String(laneNo ?? '');
-}
-
-function getPrintedBatchText(batchNo, laneNo) {
-  const printedLane = getPrintedLaneLabel(laneNo);
-  return printedLane ? `${batchNo}-${printedLane}` : batchNo;
-}
-
 // ── ScanPlugin ───────────────────────────────────────────────────────────────
 // Capacitor 接口：addListener('scanResult', cb({ value })) / startScan() / stopScan()
 
@@ -108,7 +68,7 @@ export const ScanPlugin = {
 // ── PrintPlugin ──────────────────────────────────────────────────────────────
 // Capacitor 接口：
 //   addListener('printStatus', cb({ connection?, status?, flag? }))
-//   connect() / prepareToPrintLabel() / printBatchLabel(p) / printMachineQR(p)
+//   connect() / prepareToPrintLabel() / printMachineQR(p) / printLabel(p)
 //
 // X8 打印状态字符串 → Capacitor connection/status 字段映射
 
@@ -152,37 +112,6 @@ export const PrintPlugin = {
   },
 
   /**
-   * 批次标签（一维码）
-   * 与 PrintPlugin.java 的 printBatchLabel 布局一致：
-   *   384×644  一维码(10,0 364×140)  批次码(0,180)  机器(0,234)  日期(0,282)
-   *             品类最多两行(0,336...)  穴号、周期、栏号依次紧随其后；批次间额外走纸 96
-   */
-  async printBatchLabel({ batchNo, machineId = '', productType = '', cavityNo = '', date = '', periodLabel = '', laneNo = '' }) {
-    const productLines = wrapLabeledText('品类：', productType, 18);
-    const data = [
-      { printType: 1, text: batchNo,
-        desiredWidth: 364, desiredHeight: 140, displayCode: false, left: 10, top: 0 },
-      { printType: 0, text: getPrintedBatchText(batchNo, laneNo), textSize: 36, x: 0, y: 180 },
-      { printType: 0, text: `机器：${machineId}`, textSize: 30, x: 0, y: 234 },
-      { printType: 0, text: `日期：${date}`,      textSize: 30, x: 0, y: 282 },
-    ];
-    let y = 336;
-    for (const line of productLines) {
-      data.push({ printType: 0, text: line, textSize: 30, x: 0, y });
-      y += 42;
-    }
-    y += 16;
-    data.push({ printType: 0, text: `穴号：${cavityNo}`,    textSize: 30, x: 0, y });
-    data.push({ printType: 0, text: `周期：${periodLabel}`, textSize: 30, x: 0, y: y + 42 });
-    data.push({ printType: 0, text: `栏号：${getPrintedLaneLabel(laneNo)}`, textSize: 30, x: 0, y: y + 84 });
-    _send({
-      name: 'printBmpLabel',
-      width: 384, height: 644, top: 8, concentration: 15, forwardMorePaper: 96,
-      data,
-    });
-  },
-
-  /**
    * 机器标签（二维码）
    * 与 PrintPlugin.java 的 printMachineQR 布局一致：
    *   384×344  QR(76,8 232×232)  机器/品类/日期三行
@@ -203,31 +132,19 @@ export const PrintPlugin = {
 
   /**
    * 通用标签：
-   * - barcodeValue: 一维码内容
    * - qrCodeValue: 二维码内容
    * - textValue: 多行正文
    */
-  async printLabel({ barcodeValue = '', qrCodeValue = '', textValue = '', paperType = 'thermal', layoutPreset = 'standard' }) {
+  async printLabel({ qrCodeValue = '', textValue = '', paperType = 'thermal', layoutPreset = 'standard' }) {
     const preset = String(layoutPreset || '').trim().toLowerCase();
     const isBlackMark = String(paperType || '').trim().toLowerCase() === 'black_mark';
     const layout = preset === 'compact'
-      ? { barcodeWidth: 208, barcodeHeight: 84, qrWidth: 184, qrHeight: 184, qrLeft: 100, textSize: 22, lineHeight: 28, minHeight: 244, textLeft: 8 }
+      ? { qrWidth: 184, qrHeight: 184, qrLeft: 100, textSize: 22, lineHeight: 28, minHeight: 244, textLeft: 8 }
       : preset === 'large'
-        ? { barcodeWidth: 240, barcodeHeight: 104, qrWidth: 232, qrHeight: 232, qrLeft: 76, textSize: 26, lineHeight: 34, minHeight: 308, textLeft: 8 }
-        : { barcodeWidth: 228, barcodeHeight: 96, qrWidth: 208, qrHeight: 208, qrLeft: 88, textSize: 24, lineHeight: 32, minHeight: 280, textLeft: 8 };
+        ? { qrWidth: 232, qrHeight: 232, qrLeft: 76, textSize: 26, lineHeight: 34, minHeight: 308, textLeft: 8 }
+        : { qrWidth: 208, qrHeight: 208, qrLeft: 88, textSize: 24, lineHeight: 32, minHeight: 280, textLeft: 8 };
     const lines = String(textValue || '').replace(/\r/g, '').split('\n');
     const data = [];
-    if (barcodeValue) {
-      data.push({
-        printType: 1,
-        text: barcodeValue,
-        desiredWidth: layout.barcodeWidth,
-        desiredHeight: layout.barcodeHeight,
-        displayCode: false,
-        left: 8,
-        top: 8,
-      });
-    }
     if (qrCodeValue) {
       data.push({
         printType: 2,
@@ -239,10 +156,7 @@ export const PrintPlugin = {
         top: 8,
       });
     }
-    const mediaBottom = Math.max(
-      barcodeValue ? 8 + layout.barcodeHeight : 0,
-      qrCodeValue ? 8 + layout.qrHeight : 0,
-    );
+    const mediaBottom = qrCodeValue ? 8 + layout.qrHeight : 0;
     let y = mediaBottom > 0 ? mediaBottom + 24 : 16;
     for (const line of lines) {
       data.push({ printType: 0, text: String(line || ''), textSize: layout.textSize, x: layout.textLeft, y });

@@ -5,10 +5,13 @@
  *   printer:status  { connection?, status?, flag? }
  *
  * 对外方法：
- *   init()          首次连接，注册监听
- *   reset()         断开并重置状态（页面退出/重新进入时调用）
- *   printBatch(p)   打印批次标签
- *   isConnected()   当前是否已连接
+ *   init()              首次连接，注册监听
+ *   reset()             断开并重置状态（页面退出/重新进入时调用）
+ *   printMachineLabel() 打印机器二维码标签
+ *   isConnected()       当前是否已连接
+ *
+ * 批次标签等业务打印已迁移到动作表（print_label / print_batch_label），
+ * 由 client-runtime 走通用二维码路径，不再使用本模块的一维码批次接口。
  */
 import { emit } from './events.js';
 
@@ -18,35 +21,13 @@ let _connected = false;
 
 export function isConnected() { return _connected; }
 
-/**
- * 等待特定的 printStatus 事件（resolve），遇到错误状态时 reject。
- * 必须在调用 SDK 方法之前先创建 Promise，确保监听器在事件触发前已注册。
- */
-function waitPrintStatus(wanted) {
-  const ERRORS = [
-    'NO_PAPER', 'PRINTER_CLOSED', 'SEND_DATA_FAILED', 'PRINT_FAILED',
-    'BLACK_FLAG_NOT_FOUND',
-    'PREPARE_LABEL_NO_PAPER', 'PREPARE_LABEL_BLACK_FLAG_NOT_FOUND',
-    'PREPARE_LABEL_FAILED', 'PREPARE_LABEL_PRINTER_CLOSED',
-    'PREPARE_LABEL_SEND_DATA_FAILED',
-  ];
-  return new Promise((resolve, reject) => {
-    let sub = null;
-    _plugin.addListener('printStatus', ({ status }) => {
-      if (!status) return;
-      if (status === wanted)          { sub?.remove(); resolve(); }
-      else if (ERRORS.includes(status)) { sub?.remove(); reject(new Error(status)); }
-    }).then(s => { sub = s; });
-  });
-}
-
 export async function init(PrintPlugin) {
   _plugin = PrintPlugin;
   // 每次 init 都清掉旧监听，保证状态干净
   await reset();
   try {
     _listener = await _plugin.addListener('printStatus', (data) => {
-      const { connection, status } = data;
+      const { connection } = data;
       if (connection === 'connected') _connected = true;
       if (connection === 'failed' || connection === 'closed') _connected = false;
       emit('printer:status', data);
@@ -61,65 +42,6 @@ export async function reset() {
   _connected = false;
   if (_listener) { try { _listener.remove(); } catch(_) {} _listener = null; }
   emit('printer:status', { connection: 'reset' });
-}
-
-/**
- * 打印批次标签（一维码），处理完整的多张打印流程。
- *
- * 流程：
- *   printBatchLabel → PRINT_OK → ... 循环
- *
- * 批次标签走普通纸（热敏）打印，不走黑标定位，每张打完不需要 checkBlack 归位。
- *
- * @param {{ batchNo, machineId, productType, date }} params
- *   - batchNo     15位批次码
- *   - machineId   机器编号（3位，如 M05）
- *   - productType 产品名称（人可读，如"电容"）
- *   - date        YYMMDD（从批次码中提取：batchNo.slice(3,9)）
- * @param {number} [count=1]  打印张数
- * @param {function} [onProgress]  进度回调 (current, total) => void
- * @param {function} [afterEach]  每张成功后的暂停回调 (current, total, params) => Promise<void>
- */
-export async function printBatches(params, count = 1, onProgress, afterEach) {
-  if (!_plugin) throw new Error('打印机未初始化');
-  if (!_connected) throw new Error('打印机未连接，请先重连');
-
-  for (let i = 0; i < count; i++) {
-    onProgress?.(i + 1, count);
-    const pPrint = waitPrintStatus('PRINT_OK');
-    await _plugin.printBatchLabel(params);
-    await pPrint;
-    if (i < count - 1) await afterEach?.(i + 1, count, params);
-  }
-}
-
-/** @deprecated 请改用 printBatches(params, 1) */
-export async function printBatch(params) {
-  return printBatches(params, 1);
-}
-
-/**
- * 打印一组「不同批次码」的标签，每个批次一张（用于开机按穴号拆分后逐穴号打码）。
- * 与 printBatches 的区别：printBatches 重复同一份 params N 张，这里每张 params 不同。
- *
- * 批次标签走普通纸（热敏）打印，不走黑标定位，每张打完不需要 checkBlack 归位。
- *
- * @param {Array<{batchNo,machineId,productType,date}>} list  每张标签的参数
- * @param {function} [onProgress]  进度回调 (current, total, params) => void
- * @param {function} [afterEach]  每张成功后的暂停回调 (current, total, params) => Promise<void>
- */
-export async function printBatchList(list, onProgress, afterEach) {
-  if (!_plugin) throw new Error('打印机未初始化');
-  if (!_connected) throw new Error('打印机未连接，请先重连');
-
-  const total = list.length;
-  for (let i = 0; i < total; i++) {
-    onProgress?.(i + 1, total, list[i]);
-    const pPrint = waitPrintStatus('PRINT_OK');
-    await _plugin.printBatchLabel(list[i]);
-    await pPrint;
-    if (i < total - 1) await afterEach?.(i + 1, total, list[i]);
-  }
 }
 
 /**

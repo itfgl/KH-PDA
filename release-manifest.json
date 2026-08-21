@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 106,
+  "currentVersionCode": 107,
   "releases": [
+    {
+      "versionCode": 107,
+      "versionName": "1.2.98",
+      "apkFileName": "kaihang-scanner-v1.2.98-107.apk",
+      "changelog": "右侧字段起始和容量改为按上方整个区域算（有一维码时从一维码顶部到二维码底部），可排字段更多",
+      "releasedAt": "2026-08-20",
+      "notes": [
+        "Android 版本提升到 1.2.98 (107)",
+        "右侧字段起始和容量改为按上方整个区域算（有一维码时从一维码顶部到二维码底部），可排字段更多"
+      ]
+    },
     {
       "versionCode": 106,
       "versionName": "1.2.97",
@@ -1232,7 +1243,7 @@
   ],
   "pending": {
     "notes": [
-      "右侧字段起始和容量改为按上方整个区域算（有一维码时从一维码顶部到二维码底部），可排字段更多"
+      "打印全面改为二维码：清理一维码相关旧代码，打印流程不变"
     ]
   }
 }

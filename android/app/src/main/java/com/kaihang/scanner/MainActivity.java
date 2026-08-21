@@ -1581,7 +1581,6 @@ public class MainActivity extends BridgeActivity {
         public boolean printLabel(String payloadJson) {
             try {
                 org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
-                String barcodeValue = payload.optString("barcodeValue", "");
                 String qrCodeValue = payload.optString("qrCodeValue", "");
                 String textValue = payload.optString("textValue", "");
                 String paperType = payload.optString("paperType", "thermal");
@@ -1595,8 +1594,7 @@ public class MainActivity extends BridgeActivity {
                 if (compactText.length() > 120) compactText = compactText.substring(0, 120) + "…";
                 appendNativeLog(
                     "原生打印桥调用#" + nativePrintBridgeCallCount
-                        + ": barcode=" + safe(barcodeValue)
-                        + ", qrcode=" + safe(qrCodeValue)
+                        + ": qrcode=" + safe(qrCodeValue)
                         + ", text=" + compactText
                         + ", paperType=" + safe(paperType)
                         + ", layout=" + safe(layoutPreset)
@@ -1612,7 +1610,6 @@ public class MainActivity extends BridgeActivity {
                         PrintPlugin.previewLabelNative(
                             MainActivity.this,
                             MainActivity.this,
-                            barcodeValue,
                             qrCodeValue,
                             textValue,
                             layoutPreset,
@@ -1627,7 +1624,6 @@ public class MainActivity extends BridgeActivity {
                 runOnUiThread(() -> PrintPlugin.printLabelNative(
                     MainActivity.this,
                     MainActivity.this,
-                    barcodeValue,
                     qrCodeValue,
                     textValue,
                     paperType,
@@ -1648,7 +1644,6 @@ public class MainActivity extends BridgeActivity {
         public boolean previewLabel(String payloadJson) {
             try {
                 org.json.JSONObject payload = new org.json.JSONObject(payloadJson == null ? "{}" : payloadJson);
-                String barcodeValue = payload.optString("barcodeValue", "");
                 String qrCodeValue = payload.optString("qrCodeValue", "");
                 String textValue = payload.optString("textValue", "");
                 String layoutPreset = payload.optString("layoutPreset", "standard");
@@ -1657,8 +1652,7 @@ public class MainActivity extends BridgeActivity {
                 int textColumns = payload.optInt("textColumns", 1);
                 String textStylesJson = payload.optString("textStyles", "");
                 appendNativeLog(
-                    "无打印机，生成标签预览: barcode=" + safe(barcodeValue)
-                        + ", qrcode=" + safe(qrCodeValue)
+                    "无打印机，生成标签预览: qrcode=" + safe(qrCodeValue)
                         + ", layout=" + safe(layoutPreset)
                         + ", qrSize=" + qrSize
                         + ", qrAlign=" + safe(qrAlign)
@@ -1670,7 +1664,6 @@ public class MainActivity extends BridgeActivity {
                     PrintPlugin.previewLabelNative(
                         MainActivity.this,
                         MainActivity.this,
-                        barcodeValue,
                         qrCodeValue,
                         textValue,
                         layoutPreset,
