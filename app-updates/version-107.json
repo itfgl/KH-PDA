@@ -1,0 +1,12 @@
+{
+  "versionCode": 107,
+  "versionName": "1.2.98",
+  "apkFileName": "kaihang-scanner-v1.2.98-107.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.98-107.apk",
+  "changelog": "右侧字段起始和容量改为按上方整个区域算（有一维码时从一维码顶部到二维码底部），可排字段更多",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.98 (107)",
+    "右侧字段起始和容量改为按上方整个区域算（有一维码时从一维码顶部到二维码底部），可排字段更多"
+  ]
+}

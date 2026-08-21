@@ -1,0 +1,12 @@
+{
+  "versionCode": 102,
+  "versionName": "1.2.93",
+  "apkFileName": "kaihang-scanner-v1.2.93-102.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.93-102.apk",
+  "changelog": "qr_align=center 时二维码按实际大小真正水平居中；顶部页边距增加约一行高度",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.93 (102)",
+    "qr_align=center 时二维码按实际大小真正水平居中；顶部页边距增加约一行高度"
+  ]
+}

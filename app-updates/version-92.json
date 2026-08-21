@@ -1,0 +1,13 @@
+{
+  "versionCode": 92,
+  "versionName": "1.2.83",
+  "apkFileName": "kaihang-scanner-v1.2.83-92.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.83-92.apk",
+  "changelog": "悬浮工具球闲置6秒自动半藏到屏幕边缘，点击即唤回，不再挡住页面内容",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.83 (92)",
+    "悬浮工具球闲置6秒自动半藏到屏幕边缘，点击即唤回，不再挡住页面内容",
+    "设置界面精简：客户端设置只留常用项，高级排障项收进原生配置折叠区"
+  ]
+}

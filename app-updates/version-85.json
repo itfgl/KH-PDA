@@ -1,0 +1,12 @@
+{
+  "versionCode": 85,
+  "versionName": "1.2.76",
+  "apkFileName": "kaihang-scanner-v1.2.76-85.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.76-85.apk",
+  "changelog": "打印按钮可配置等工作流完成再出纸：动作 options 加 wait_workflow 即生效，工作流失败则不打印",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.76 (85)",
+    "打印按钮可配置等工作流完成再出纸：动作 options 加 wait_workflow 即生效，工作流失败则不打印"
+  ]
+}

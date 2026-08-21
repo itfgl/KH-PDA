@@ -1,0 +1,12 @@
+{
+  "versionCode": 99,
+  "versionName": "1.2.90",
+  "apkFileName": "kaihang-scanner-v1.2.90-99.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.90-99.apk",
+  "changelog": "黑标贴纸间距收紧：二维码顶部留白从12点减到8点，二维码与下方文字间距从8点减到4点，贴纸利用率更高",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.90 (99)",
+    "黑标贴纸间距收紧：二维码顶部留白从12点减到8点，二维码与下方文字间距从8点减到4点，贴纸利用率更高"
+  ]
+}

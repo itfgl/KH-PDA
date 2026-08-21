@@ -1,0 +1,13 @@
+{
+  "versionCode": 95,
+  "versionName": "1.2.86",
+  "apkFileName": "kaihang-scanner-v1.2.86-95.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.86-95.apk",
+  "changelog": "原生日志也默认不记录，打开详细日志开关后才会写入运行日志",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.86 (95)",
+    "原生日志也默认不记录，打开详细日志开关后才会写入运行日志",
+    "高级选项默认只显示开关名，点小眼睛才展开每项详细说明"
+  ]
+}

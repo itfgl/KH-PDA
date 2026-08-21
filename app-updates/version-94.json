@@ -1,0 +1,13 @@
+{
+  "versionCode": 94,
+  "versionName": "1.2.85",
+  "apkFileName": "kaihang-scanner-v1.2.85-94.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.85-94.apk",
+  "changelog": "日志默认完全关闭，需要排查问题时再到原生配置高级选项里打开",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.85 (94)",
+    "日志默认完全关闭，需要排查问题时再到原生配置高级选项里打开",
+    "移除注入时机选项，固定为可靠模式；调试开关默认关、功能开关默认开，恢复默认同规则"
+  ]
+}

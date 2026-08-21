@@ -1,7 +1,210 @@
 {
-  "currentVersionCode": 79,
-  "currentVersionFile": "version-79.json",
+  "currentVersionCode": 108,
+  "currentVersionFile": "version-108.json",
   "releases": [
+    {
+      "versionCode": 108,
+      "versionName": "1.2.99",
+      "apkFileName": "kaihang-scanner-v1.2.99-108.apk",
+      "releasedAt": "2026-08-21",
+      "versionFile": "version-108.json"
+    },
+    {
+      "versionCode": 107,
+      "versionName": "1.2.98",
+      "apkFileName": "kaihang-scanner-v1.2.98-107.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-107.json"
+    },
+    {
+      "versionCode": 106,
+      "versionName": "1.2.97",
+      "apkFileName": "kaihang-scanner-v1.2.97-106.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-106.json"
+    },
+    {
+      "versionCode": 105,
+      "versionName": "1.2.96",
+      "apkFileName": "kaihang-scanner-v1.2.96-105.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-105.json"
+    },
+    {
+      "versionCode": 104,
+      "versionName": "1.2.95",
+      "apkFileName": "kaihang-scanner-v1.2.95-104.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-104.json"
+    },
+    {
+      "versionCode": 103,
+      "versionName": "1.2.94",
+      "apkFileName": "kaihang-scanner-v1.2.94-103.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-103.json"
+    },
+    {
+      "versionCode": 102,
+      "versionName": "1.2.93",
+      "apkFileName": "kaihang-scanner-v1.2.93-102.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-102.json"
+    },
+    {
+      "versionCode": 101,
+      "versionName": "1.2.92",
+      "apkFileName": "kaihang-scanner-v1.2.92-101.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-101.json"
+    },
+    {
+      "versionCode": 100,
+      "versionName": "1.2.91",
+      "apkFileName": "kaihang-scanner-v1.2.91-100.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-100.json"
+    },
+    {
+      "versionCode": 99,
+      "versionName": "1.2.90",
+      "apkFileName": "kaihang-scanner-v1.2.90-99.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-99.json"
+    },
+    {
+      "versionCode": 98,
+      "versionName": "1.2.89",
+      "apkFileName": "kaihang-scanner-v1.2.89-98.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-98.json"
+    },
+    {
+      "versionCode": 97,
+      "versionName": "1.2.88",
+      "apkFileName": "kaihang-scanner-v1.2.88-97.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-97.json"
+    },
+    {
+      "versionCode": 96,
+      "versionName": "1.2.87",
+      "apkFileName": "kaihang-scanner-v1.2.87-96.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-96.json"
+    },
+    {
+      "versionCode": 95,
+      "versionName": "1.2.86",
+      "apkFileName": "kaihang-scanner-v1.2.86-95.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-95.json"
+    },
+    {
+      "versionCode": 94,
+      "versionName": "1.2.85",
+      "apkFileName": "kaihang-scanner-v1.2.85-94.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-94.json"
+    },
+    {
+      "versionCode": 93,
+      "versionName": "1.2.84",
+      "apkFileName": "kaihang-scanner-v1.2.84-93.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-93.json"
+    },
+    {
+      "versionCode": 92,
+      "versionName": "1.2.83",
+      "apkFileName": "kaihang-scanner-v1.2.83-92.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-92.json"
+    },
+    {
+      "versionCode": 91,
+      "versionName": "1.2.82",
+      "apkFileName": "kaihang-scanner-v1.2.82-91.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-91.json"
+    },
+    {
+      "versionCode": 90,
+      "versionName": "1.2.81",
+      "apkFileName": "kaihang-scanner-v1.2.81-90.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-90.json"
+    },
+    {
+      "versionCode": 89,
+      "versionName": "1.2.80",
+      "apkFileName": "kaihang-scanner-v1.2.80-89.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-89.json"
+    },
+    {
+      "versionCode": 88,
+      "versionName": "1.2.79",
+      "apkFileName": "kaihang-scanner-v1.2.79-88.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-88.json"
+    },
+    {
+      "versionCode": 87,
+      "versionName": "1.2.78",
+      "apkFileName": "kaihang-scanner-v1.2.78-87.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-87.json"
+    },
+    {
+      "versionCode": 86,
+      "versionName": "1.2.77",
+      "apkFileName": "kaihang-scanner-v1.2.77-86.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-86.json"
+    },
+    {
+      "versionCode": 85,
+      "versionName": "1.2.76",
+      "apkFileName": "kaihang-scanner-v1.2.76-85.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-85.json"
+    },
+    {
+      "versionCode": 84,
+      "versionName": "1.2.75",
+      "apkFileName": "kaihang-scanner-v1.2.75-84.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-84.json"
+    },
+    {
+      "versionCode": 83,
+      "versionName": "1.2.74",
+      "apkFileName": "kaihang-scanner-v1.2.74-83.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-83.json"
+    },
+    {
+      "versionCode": 82,
+      "versionName": "1.2.73",
+      "apkFileName": "kaihang-scanner-v1.2.73-82.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-82.json"
+    },
+    {
+      "versionCode": 81,
+      "versionName": "1.2.72",
+      "apkFileName": "kaihang-scanner-v1.2.72-81.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-81.json"
+    },
+    {
+      "versionCode": 80,
+      "versionName": "1.2.71",
+      "apkFileName": "kaihang-scanner-v1.2.71-80.apk",
+      "releasedAt": "2026-08-20",
+      "versionFile": "version-80.json"
+    },
     {
       "versionCode": 79,
       "versionName": "1.2.70",

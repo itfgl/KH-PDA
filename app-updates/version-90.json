@@ -1,0 +1,12 @@
+{
+  "versionCode": 90,
+  "versionName": "1.2.81",
+  "apkFileName": "kaihang-scanner-v1.2.81-90.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.81-90.apk",
+  "changelog": "进页面更流畅：打开页面时减少重复注入大段脚本，页面加载不再被拖慢",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.81 (90)",
+    "进页面更流畅：打开页面时减少重复注入大段脚本，页面加载不再被拖慢"
+  ]
+}

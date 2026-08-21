@@ -1,0 +1,12 @@
+{
+  "versionCode": 105,
+  "versionName": "1.2.96",
+  "apkFileName": "kaihang-scanner-v1.2.96-105.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.96-105.apk",
+  "changelog": "简化右侧字段规则：只要二维码靠左字段就排右侧，带字号的也算，装不下才掉到二维码下方",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.96 (105)",
+    "简化右侧字段规则：只要二维码靠左字段就排右侧，带字号的也算，装不下才掉到二维码下方"
+  ]
+}

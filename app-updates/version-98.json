@@ -1,0 +1,13 @@
+{
+  "versionCode": 98,
+  "versionName": "1.2.89",
+  "apkFileName": "kaihang-scanner-v1.2.89-98.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.89-98.apk",
+  "changelog": "修复黑标贴纸先出一张空白再出内容的问题",
+  "releasedAt": "2026-08-20",
+  "notes": [
+    "Android 版本提升到 1.2.89 (98)",
+    "修复黑标贴纸先出一张空白再出内容的问题",
+    "贴纸底部字段改为紧跟内容排列，不再贴底拉伸，消除中间大段空白"
+  ]
+}
