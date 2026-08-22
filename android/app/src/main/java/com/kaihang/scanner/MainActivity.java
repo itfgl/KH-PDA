@@ -771,7 +771,22 @@ public class MainActivity extends BridgeActivity {
             if (id == 7) {
                 appendNativeLog("触发原生菜单: 重新加载页面");
                 if (bridge != null && bridge.getWebView() != null) {
-                    bridge.getWebView().reload();
+                    WebView webView = bridge.getWebView();
+                    String current = safe(webView.getUrl());
+                    // 断网加载失败后 reload() 在该 ROM 上会静默无效（错误页未提交进导航栈），
+                    // 且 WebView 可能丢失业务地址（空/about:blank/本地占位页），
+                    // 因此统一用 loadUrl 强制发起全新导航
+                    boolean validPageUrl = current.startsWith("http")
+                        && !current.startsWith("http://localhost")
+                        && !current.startsWith("about:");
+                    String target = validPageUrl
+                        ? current
+                        : buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
+                    if (!validPageUrl) {
+                        appendNativeLog("当前无有效页面地址，重新加载启动页: " + target);
+                    }
+                    appendNativeLog("重新加载目标: " + target);
+                    webView.loadUrl(target);
                 }
                 return true;
             }
