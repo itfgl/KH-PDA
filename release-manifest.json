@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 123,
+  "currentVersionCode": 124,
   "releases": [
+    {
+      "versionCode": 124,
+      "versionName": "1.2.115",
+      "apkFileName": "kaihang-scanner-v1.2.115-124.apk",
+      "changelog": "断网时显示提示页，可点击按钮手动重新加载",
+      "releasedAt": "2026-08-22",
+      "notes": [
+        "Android 版本提升到 1.2.115 (124)",
+        "断网时显示提示页，可点击按钮手动重新加载",
+        "防止页面加载异常时程序卡死"
+      ]
+    },
     {
       "versionCode": 123,
       "versionName": "1.2.114",
@@ -1422,11 +1434,5 @@
         "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
       ]
     }
-  ],
-  "pending": {
-    "notes": [
-      "断网时显示提示页，可点击按钮手动重新加载",
-      "防止页面加载异常时程序卡死"
-    ]
-  }
+  ]
 }
