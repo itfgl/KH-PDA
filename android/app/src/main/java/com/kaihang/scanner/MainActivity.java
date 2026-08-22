@@ -729,6 +729,7 @@ public class MainActivity extends BridgeActivity {
         menu.getMenu().add(0, 4, 3, "原生配置");
         menu.getMenu().add(0, 5, 4, "检查更新");
         menu.getMenu().add(0, 6, 5, "日志");
+        menu.getMenu().add(0, 7, 6, "重新加载页面");
         menu.setOnDismissListener(menu1 -> {
             if (nativeControlOverlay != null) {
                 nativeControlOverlay.scheduleDock();
@@ -765,6 +766,13 @@ public class MainActivity extends BridgeActivity {
             if (id == 6) {
                 appendNativeLog("打开运行日志");
                 showNativeLogDialog();
+                return true;
+            }
+            if (id == 7) {
+                appendNativeLog("触发原生菜单: 重新加载页面");
+                if (bridge != null && bridge.getWebView() != null) {
+                    bridge.getWebView().reload();
+                }
                 return true;
             }
             return false;
