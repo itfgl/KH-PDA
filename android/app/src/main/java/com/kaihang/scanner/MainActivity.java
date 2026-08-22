@@ -40,21 +40,6 @@ public class MainActivity extends BridgeActivity {
     private String nativePageReadyState = "loading";
     private String lastInjectedUrl = "";
     private long lastInjectAtMs = 0L;
-    // 注入循环熔断（防卡死）：探测失败→强制重注→350ms后再探测→再失败…的自我循环没有退出条件，
-    // 定制 ROM 注入静默失败时每 350ms 全量注入一次 160KB 脚本会持续压死主线程
-    // （表现：进程活着、无 ANR、界面完全无响应、系统日志零输出）。
-    // 熔断规则：同一 URL 5 秒内只允许一次强制重注，重复的直接跳过。
-    private String lastForceInjectUrl = "";
-    private long lastForceInjectAtMs = 0L;
-    // 断网页（确认式）：主框架加载失败后不立即动页面，先挂 8 秒确认窗；
-    // 期间页面出现任何活跃信号（渲染提交/加载完成/进度推进/重新导航）即判定为 ROM 误报并撤窗，
-    // 绝不打断健康加载。8 秒后仍零信号才显示断网页。断网页只有手动「重新加载」按钮，无任何自动行为。
-    private static final String OFFLINE_PAGE_BASE = "kh-offline://page/";
-    private static final long OFFLINE_CONFIRM_DELAY_MS = 8000L;
-    private Runnable offlineConfirmRunnable = null;
-    private String offlineConfirmUrl = "";
-    private String offlinePageShownUrl = "";
-    private int lastPageProgress = 0;
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
@@ -156,10 +141,6 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageCommitVisible(WebView view, String url) {
                 super.onPageCommitVisible(view, url);
-                // 页面渲染提交 = 活跃信号，撤销待确认的断网页（误报洗白，页面绝不被打断）
-                if (url == null || !url.startsWith(OFFLINE_PAGE_BASE)) {
-                    cancelOfflinePageConfirm("页面已渲染");
-                }
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_COMMIT_VISIBLE);
             }
             @Override
@@ -177,15 +158,6 @@ public class MainActivity extends BridgeActivity {
             @Override
             public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
                 super.onPageStarted(view, url, favicon);
-                if (url != null && url.startsWith(OFFLINE_PAGE_BASE)) {
-                    // 断网页自身：不动标记（防止对断网页的误报错误回调反复换页）、不注入
-                    setNativePageReadyState("error", "offline-page");
-                    return;
-                }
-                // 新导航开始：上一轮失败确认作废、允许新一轮断网页显示
-                cancelOfflinePageConfirm("页面开始重新加载");
-                offlinePageShownUrl = "";
-                lastPageProgress = 0;
                 handleRuntimeInjection(view, url, InjectionTrigger.PAGE_STARTED);
             }
 
@@ -199,7 +171,6 @@ public class MainActivity extends BridgeActivity {
                         : "unknown";
                     appendNativeLog("页面加载失败: " + description + " @ " + failingUrl);
                     setNativePageReadyState("error", description);
-                    scheduleOfflinePageConfirm(failingUrl, description);
                 }
             }
 
@@ -213,16 +184,6 @@ public class MainActivity extends BridgeActivity {
                     String detail = "HTTP " + statusCode + (reason.isEmpty() ? "" : (" " + reason));
                     appendNativeLog("页面 HTTP 异常: " + detail + " @ " + failingUrl);
                     setNativePageReadyState("error", detail);
-                    scheduleOfflinePageConfirm(failingUrl, detail);
-                }
-            }
-
-            @Override
-            public void onPageFinished(WebView view, String url) {
-                super.onPageFinished(view, url);
-                // 页面加载完成 = 活跃信号，撤销待确认的断网页
-                if (url == null || !url.startsWith(OFFLINE_PAGE_BASE)) {
-                    cancelOfflinePageConfirm("页面加载完成");
                 }
             }
 
@@ -237,15 +198,6 @@ public class MainActivity extends BridgeActivity {
             }
         });
         webView.setWebChromeClient(new WebChromeClient() {
-            @Override
-            public void onProgressChanged(WebView view, int newProgress) {
-                // 进度推进 = 页面活着（ROM 误报失败后慢加载仍会爬进度；真断网则进度冻结）
-                if (newProgress > lastPageProgress) {
-                    lastPageProgress = newProgress;
-                    cancelOfflinePageConfirm("加载进度推进");
-                }
-            }
-
             @Override
             public boolean onShowFileChooser(
                 WebView webView,
@@ -323,7 +275,6 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onDestroy() {
-        cancelOfflinePageConfirm(null);
         try {
             stopNativeScan();
         } catch (Exception ignored) {}
@@ -363,11 +314,6 @@ public class MainActivity extends BridgeActivity {
     private boolean handleNavigation(WebView view, String url) {
         if (url == null || url.trim().isEmpty()) {
             return false;
-        }
-        // 断网页「重新加载」按钮：加载失败前的业务页（仅用户手动触发，无自动行为）
-        if (url.startsWith(OFFLINE_PAGE_BASE + "retry")) {
-            retryFromOfflinePage();
-            return true;
         }
         Uri uri;
         try {
@@ -674,11 +620,6 @@ public class MainActivity extends BridgeActivity {
 
     private void handleRuntimeInjection(WebView view, String targetUrl, InjectionTrigger trigger) {
         String url = safe(targetUrl);
-        if (url.startsWith(OFFLINE_PAGE_BASE)) {
-            // 断网页自身：不注入业务脚本，保持 error 状态
-            setNativePageReadyState("error", "offline-page");
-            return;
-        }
         if (url.isEmpty() && view != null) {
             url = safe(view.getUrl());
         }
@@ -744,17 +685,7 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         String url = safe(view.getUrl());
-        if (url.startsWith(OFFLINE_PAGE_BASE)) {
-            // 断网页上不注入业务脚本（覆盖手动初始化/菜单命令/兜底探测等所有调用路径）
-            appendNativeLog("跳过注入: 当前为断网页");
-            return;
-        }
         long now = System.currentTimeMillis();
-        // 熔断：同 URL 5 秒内已强制重注过仍要求 force → 判定探测-重注已进入死循环，跳过
-        if (force && url.equals(lastForceInjectUrl) && (now - lastForceInjectAtMs) < 5000L) {
-            appendNativeLog("注入熔断: 同URL 5秒内已强制重注，本次跳过（防探测失败无限循环）");
-            return;
-        }
         boolean sameUrlRecently = url.equals(lastInjectedUrl) && (now - lastInjectAtMs) < 1200L;
         if (sameUrlRecently && !force) {
             return;
@@ -762,10 +693,6 @@ public class MainActivity extends BridgeActivity {
         setNativePageReadyState("loading", url);
         lastInjectedUrl = url;
         lastInjectAtMs = now;
-        if (force) {
-            lastForceInjectUrl = url;
-            lastForceInjectAtMs = now;
-        }
         String script = buildClientRuntimeScript(url);
         view.evaluateJavascript(script, null);
         // 350ms 兜底：探测 runtime 存活则只跑 bootOnce+refresh（省一次 158KB 全量注入）；
@@ -777,99 +704,6 @@ public class MainActivity extends BridgeActivity {
                 probeReusableRuntime(view, latestUrl, InjectionTrigger.PAGE_LOADED);
             }
         }, 350);
-    }
-
-    /**
-     * 挂起断网页确认窗：主框架加载失败后先观察 OFFLINE_CONFIRM_DELAY_MS，
-     * 期间任何活跃信号（渲染/完成/进度/新导航）都会撤销；超时仍零信号才换断网页。
-     * 绝不在失败回调瞬间动页面——本 ROM 会在健康加载中误报失败。
-     */
-    private void scheduleOfflinePageConfirm(String url, String reason) {
-        if (url == null || url.trim().isEmpty() || url.startsWith(OFFLINE_PAGE_BASE)) {
-            return;
-        }
-        if (url.equals(offlinePageShownUrl)) {
-            return; // 本轮已显示过断网页（ROM 连发错误回调时避免反复换页）
-        }
-        cancelOfflinePageConfirm(null);
-        offlineConfirmUrl = url;
-        final String capturedUrl = url;
-        final String capturedReason = safe(reason);
-        offlineConfirmRunnable = () -> {
-            offlineConfirmRunnable = null;
-            showOfflinePage(capturedUrl, capturedReason);
-        };
-        mainHandler.postDelayed(offlineConfirmRunnable, OFFLINE_CONFIRM_DELAY_MS);
-        appendNativeLog("页面加载失败，" + (OFFLINE_CONFIRM_DELAY_MS / 1000) + "秒内无恢复将显示断网页提示");
-    }
-
-    private void cancelOfflinePageConfirm(String cause) {
-        if (offlineConfirmRunnable != null) {
-            mainHandler.removeCallbacks(offlineConfirmRunnable);
-            offlineConfirmRunnable = null;
-            if (cause != null) {
-                appendNativeLog("页面恢复活跃，撤销断网页确认（" + cause + "）");
-            }
-        }
-    }
-
-    private void showOfflinePage(String url, String reason) {
-        WebView webView = bridge != null ? bridge.getWebView() : null;
-        if (webView == null || url.isEmpty() || url.equals(offlinePageShownUrl)) {
-            return;
-        }
-        offlinePageShownUrl = url;
-        appendNativeLog("确认页面无响应，显示断网页: " + url);
-        webView.loadDataWithBaseURL(
-            OFFLINE_PAGE_BASE,
-            buildOfflinePageHtml(url, reason),
-            "text/html",
-            "utf-8",
-            null
-        );
-    }
-
-    /** 断网页「重新加载」按钮回调：仅用户手动触发 */
-    private void retryFromOfflinePage() {
-        String target = offlinePageShownUrl.isEmpty() ? offlineConfirmUrl : offlinePageShownUrl;
-        appendNativeLog("断网页手动重试: " + target);
-        cancelOfflinePageConfirm(null);
-        offlinePageShownUrl = "";
-        if (target.isEmpty() || bridge == null) {
-            return;
-        }
-        WebView webView = bridge.getWebView();
-        if (webView != null) {
-            webView.loadUrl(target);
-        }
-    }
-
-    private String buildOfflinePageHtml(String url, String reason) {
-        String serverBase = ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE);
-        return "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
-            + "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-            + "<style>"
-            + "body{font-family:sans-serif;background:#f1f5f9;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}"
-            + ".card{background:#fff;border-radius:16px;padding:32px 28px;max-width:320px;width:86%;text-align:center;box-shadow:0 4px 16px rgba(15,23,42,.08);}"
-            + ".icon{font-size:44px;}"
-            + ".title{font-size:18px;font-weight:700;color:#0f172a;margin:12px 0 6px;}"
-            + ".reason{font-size:13px;color:#64748b;word-break:break-all;}"
-            + ".server{font-size:13px;color:#334155;margin-top:10px;font-weight:600;word-break:break-all;}"
-            + "button{margin-top:20px;width:100%;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:15px;font-weight:700;}"
-            + "button:active{background:#1d4ed8;}"
-            + "</style></head><body><div class=\"card\">"
-            + "<div class=\"icon\">&#128268;</div>"
-            + "<div class=\"title\">网页打不开</div>"
-            + "<div class=\"reason\">" + htmlEscape(reason) + "</div>"
-            + "<div class=\"server\">" + htmlEscape(serverBase) + "</div>"
-            + "<button onclick=\"location.href='" + OFFLINE_PAGE_BASE + "retry'\">重新加载</button>"
-            + "</div></body></html>";
-    }
-
-    private String htmlEscape(String text) {
-        String value = safe(text);
-        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-            .replace("\"", "&quot;").replace("'", "&#39;");
     }
 
     private void setNativePageReadyState(String state, String detail) {
@@ -944,12 +778,6 @@ public class MainActivity extends BridgeActivity {
             return;
         }
         WebView webView = bridge.getWebView();
-        if (safe(webView.getUrl()).startsWith(OFFLINE_PAGE_BASE)) {
-            // 当前是断网页：重新加载业务页（等同点击「重新加载」按钮）
-            appendNativeLog("手动初始化: 当前为断网页，重新加载业务页");
-            retryFromOfflinePage();
-            return;
-        }
         setNativePageReadyState("loading", "manual init");
         injectClientTypeHeader(webView, true);
         String command = forceRefresh
@@ -1015,11 +843,6 @@ public class MainActivity extends BridgeActivity {
         }
         WebView webView = bridge.getWebView();
         String currentUrl = safe(webView.getUrl());
-        if (currentUrl.startsWith(OFFLINE_PAGE_BASE)) {
-            // 断网页恢复前台：保持 error 状态，不做 runtime 检查
-            setNativePageReadyState("error", "offline-page");
-            return;
-        }
         setNativePageReadyState("loading", currentUrl.isEmpty() ? "activity resume" : currentUrl);
         String script =
             "(function(){"

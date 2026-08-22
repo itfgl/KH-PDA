@@ -1434,5 +1434,14 @@
         "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
       ]
     }
+<<<<<<< HEAD
   ]
+=======
+  ],
+  "pending": {
+    "notes": [
+      "回退断网页功能，恢复到之前正常使用的版本"
+    ]
+  }
+>>>>>>> parent of 35c77ae (feat: confirmed offline page with manual retry + injection circuit breaker)
 }
