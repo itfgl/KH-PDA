@@ -128,6 +128,15 @@ public class MainActivity extends BridgeActivity {
         attachNativeWebBridge(webView);
         nativeControlOverlay = NativeControlOverlay.attach(this, nativeControlHost);
 
+        // 冷启动清理 WebView HTTP 缓存：避免残留维护页/旧资源导致页面数据加载异常。
+        // clearCache(true) 只清 HTTP 缓存，不影响 localStorage/cookie，登录态保持。
+        try {
+            webView.clearCache(true);
+            appendNativeLog("冷启动已清理 WebView 缓存");
+        } catch (Exception e) {
+            appendNativeLog("清理 WebView 缓存失败: " + e.getMessage());
+        }
+
         String launchUrl = buildLaunchUrl(ClientConfigPlugin.getSavedServerBase(this, DEFAULT_SERVER_BASE));
         webView.post(() -> {
             String current = webView.getUrl();

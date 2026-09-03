@@ -1,6 +1,17 @@
 {
-  "currentVersionCode": 126,
+  "currentVersionCode": 127,
   "releases": [
+    {
+      "versionCode": 127,
+      "versionName": "1.2.118",
+      "apkFileName": "kaihang-scanner-v1.2.118-127.apk",
+      "changelog": "动作核对在页面离线时给出明确提示，不再报JSON解析错误",
+      "releasedAt": "2026-09-03",
+      "notes": [
+        "Android 版本提升到 1.2.118 (127)",
+        "动作核对在页面离线时给出明确提示，不再报JSON解析错误"
+      ]
+    },
     {
       "versionCode": 126,
       "versionName": "1.2.117",
@@ -1460,7 +1471,7 @@
   ],
   "pending": {
     "notes": [
-      "动作核对在页面离线时给出明确提示，不再报JSON解析错误"
+      "冷启动自动清理网页缓存，避免残留旧页面导致数据加载异常"
     ]
   }
 }
