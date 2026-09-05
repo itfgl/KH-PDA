@@ -1,6 +1,30 @@
 {
-  "currentVersionCode": 128,
+  "currentVersionCode": 130,
   "releases": [
+    {
+      "versionCode": 130,
+      "versionName": "1.2.121",
+      "apkFileName": "kaihang-scanner-v1.2.121-130.apk",
+      "changelog": "打开软件时自动检测更新，有提示更新的新版本会弹窗提醒",
+      "releasedAt": "2026-09-05",
+      "notes": [
+        "Android 版本提升到 1.2.121 (130)",
+        "打开软件时自动检测更新，有提示更新的新版本会弹窗提醒"
+      ],
+      "promptUpdate": true
+    },
+    {
+      "versionCode": 129,
+      "versionName": "1.2.120",
+      "apkFileName": "kaihang-scanner-v1.2.120-129.apk",
+      "changelog": "打开软件时自动检测更新，有提示更新的新版本会弹窗提醒",
+      "releasedAt": "2026-09-05",
+      "notes": [
+        "Android 版本提升到 1.2.120 (129)",
+        "打开软件时自动检测更新，有提示更新的新版本会弹窗提醒"
+      ],
+      "promptUpdate": true
+    },
     {
       "versionCode": 128,
       "versionName": "1.2.119",
@@ -1479,10 +1503,5 @@
         "保留页面初始化、网页日志桥和打印诊断能力，便于继续定位单页打印问题"
       ]
     }
-  ],
-  "pending": {
-    "notes": [
-      "打开软件时自动检测更新，有提示更新的新版本会弹窗提醒"
-    ]
-  }
+  ]
 }
