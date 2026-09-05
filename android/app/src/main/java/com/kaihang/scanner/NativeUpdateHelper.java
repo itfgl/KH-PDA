@@ -89,6 +89,8 @@ final class NativeUpdateHelper {
                 });
             }
         }).start();
+    }
+
     /** 启动时静默检查提示更新：仅当存在"提示更新"标记的新版本时弹提示框（可关闭），否则静默不打扰 */
     static void checkForPromptUpdate(Activity activity, String updateBase, Callbacks callbacks) {
         new Thread(() -> {
