@@ -1,0 +1,12 @@
+{
+  "versionCode": 128,
+  "versionName": "1.2.119",
+  "apkFileName": "kaihang-scanner-v1.2.119-128.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.119-128.apk",
+  "changelog": "冷启动自动清理网页缓存，避免残留旧页面导致数据加载异常",
+  "releasedAt": "2026-09-03",
+  "notes": [
+    "Android 版本提升到 1.2.119 (128)",
+    "冷启动自动清理网页缓存，避免残留旧页面导致数据加载异常"
+  ]
+}

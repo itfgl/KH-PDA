@@ -40,10 +40,25 @@ Write-Host ""
 Write-Host "当前版本: $($currentNow.versionName) (versionCode $($manifestNow.currentVersionCode))" -ForegroundColor Cyan
 $bumpScript = Join-Path $repoRoot 'scripts\bump-version.mjs'
 
-# 询问本次升版是否标记为"提示更新"（仅在真正升版时生效，沿用版本不标记）
+# 询问本次构建的提示更新标记：y=标记 / n=取消标记 / 回车=保持不变（升版与沿用版本重打均生效）
 $promptFlag = ''
-$markPrompt = Read-Host "本次若升版，是否标记为提示更新？（用户打开软件时会收到更新提示）(y/n)"
-if ($markPrompt.Trim().ToLower() -eq 'y') { $promptFlag = '--prompt-update' }
+$markPrompt = Read-Host "本次构建的提示更新标记？(y=标记 / n=取消标记 / 回车=不变)"
+$markChoice = $markPrompt.Trim().ToLower()
+if ($markChoice -eq 'y') { $promptFlag = '--prompt-update' }
+
+# 沿用当前版本重打时，用 --set-prompt 设置/取消当前版本的提示更新标记
+function Set-PromptMark {
+    param([string]$Choice)
+    if ($Choice -eq 'y') {
+        node $bumpScript $manifestPath '--set-prompt' 'y'
+        if ($LASTEXITCODE -ne 0) { throw "标记提示更新设置失败" }
+        Write-Host "已标记当前版本为提示更新" -ForegroundColor Green
+    } elseif ($Choice -eq 'n') {
+        node $bumpScript $manifestPath '--set-prompt' 'n'
+        if ($LASTEXITCODE -ne 0) { throw "取消提示更新标记失败" }
+        Write-Host "已取消当前版本的提示更新标记" -ForegroundColor Green
+    }
+}
 
 if ($pendingNotes.Count -gt 0) {
     Write-Host "待发布说明（共 $($pendingNotes.Count) 条，将随新版本一起写入 changelog）:" -ForegroundColor Cyan
@@ -59,6 +74,7 @@ if ($pendingNotes.Count -gt 0) {
         Write-Host "已升版并写入待发布说明" -ForegroundColor Green
     } elseif ($choice.Trim() -eq 'r' -or $choice.Trim() -eq 'R') {
         Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建，待发布说明保留" -ForegroundColor Yellow
+        Set-PromptMark $markChoice
     } else {
         $bumpArgs = @($manifestPath, $choice.Trim())
         if ($promptFlag) { $bumpArgs += $promptFlag }
@@ -78,6 +94,7 @@ if ($pendingNotes.Count -gt 0) {
         Write-Host "已升版，本次构建新版本" -ForegroundColor Green
     } else {
         Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建" -ForegroundColor Yellow
+        Set-PromptMark $markChoice
     }
 }
 

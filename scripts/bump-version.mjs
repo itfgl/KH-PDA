@@ -40,6 +40,33 @@ if (isNoteMode) {
   process.exit(0);
 }
 
+// 3) 设置/取消当前版本的"提示更新"标记（不升版，供沿用当前版本重打时用）：
+//    node scripts/bump-version.mjs <manifestJson> --set-prompt y|n
+const setPromptIdx = cleanRest.indexOf('--set-prompt');
+if (setPromptIdx >= 0) {
+  const setPromptValue = String(cleanRest[setPromptIdx + 1] || '').trim().toLowerCase();
+  if (setPromptValue !== 'y' && setPromptValue !== 'n') {
+    console.error('--set-prompt 需要参数 y（标记）或 n（取消标记）');
+    process.exit(1);
+  }
+  {
+    const curCode = Number.parseInt(String(manifest.currentVersionCode ?? ''), 10);
+    if (!Number.isFinite(curCode)) {
+      throw new Error(`Invalid currentVersionCode: ${manifest.currentVersionCode ?? ''}`);
+    }
+    const rels = Array.isArray(manifest.releases) ? manifest.releases : [];
+    const cur = rels.find((item) => Number.parseInt(String(item.versionCode ?? ''), 10) === curCode);
+    if (!cur) {
+      throw new Error(`Release ${curCode} not found in manifest`);
+    }
+    if (setPromptValue === 'y') cur.promptUpdate = true;
+    else delete cur.promptUpdate;
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    console.log(`版本 ${curCode} 的提示更新标记已设为: ${setPromptValue === 'y' ? '标记' : '取消'}`);
+  }
+  process.exit(0);
+}
+
 const currentCode = Number.parseInt(String(manifest.currentVersionCode ?? ''), 10);
 if (!Number.isFinite(currentCode)) {
   throw new Error(`Invalid currentVersionCode: ${manifest.currentVersionCode ?? ''}`);

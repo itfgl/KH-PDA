@@ -1,0 +1,12 @@
+{
+  "versionCode": 127,
+  "versionName": "1.2.118",
+  "apkFileName": "kaihang-scanner-v1.2.118-127.apk",
+  "apkUrl": "/app-updates/kaihang-scanner-v1.2.118-127.apk",
+  "changelog": "动作核对在页面离线时给出明确提示，不再报JSON解析错误",
+  "releasedAt": "2026-09-03",
+  "notes": [
+    "Android 版本提升到 1.2.118 (127)",
+    "动作核对在页面离线时给出明确提示，不再报JSON解析错误"
+  ]
+}
