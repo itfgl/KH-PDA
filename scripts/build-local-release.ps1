@@ -39,6 +39,12 @@ if ($manifestNow.pending -and $manifestNow.pending.notes) { $pendingNotes = @($m
 Write-Host ""
 Write-Host "当前版本: $($currentNow.versionName) (versionCode $($manifestNow.currentVersionCode))" -ForegroundColor Cyan
 $bumpScript = Join-Path $repoRoot 'scripts\bump-version.mjs'
+
+# 询问本次升版是否标记为"提示更新"（仅在真正升版时生效，沿用版本不标记）
+$promptFlag = ''
+$markPrompt = Read-Host "本次若升版，是否标记为提示更新？（用户打开软件时会收到更新提示）(y/n)"
+if ($markPrompt.Trim().ToLower() -eq 'y') { $promptFlag = '--prompt-update' }
+
 if ($pendingNotes.Count -gt 0) {
     Write-Host "待发布说明（共 $($pendingNotes.Count) 条，将随新版本一起写入 changelog）:" -ForegroundColor Cyan
     $pendingNotes | ForEach-Object { Write-Host "  - $_" }
@@ -46,13 +52,17 @@ if ($pendingNotes.Count -gt 0) {
     Write-Host "回车 = 升一版并用以上说明；r = 沿用当前版本重打（说明继续保留）；也可以直接输入一行新说明覆盖" -ForegroundColor Cyan
     $choice = Read-Host "选择"
     if ($choice.Trim() -eq '') {
-        node $bumpScript $manifestPath '--use-pending'
+        $bumpArgs = @($manifestPath, '--use-pending')
+        if ($promptFlag) { $bumpArgs += $promptFlag }
+        node $bumpScript @bumpArgs
         if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
         Write-Host "已升版并写入待发布说明" -ForegroundColor Green
     } elseif ($choice.Trim() -eq 'r' -or $choice.Trim() -eq 'R') {
         Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建，待发布说明保留" -ForegroundColor Yellow
     } else {
-        node $bumpScript $manifestPath $choice.Trim()
+        $bumpArgs = @($manifestPath, $choice.Trim())
+        if ($promptFlag) { $bumpArgs += $promptFlag }
+        node $bumpScript @bumpArgs
         if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
         Write-Host "已升版并使用输入的说明（待发布说明仍保留在 pending 中）" -ForegroundColor Green
     }
@@ -61,7 +71,9 @@ if ($pendingNotes.Count -gt 0) {
     Write-Host "回车 = 沿用当前版本重新构建；输入一行说明 = 自动升一版" -ForegroundColor Cyan
     $choice = Read-Host "选择"
     if ($choice.Trim() -ne '') {
-        node $bumpScript $manifestPath $choice.Trim()
+        $bumpArgs = @($manifestPath, $choice.Trim())
+        if ($promptFlag) { $bumpArgs += $promptFlag }
+        node $bumpScript @bumpArgs
         if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
         Write-Host "已升版，本次构建新版本" -ForegroundColor Green
     } else {

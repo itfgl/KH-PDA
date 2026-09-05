@@ -89,6 +89,44 @@ final class NativeUpdateHelper {
                 });
             }
         }).start();
+    /** 启动时静默检查提示更新：仅当存在"提示更新"标记的新版本时弹提示框（可关闭），否则静默不打扰 */
+    static void checkForPromptUpdate(Activity activity, String updateBase, Callbacks callbacks) {
+        new Thread(() -> {
+            try {
+                JSONObject serverInfo = fetchUpdateInfo(updateBase);
+                long localVersionCode = getLocalVersionCode(activity);
+                String localVersionName = getLocalVersionName(activity);
+                long remoteVersionCode = serverInfo.optLong("versionCode", 0);
+                boolean promptUpdate = serverInfo.optBoolean("promptUpdate", false);
+                if (remoteVersionCode <= localVersionCode || !promptUpdate) {
+                    return; // 无新版本或未标记"提示更新" → 静默，不弹任何框
+                }
+                String remoteVersionName = serverInfo.optString("versionName", "");
+                String changelog = serverInfo.optString("changelog", "");
+                String apkUrl = resolveAbsoluteUrl(updateBase, serverInfo.optString("apkUrl", ""));
+                activity.runOnUiThread(() -> {
+                    if (activity.isFinishing() || activity.isDestroyed()) return;
+                    StringBuilder message = new StringBuilder();
+                    message.append("发现新版本 ").append(remoteVersionName).append(" (").append(remoteVersionCode).append(")\n");
+                    message.append("当前版本 ").append(localVersionName).append(" (").append(localVersionCode).append(")");
+                    if (!changelog.isEmpty()) {
+                        message.append("\n\n更新说明:\n").append(changelog);
+                    }
+                    new AlertDialog.Builder(activity)
+                        .setTitle("发现新版本")
+                        .setMessage(message.toString())
+                        .setPositiveButton("下载更新", (dialog, which) -> {
+                            callbacks.appendLog("提示更新：开始下载 " + remoteVersionName);
+                            startDownload(activity, apkUrl, remoteVersionName, callbacks);
+                        })
+                        .setNegativeButton("取消", null)
+                        .show();
+                });
+            } catch (Exception e) {
+                // 静默失败，不打扰用户
+                callbacks.appendLog("启动提示更新检查失败: " + e.getMessage());
+            }
+        }).start();
     }
 
     private static void startDownload(

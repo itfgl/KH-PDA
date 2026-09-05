@@ -117,6 +117,23 @@ public class MainActivity extends BridgeActivity {
                 });
             } catch (Exception ignored) {}
         });
+
+        // 启动自动检测"提示更新"：发布版本标记了 promptUpdate 且有新版本时才弹提示框（可关闭），否则静默
+        mainHandler.postDelayed(() -> {
+            com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(MainActivity.this);
+            String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
+            NativeUpdateHelper.checkForPromptUpdate(MainActivity.this, updateBase, new NativeUpdateHelper.Callbacks() {
+                @Override
+                public void appendLog(String message) {
+                    MainActivity.this.appendNativeLog(message);
+                }
+
+                @Override
+                public void toast(String message) {
+                    MainActivity.this.toast(message);
+                }
+            });
+        }, 6000L);
     }
 
     @Override

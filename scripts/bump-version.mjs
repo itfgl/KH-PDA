@@ -6,12 +6,13 @@ import path from 'node:path';
 //      node scripts/bump-version.mjs <manifestJson> --note <说明>
 //      说明累积到 manifest.pending.notes，构建时一起带出
 //   2) 正式升版（构建时由 build-local-release.ps1 调用）：
-//      node scripts/bump-version.mjs <manifestJson> [--use-pending | <changelog>]
+//      node scripts/bump-version.mjs <manifestJson> [--use-pending | <changelog>] [--prompt-update]
 //      --use-pending 使用累积的 pending 说明；<changelog> 用一行说明
+//      --prompt-update 标记本版本为"提示更新"（用户打开软件时会收到更新提示）
 //      升版后 pending 清空
 const args = process.argv.slice(2);
 if (args.length < 2) {
-  console.error('Usage: node scripts/bump-version.mjs <manifestJson> (--note <说明> | [--use-pending | <changelog>])');
+  console.error('Usage: node scripts/bump-version.mjs <manifestJson> (--note <说明> | [--use-pending | <changelog>] [--prompt-update])');
   process.exit(1);
 }
 
@@ -19,12 +20,14 @@ const [manifestFile, ...rest] = args;
 const manifestPath = path.resolve(manifestFile);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
-const isNoteMode = rest[0] === '--note';
-const usePending = rest[0] === '--use-pending';
-const inlineChangelog = !isNoteMode && !usePending ? rest.join(' ').trim() : '';
+const promptUpdate = rest.includes('--prompt-update');
+const cleanRest = rest.filter((item) => item !== '--prompt-update');
+const isNoteMode = cleanRest[0] === '--note';
+const usePending = cleanRest[0] === '--use-pending';
+const inlineChangelog = !isNoteMode && !usePending ? cleanRest.join(' ').trim() : '';
 
 if (isNoteMode) {
-  const note = rest.slice(1).join(' ').trim();
+  const note = cleanRest.slice(1).join(' ').trim();
   if (!note) {
     console.error('--note 需要说明内容');
     process.exit(1);
@@ -78,6 +81,7 @@ const entry = {
   releasedAt: new Date().toISOString().slice(0, 10),
   notes: [`Android 版本提升到 ${newName} (${newCode})`, ...notes],
 };
+if (promptUpdate) entry.promptUpdate = true;
 
 manifest.currentVersionCode = newCode;
 manifest.releases.unshift(entry);
