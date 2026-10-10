@@ -119,8 +119,8 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception ignored) {}
         });
 
-        // 自动检测更新：启动 6 秒后检查一次（强制更新优先、提示更新可关闭），之后每 30 分钟循环检测
-        final long updateCheckIntervalMs = 30L * 60L * 1000L;
+        // 自动检测更新：启动 6 秒后检查一次（强制更新优先、提示更新可关闭），之后每分钟循环检测
+        final long updateCheckIntervalMs = 1L * 60L * 1000L;
         nextUpdateCheckAtMs = System.currentTimeMillis() + 6000L; // 记录首次检测时间，供原生配置弹窗显示
         final Runnable updateCheckRunnable = new Runnable() {
             @Override
