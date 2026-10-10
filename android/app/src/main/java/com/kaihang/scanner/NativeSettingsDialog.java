@@ -87,6 +87,7 @@ final class NativeSettingsDialog {
         JSObject config,
         String defaultServerBase,
         String defaultUpdateBase,
+        String nextUpdateCheckText,
         Callbacks callbacks
     ) {
         LinearLayout root = new LinearLayout(activity);
@@ -130,6 +131,7 @@ final class NativeSettingsDialog {
         root.addView(updateInput);
         root.addView(createSectionLabel(activity, "纸张类型"));
         root.addView(paperSpinner);
+        root.addView(createInfoLabel(activity, "下次自动检测更新：" + safe(nextUpdateCheckText)));
         root.addView(advancedToggle);
         root.addView(advancedBox);
         createDetailToggle(activity, advancedBox);
@@ -204,6 +206,15 @@ final class NativeSettingsDialog {
         label.setTextSize(14);
         label.setTextColor(Color.parseColor("#344054"));
         label.setPadding(0, dp(activity, 12), 0, dp(activity, 6));
+        return label;
+    }
+
+    private static TextView createInfoLabel(Activity activity, String text) {
+        TextView label = new TextView(activity);
+        label.setText(text);
+        label.setTextSize(13);
+        label.setTextColor(Color.parseColor("#667085"));
+        label.setPadding(0, dp(activity, 8), 0, 0);
         return label;
     }
 

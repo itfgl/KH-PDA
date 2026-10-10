@@ -1,6 +1,18 @@
 {
-  "currentVersionCode": 130,
+  "currentVersionCode": 131,
   "releases": [
+    {
+      "versionCode": 131,
+      "versionName": "1.2.122",
+      "apkFileName": "kaihang-scanner-v1.2.122-131.apk",
+      "changelog": "新增强制更新：可指定某版本必须更新后才能继续使用（弹窗不可关闭）",
+      "releasedAt": "2026-10-10",
+      "notes": [
+        "Android 版本提升到 1.2.122 (131)",
+        "新增强制更新：可指定某版本必须更新后才能继续使用（弹窗不可关闭）",
+        "软件运行中每30分钟自动检测一次新版本，发现会弹窗提示"
+      ]
+    },
     {
       "versionCode": 130,
       "versionName": "1.2.121",
@@ -1506,8 +1518,7 @@
   ],
   "pending": {
     "notes": [
-      "新增强制更新：可指定某版本必须更新后才能继续使用（弹窗不可关闭）",
-      "软件运行中每30分钟自动检测一次新版本，发现会弹窗提示"
+      "原生配置中显示下一次自动检测更新的时间"
     ]
   }
 }

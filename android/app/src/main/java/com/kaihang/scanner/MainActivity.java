@@ -43,6 +43,7 @@ public class MainActivity extends BridgeActivity {
     private String pendingLogExportText;
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
+    private long nextUpdateCheckAtMs = 0L;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -120,6 +121,7 @@ public class MainActivity extends BridgeActivity {
 
         // 自动检测更新：启动 6 秒后检查一次（强制更新优先、提示更新可关闭），之后每 30 分钟循环检测
         final long updateCheckIntervalMs = 30L * 60L * 1000L;
+        nextUpdateCheckAtMs = System.currentTimeMillis() + 6000L; // 记录首次检测时间，供原生配置弹窗显示
         final Runnable updateCheckRunnable = new Runnable() {
             @Override
             public void run() {
@@ -136,6 +138,7 @@ public class MainActivity extends BridgeActivity {
                         MainActivity.this.toast(message);
                     }
                 });
+                nextUpdateCheckAtMs = System.currentTimeMillis() + updateCheckIntervalMs;
                 mainHandler.postDelayed(this, updateCheckIntervalMs);
             }
         };
@@ -1135,8 +1138,15 @@ public class MainActivity extends BridgeActivity {
         return cachedVerboseLogs;
     }
 
+    /** 下一次自动检测更新的时间（HH:mm:ss），供原生配置弹窗显示 */
+    private String formatNextUpdateCheckTime() {
+        if (nextUpdateCheckAtMs <= 0L) return "未启动";
+        return new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.CHINA)
+            .format(new java.util.Date(nextUpdateCheckAtMs));
+    }
+
     private void showNativeSettingsDialog() {
-        NativeSettingsDialog.show(this, ClientConfigPlugin.getSavedConfig(this), DEFAULT_SERVER_BASE, DEFAULT_UPDATE_BASE, new NativeSettingsDialog.Callbacks() {
+        NativeSettingsDialog.show(this, ClientConfigPlugin.getSavedConfig(this), DEFAULT_SERVER_BASE, DEFAULT_UPDATE_BASE, formatNextUpdateCheckTime(), new NativeSettingsDialog.Callbacks() {
             @Override
             public String normalizeBaseUrl(String value, String fallback) {
                 return MainActivity.this.normalizeBaseUrl(value, fallback);
