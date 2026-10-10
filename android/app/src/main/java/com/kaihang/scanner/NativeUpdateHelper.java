@@ -27,6 +27,12 @@ final class NativeUpdateHelper {
         void toast(String message);
     }
 
+    /** 标记版本（提示/强制更新）存在状态回调：供悬浮球红点使用 */
+    interface MarkedUpdateListener {
+        /** 主线程回调：存在标记了提示/强制更新的新版本时 available=true，否则 false */
+        void onMarkedUpdateState(boolean available);
+    }
+
     private NativeUpdateHelper() {}
 
     static void showUpdateDialog(Activity activity, String updateBase, Callbacks callbacks) {
@@ -94,24 +100,28 @@ final class NativeUpdateHelper {
     /** 启动/定时静默检查更新：优先级 强制更新 > 提示更新。
      *  强制更新：有新版本且标记 forceUpdate → 弹不可关闭对话框（仅"立即更新"，返回键/点外部均无法关闭）
      *  提示更新：有新版本且标记 promptUpdate 且本版本未被用户忽略 → 弹可关闭提示框
-     *  其余情况静默，不打扰用户 */
-    static void checkForAutoUpdate(Activity activity, String updateBase, Callbacks callbacks) {
+     *  其余情况静默，不打扰用户。
+     *  badgeListener：无论是否弹窗都会回调"是否存在标记新版本"，供悬浮球红点使用 */
+    static void checkForAutoUpdate(Activity activity, String updateBase, Callbacks callbacks, MarkedUpdateListener badgeListener) {
         new Thread(() -> {
             try {
                 JSONObject serverInfo = fetchUpdateInfo(updateBase);
                 long localVersionCode = getLocalVersionCode(activity);
                 String localVersionName = getLocalVersionName(activity);
                 long remoteVersionCode = serverInfo.optLong("versionCode", 0);
-                if (remoteVersionCode <= localVersionCode) {
-                    return; // 无新版本 → 静默
-                }
                 boolean forceUpdate = serverInfo.optBoolean("forceUpdate", false);
                 boolean promptUpdate = serverInfo.optBoolean("promptUpdate", false);
-                if (!forceUpdate && !promptUpdate) {
-                    return; // 新版本未标记任何更新策略 → 静默
+                // 仅"标记了提示/强制更新的新版本"算有待更新版本（红点与弹窗共用此判定）
+                final boolean hasMarkedUpdate = remoteVersionCode > localVersionCode && (forceUpdate || promptUpdate);
+                activity.runOnUiThread(() -> {
+                    if (activity.isFinishing() || activity.isDestroyed()) return;
+                    badgeListener.onMarkedUpdateState(hasMarkedUpdate);
+                });
+                if (!hasMarkedUpdate) {
+                    return; // 无标记新版本 → 不弹窗（红点已回调 false，更新后自动熄灭）
                 }
                 if (!forceUpdate && wasPromptDismissed(activity, remoteVersionCode)) {
-                    return; // 提示更新已被用户忽略过该版本 → 不再打扰
+                    return; // 提示更新已被用户忽略过该版本 → 不再打扰（红点保持提醒）
                 }
                 String remoteVersionName = serverInfo.optString("versionName", "");
                 String changelog = serverInfo.optString("changelog", "");

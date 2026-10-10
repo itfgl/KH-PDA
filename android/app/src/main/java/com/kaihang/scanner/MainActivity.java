@@ -44,6 +44,9 @@ public class MainActivity extends BridgeActivity {
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
     private long nextUpdateCheckAtMs = 0L;
+    // 自动检测更新循环：间隔 + 可复用 Runnable（"重新加载页面"时会 removeCallbacks 后立即触发一次）
+    private static final long UPDATE_CHECK_INTERVAL_MS = 1L * 60L * 1000L;
+    private final Runnable updateCheckRunnable = this::runAutoUpdateCheck;
 
     private enum InjectionTrigger {
         PAGE_STARTED,
@@ -119,29 +122,8 @@ public class MainActivity extends BridgeActivity {
             } catch (Exception ignored) {}
         });
 
-        // 自动检测更新：启动 6 秒后检查一次（强制更新优先、提示更新可关闭），之后每分钟循环检测
-        final long updateCheckIntervalMs = 1L * 60L * 1000L;
+        // 自动检测更新：启动 6 秒后首次检测，之后按此间隔循环；"重新加载页面"菜单也会立即触发一次
         nextUpdateCheckAtMs = System.currentTimeMillis() + 6000L; // 记录首次检测时间，供原生配置弹窗显示
-        final Runnable updateCheckRunnable = new Runnable() {
-            @Override
-            public void run() {
-                com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(MainActivity.this);
-                String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
-                NativeUpdateHelper.checkForAutoUpdate(MainActivity.this, updateBase, new NativeUpdateHelper.Callbacks() {
-                    @Override
-                    public void appendLog(String message) {
-                        MainActivity.this.appendNativeLog(message);
-                    }
-
-                    @Override
-                    public void toast(String message) {
-                        MainActivity.this.toast(message);
-                    }
-                });
-                nextUpdateCheckAtMs = System.currentTimeMillis() + updateCheckIntervalMs;
-                mainHandler.postDelayed(this, updateCheckIntervalMs);
-            }
-        };
         mainHandler.postDelayed(updateCheckRunnable, 6000L);
     }
 
@@ -805,6 +787,9 @@ public class MainActivity extends BridgeActivity {
             }
             if (id == 7) {
                 appendNativeLog("触发原生菜单: 重新加载页面");
+                // 重新加载时立即检测一次更新：先取消已排程的，避免重复排程累积
+                mainHandler.removeCallbacks(updateCheckRunnable);
+                runAutoUpdateCheck();
                 if (bridge != null && bridge.getWebView() != null) {
                     WebView webView = bridge.getWebView();
                     String current = safe(webView.getUrl());
@@ -1198,6 +1183,30 @@ public class MainActivity extends BridgeActivity {
                 MainActivity.this.toast(message);
             }
         });
+    }
+
+    /** 执行一次自动更新检测并重新排程下一次；悬浮球菜单"重新加载页面"也会立即触发 */
+    private void runAutoUpdateCheck() {
+        com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
+        String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
+        NativeUpdateHelper.checkForAutoUpdate(this, updateBase, new NativeUpdateHelper.Callbacks() {
+            @Override
+            public void appendLog(String message) {
+                MainActivity.this.appendNativeLog(message);
+            }
+
+            @Override
+            public void toast(String message) {
+                MainActivity.this.toast(message);
+            }
+        }, available -> {
+            // 存在标记了提示/强制更新的新版本 → 悬浮球红点；更新后（检测不到）自动熄灭
+            if (nativeControlOverlay != null) {
+                nativeControlOverlay.setUpdateBadgeVisible(available);
+            }
+        });
+        nextUpdateCheckAtMs = System.currentTimeMillis() + UPDATE_CHECK_INTERVAL_MS;
+        mainHandler.postDelayed(updateCheckRunnable, UPDATE_CHECK_INTERVAL_MS);
     }
 
     private final NativeLogDialog.Host nativeLogHost = new NativeLogDialog.Host() {

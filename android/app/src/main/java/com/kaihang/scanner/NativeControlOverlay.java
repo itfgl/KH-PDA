@@ -21,6 +21,10 @@ final class NativeControlOverlay {
     private static final int MARGIN_BOTTOM_DP = 24;
     private static final int STATUS_DOT_OFFSET_END_DP = 2;
     private static final int STATUS_DOT_OFFSET_BOTTOM_DP = 46;
+    // 更新提醒红点：贴在工具球右上角（状态点上方），仅检测到标记版本的新更新时显示
+    private static final int UPDATE_BADGE_SIZE_DP = 12;
+    private static final int UPDATE_BADGE_OFFSET_END_DP = STATUS_DOT_OFFSET_END_DP;
+    private static final int UPDATE_BADGE_OFFSET_BOTTOM_DP = 62;
     // 扫码按钮独立锚点：默认停在工具球正上方（与旧版跟随位置一致），支持单独拖动
     private static final int SCAN_BUTTON_SIZE_DP = 48;
     private static final int SCAN_MARGIN_END_DP = MARGIN_END_DP;
@@ -44,6 +48,7 @@ final class NativeControlOverlay {
     private ImageButton fabButton;
     private ImageButton scanButton;
     private View statusDot;
+    private View updateBadge;
     private FrameLayout overlayContainer;
 
     private int marginEndPx = -1;
@@ -101,6 +106,17 @@ final class NativeControlOverlay {
             return;
         }
         scanButton.setBackground(buildCircleBackground(active));
+    }
+
+    /** 更新提醒红点显隐：检测到标记了提示/强制更新的新版本时显示，更新后自动隐藏 */
+    void setUpdateBadgeVisible(boolean visible) {
+        if (updateBadge == null) {
+            return;
+        }
+        updateBadge.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (visible) {
+            updateBadge.bringToFront();
+        }
     }
 
     void scheduleDock() {
@@ -189,6 +205,14 @@ final class NativeControlOverlay {
         statusDot.setElevation(dp(12));
         statusDot.setBackground(buildStatusDotBackground("#98A2B3"));
 
+        updateBadge = new View(activity);
+        FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(dp(UPDATE_BADGE_SIZE_DP), dp(UPDATE_BADGE_SIZE_DP));
+        updateBadge.setLayoutParams(badgeParams);
+        updateBadge.setElevation(dp(13));
+        updateBadge.setBackground(buildUpdateBadgeBackground());
+        updateBadge.setVisibility(View.GONE);
+        updateBadge.setContentDescription("有新版本可更新");
+
         scanButton = new ImageButton(activity);
         scanButton.setImageResource(android.R.drawable.ic_menu_camera);
         scanButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
@@ -241,11 +265,13 @@ final class NativeControlOverlay {
         container.addView(statusDot);
         container.addView(scanButton);
         container.addView(fabButton);
+        container.addView(updateBadge);
         root.addView(container);
         container.bringToFront();
         statusDot.bringToFront();
         scanButton.bringToFront();
         fabButton.bringToFront();
+        updateBadge.bringToFront();
         updatePositions();
         updateStatusDot();
         // 布局完成后启动首次闲置计时
@@ -314,9 +340,9 @@ final class NativeControlOverlay {
         return Math.max(0, Math.min(requestedPx, maxMargin));
     }
 
-    /** 工具球与状态点共用锚点（状态点贴工具球）；扫码按钮独立锚点，互不影响 */
+    /** 工具球与状态点、更新红点共用锚点（状态点/红点贴工具球）；扫码按钮独立锚点，互不影响 */
     private void updateFabPositions() {
-        if (fabButton == null || statusDot == null) {
+        if (fabButton == null) {
             return;
         }
         int end = getMarginEndPx();
@@ -327,10 +353,19 @@ final class NativeControlOverlay {
         fabParams.setMargins(0, 0, end, bottom);
         fabButton.setLayoutParams(fabParams);
 
-        FrameLayout.LayoutParams dotParams = (FrameLayout.LayoutParams) statusDot.getLayoutParams();
-        dotParams.gravity = Gravity.END | Gravity.BOTTOM;
-        dotParams.setMargins(0, 0, end + dp(STATUS_DOT_OFFSET_END_DP), bottom + dp(STATUS_DOT_OFFSET_BOTTOM_DP));
-        statusDot.setLayoutParams(dotParams);
+        if (statusDot != null) {
+            FrameLayout.LayoutParams dotParams = (FrameLayout.LayoutParams) statusDot.getLayoutParams();
+            dotParams.gravity = Gravity.END | Gravity.BOTTOM;
+            dotParams.setMargins(0, 0, end + dp(STATUS_DOT_OFFSET_END_DP), bottom + dp(STATUS_DOT_OFFSET_BOTTOM_DP));
+            statusDot.setLayoutParams(dotParams);
+        }
+
+        if (updateBadge != null) {
+            FrameLayout.LayoutParams badgeParams = (FrameLayout.LayoutParams) updateBadge.getLayoutParams();
+            badgeParams.gravity = Gravity.END | Gravity.BOTTOM;
+            badgeParams.setMargins(0, 0, end + dp(UPDATE_BADGE_OFFSET_END_DP), bottom + dp(UPDATE_BADGE_OFFSET_BOTTOM_DP));
+            updateBadge.setLayoutParams(badgeParams);
+        }
     }
 
     private void updateScanPosition() {
@@ -368,6 +403,9 @@ final class NativeControlOverlay {
         if (statusDot != null) {
             statusDot.animate().translationX(translation).setDuration(220).start();
         }
+        if (updateBadge != null) {
+            updateBadge.animate().translationX(translation).setDuration(220).start();
+        }
         host.appendVerboseLog("悬浮球已半藏至" + (nearRight ? "右侧" : "左侧") + "边缘，点击可唤回");
     }
 
@@ -383,6 +421,9 @@ final class NativeControlOverlay {
         }
         if (statusDot != null) {
             statusDot.animate().translationX(0f).setDuration(180).start();
+        }
+        if (updateBadge != null) {
+            updateBadge.animate().translationX(0f).setDuration(180).start();
         }
     }
 
@@ -404,6 +445,15 @@ final class NativeControlOverlay {
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
         background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
         background.setColor(android.graphics.Color.parseColor(color));
+        background.setStroke(dp(2), android.graphics.Color.WHITE);
+        return background;
+    }
+
+    /** 更新提醒红点背景：红色圆点 + 白描边（与状态点同风格） */
+    private android.graphics.drawable.Drawable buildUpdateBadgeBackground() {
+        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
+        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+        background.setColor(android.graphics.Color.parseColor("#F04438"));
         background.setStroke(dp(2), android.graphics.Color.WHITE);
         return background;
     }
