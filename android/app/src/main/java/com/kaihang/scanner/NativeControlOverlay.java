@@ -8,10 +8,9 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
-import android.widget.TextView;
 
 /**
- * 原生悬浮控件层：工具球（球内文字显示页面状态，可拖拽、闲置半藏）、相机扫码图标按钮（独立拖拽）。
+ * 原生悬浮控件层：工具球（球内图标显示页面状态，可拖拽、闲置半藏）、相机扫码图标按钮（独立拖拽）。
  * 只负责视图呈现与手势，业务决策（点击行为、扫码入口、日志）通过 Host 回调交给 MainActivity。
  */
 final class NativeControlOverlay {
@@ -44,7 +43,7 @@ final class NativeControlOverlay {
     private final Activity activity;
     private final Host host;
 
-    private TextView fabButton;
+    private ImageButton fabButton;
     private ImageButton scanButton;
     private View updateBadge;
     private FrameLayout overlayContainer;
@@ -148,11 +147,9 @@ final class NativeControlOverlay {
         overlayContainer = container;
         touchSlopPx = ViewConfiguration.get(activity).getScaledTouchSlop();
 
-        fabButton = new TextView(activity);
+        fabButton = new ImageButton(activity);
+        fabButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
         fabButton.setBackground(buildFabBackground());
-        fabButton.setGravity(Gravity.CENTER);
-        fabButton.setTextSize(12);
-        fabButton.setTextColor(android.graphics.Color.WHITE);
         fabButton.setContentDescription("客户端工具");
         int size = dp(FAB_SIZE_DP);
         FrameLayout.LayoutParams fabParams = new FrameLayout.LayoutParams(size, size);
@@ -434,29 +431,29 @@ final class NativeControlOverlay {
         return background;
     }
 
-    /** 页面状态改用球内文字显示：就绪（绿）/ 加载中（灰）/ 异常（红） */
+    /** 页面状态改用球内图标显示：对勾（绿）/ 刷新（灰）/ 警告（红），图标按状态色染色 */
     private void updateStatusDisplay() {
         if (fabButton == null) {
             return;
         }
-        String text;
+        int iconRes;
         String color;
         String description;
         if ("ready".equals(pageReadyState)) {
-            text = "就绪";
+            iconRes = R.drawable.ic_kh_status_ready;
             color = "#12B76A";
             description = "页面已就绪";
         } else if ("error".equals(pageReadyState)) {
-            text = "异常";
+            iconRes = R.drawable.ic_kh_status_error;
             color = "#F04438";
             description = "页面初始化异常";
         } else {
-            text = "加载中";
+            iconRes = R.drawable.ic_kh_status_loading;
             color = "#98A2B3";
             description = "页面初始化中";
         }
-        fabButton.setText(text);
-        fabButton.setTextColor(android.graphics.Color.parseColor(color));
+        fabButton.setImageResource(iconRes);
+        fabButton.setColorFilter(android.graphics.Color.parseColor(color));
         fabButton.setContentDescription(description);
     }
 
