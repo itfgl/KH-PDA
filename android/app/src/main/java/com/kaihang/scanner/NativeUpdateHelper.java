@@ -128,7 +128,7 @@ final class NativeUpdateHelper {
                         // 强制更新：弹窗不可关闭（取消按钮/返回键/点击外部均无效），只能立即更新
                         callbacks.appendLog("发现强制更新版本 " + remoteVersionName + " (" + remoteVersionCode + ")");
                         new AlertDialog.Builder(activity)
-                            .setTitle("发现新版本（强制更新）")
+                            .setTitle("发现新版本")
                             .setMessage(message.toString())
                             .setCancelable(false)
                             .setPositiveButton("立即更新", (dialog, which) -> {
