@@ -23,6 +23,8 @@ public class ClientConfigPlugin extends Plugin {
     private static final String KEY_ENABLE_UI_READY_OBSERVER = "enable_ui_ready_observer";
     private static final String KEY_ENABLE_ACTION_OBSERVER = "enable_action_observer";
     private static final String KEY_ENABLE_RUNTIME_REUSE = "enable_runtime_reuse";
+    private static final String KEY_UPDATE_CHECK_INTERVAL_MINUTES = "update_check_interval_minutes";
+    private static final int DEFAULT_UPDATE_CHECK_INTERVAL_MINUTES = 1;
     private static final String DEFAULT_SERVER_BASE = "http://192.168.2.60:8080";
     private static final String DEFAULT_UPDATE_BASE = "http://192.168.2.138:9000";
 
@@ -47,7 +49,8 @@ public class ClientConfigPlugin extends Plugin {
         Boolean enableStoragePatch,
         Boolean enableUiReadyObserver,
         Boolean enableActionObserver,
-        Boolean enableRuntimeReuse
+        Boolean enableRuntimeReuse,
+        Integer updateCheckIntervalMinutes
     ) {
         String normalizedServerBase = normalizeBaseUrl(serverBase, DEFAULT_SERVER_BASE);
         String normalizedUpdateBase = normalizeBaseUrl(updateBase, DEFAULT_UPDATE_BASE);
@@ -68,6 +71,7 @@ public class ClientConfigPlugin extends Plugin {
             .putBoolean(KEY_ENABLE_UI_READY_OBSERVER, enableUiReadyObserver != null ? enableUiReadyObserver : current.optBoolean("enableUiReadyObserver", true))
             .putBoolean(KEY_ENABLE_ACTION_OBSERVER, enableActionObserver != null ? enableActionObserver : current.optBoolean("enableActionObserver", true))
             .putBoolean(KEY_ENABLE_RUNTIME_REUSE, enableRuntimeReuse != null ? enableRuntimeReuse : current.optBoolean("enableRuntimeReuse", true))
+            .putInt(KEY_UPDATE_CHECK_INTERVAL_MINUTES, updateCheckIntervalMinutes != null ? updateCheckIntervalMinutes : current.optInt("updateCheckIntervalMinutes", DEFAULT_UPDATE_CHECK_INTERVAL_MINUTES))
             .apply();
 
         return readConfig(context);
@@ -103,7 +107,8 @@ public class ClientConfigPlugin extends Plugin {
             call.getBoolean("enableStoragePatch", current.optBoolean("enableStoragePatch", true)),
             call.getBoolean("enableUiReadyObserver", current.optBoolean("enableUiReadyObserver", true)),
             call.getBoolean("enableActionObserver", current.optBoolean("enableActionObserver", true)),
-            call.getBoolean("enableRuntimeReuse", current.optBoolean("enableRuntimeReuse", true))
+            call.getBoolean("enableRuntimeReuse", current.optBoolean("enableRuntimeReuse", true)),
+            call.getInt("updateCheckIntervalMinutes", current.optInt("updateCheckIntervalMinutes", DEFAULT_UPDATE_CHECK_INTERVAL_MINUTES))
         ));
     }
 
@@ -127,6 +132,7 @@ public class ClientConfigPlugin extends Plugin {
         boolean enableUiReadyObserver = prefs.getBoolean(KEY_ENABLE_UI_READY_OBSERVER, true);
         boolean enableActionObserver = prefs.getBoolean(KEY_ENABLE_ACTION_OBSERVER, true);
         boolean enableRuntimeReuse = prefs.getBoolean(KEY_ENABLE_RUNTIME_REUSE, true);
+        int updateCheckIntervalMinutes = prefs.getInt(KEY_UPDATE_CHECK_INTERVAL_MINUTES, DEFAULT_UPDATE_CHECK_INTERVAL_MINUTES);
 
         JSObject data = new JSObject();
         data.put("serverBase", serverBase);
@@ -140,6 +146,7 @@ public class ClientConfigPlugin extends Plugin {
         data.put("enableUiReadyObserver", enableUiReadyObserver);
         data.put("enableActionObserver", enableActionObserver);
         data.put("enableRuntimeReuse", enableRuntimeReuse);
+        data.put("updateCheckIntervalMinutes", updateCheckIntervalMinutes);
         return data;
     }
 

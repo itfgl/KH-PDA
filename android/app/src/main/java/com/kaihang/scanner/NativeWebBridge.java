@@ -98,7 +98,8 @@ final class NativeWebBridge {
                 payload.has("enableStoragePatch") ? payload.optBoolean("enableStoragePatch") : current.optBoolean("enableStoragePatch", true),
                 payload.has("enableUiReadyObserver") ? payload.optBoolean("enableUiReadyObserver") : current.optBoolean("enableUiReadyObserver", true),
                 payload.has("enableActionObserver") ? payload.optBoolean("enableActionObserver") : current.optBoolean("enableActionObserver", true),
-                payload.has("enableRuntimeReuse") ? payload.optBoolean("enableRuntimeReuse") : current.optBoolean("enableRuntimeReuse", true)
+                payload.has("enableRuntimeReuse") ? payload.optBoolean("enableRuntimeReuse") : current.optBoolean("enableRuntimeReuse", true),
+                payload.has("updateCheckIntervalMinutes") ? payload.optInt("updateCheckIntervalMinutes") : current.optInt("updateCheckIntervalMinutes", 1)
             );
             return saved.toString();
         } catch (Exception e) {

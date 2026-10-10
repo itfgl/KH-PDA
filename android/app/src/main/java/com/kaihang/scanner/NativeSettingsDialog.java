@@ -38,6 +38,7 @@ final class NativeSettingsDialog {
         final boolean enableUiReadyObserver;
         final boolean enableActionObserver;
         final boolean enableRuntimeReuse;
+        final int updateCheckIntervalMinutes;
 
         SettingsValues(
             String serverBase,
@@ -50,7 +51,8 @@ final class NativeSettingsDialog {
             boolean enableStoragePatch,
             boolean enableUiReadyObserver,
             boolean enableActionObserver,
-            boolean enableRuntimeReuse
+            boolean enableRuntimeReuse,
+            int updateCheckIntervalMinutes
         ) {
             this.serverBase = serverBase;
             this.updateBase = updateBase;
@@ -63,6 +65,7 @@ final class NativeSettingsDialog {
             this.enableUiReadyObserver = enableUiReadyObserver;
             this.enableActionObserver = enableActionObserver;
             this.enableRuntimeReuse = enableRuntimeReuse;
+            this.updateCheckIntervalMinutes = updateCheckIntervalMinutes;
         }
 
         String buildSaveSummary() {
@@ -76,8 +79,19 @@ final class NativeSettingsDialog {
                 + ", storagePatch=" + enableStoragePatch
                 + ", uiReadyObserver=" + enableUiReadyObserver
                 + ", actionObserver=" + enableActionObserver
-                + ", runtimeReuse=" + enableRuntimeReuse;
+                + ", runtimeReuse=" + enableRuntimeReuse
+                + ", updateCheckInterval=" + updateCheckIntervalMinutes + "min";
         }
+    }
+
+    /** 更新检测间隔选项（分钟），与 Spinner 顺序一一对应 */
+    private static final int[] UPDATE_CHECK_INTERVAL_OPTIONS = {1, 30, 60};
+
+    private static int resolveIntervalIndex(int minutes) {
+        for (int i = 0; i < UPDATE_CHECK_INTERVAL_OPTIONS.length; i++) {
+            if (UPDATE_CHECK_INTERVAL_OPTIONS[i] == minutes) return i;
+        }
+        return 0; // 未匹配按默认"1 分钟"
     }
 
     private NativeSettingsDialog() {}
@@ -97,6 +111,7 @@ final class NativeSettingsDialog {
         EditText serverInput = createUrlInput(activity, config.optString("serverBase", defaultServerBase));
         EditText updateInput = createUrlInput(activity, config.optString("updateBase", defaultUpdateBase));
         Spinner paperSpinner = createSpinner(activity, new String[]{"普通热敏纸", "黑标标签纸"});
+        Spinner intervalSpinner = createSpinner(activity, new String[]{"1 分钟", "30 分钟", "1 小时"});
         // 高级选项（仅排障用）：默认收起。注入时机已固定激进模式，不再提供切换
         TextView advancedToggle = createSectionLabel(activity, "高级选项（仅排障用）▸");
         LinearLayout advancedBox = new LinearLayout(activity);
@@ -116,6 +131,7 @@ final class NativeSettingsDialog {
         SwitchCompat actionObserverSwitch = createSwitchRow(activity, advancedBox, "页面动作 observer", "默认开。条件显示按钮等场景依赖，请勿关闭");
         SwitchCompat runtimeReuseSwitch = createSwitchRow(activity, advancedBox, "同页复用 runtime", "默认开。避免重复注入大段脚本，性能优化，请勿关闭");
         paperSpinner.setSelection("black_mark".equals(config.optString("paperType", "thermal")) ? 1 : 0);
+        intervalSpinner.setSelection(resolveIntervalIndex(config.optInt("updateCheckIntervalMinutes", 1)));
         floatingLogsSwitch.setChecked(config.optBoolean("enableFloatingLogs", false));
         verboseLogsSwitch.setChecked(config.optBoolean("enableVerboseLogs", false));
         networkPatchSwitch.setChecked(config.optBoolean("enableNetworkHeaderPatch", true));
@@ -131,6 +147,8 @@ final class NativeSettingsDialog {
         root.addView(updateInput);
         root.addView(createSectionLabel(activity, "纸张类型"));
         root.addView(paperSpinner);
+        root.addView(createSectionLabel(activity, "更新检测间隔"));
+        root.addView(intervalSpinner);
         root.addView(createInfoLabel(activity, "下次自动检测更新：" + safe(nextUpdateCheckText)));
         root.addView(advancedToggle);
         root.addView(advancedBox);
@@ -157,6 +175,7 @@ final class NativeSettingsDialog {
                 serverInput.setText(defaultServerBase);
                 updateInput.setText(defaultUpdateBase);
                 paperSpinner.setSelection(0);
+                intervalSpinner.setSelection(0);
                 // 日志等调试项默认关，功能项默认开
                 floatingLogsSwitch.setChecked(false);
                 verboseLogsSwitch.setChecked(false);
@@ -190,7 +209,8 @@ final class NativeSettingsDialog {
                 storagePatchSwitch.isChecked(),
                 uiReadyObserverSwitch.isChecked(),
                 actionObserverSwitch.isChecked(),
-                runtimeReuseSwitch.isChecked()
+                runtimeReuseSwitch.isChecked(),
+                UPDATE_CHECK_INTERVAL_OPTIONS[intervalSpinner.getSelectedItemPosition()]
             );
             callbacks.onSave(values);
             dialog.dismiss();

@@ -44,8 +44,8 @@ public class MainActivity extends BridgeActivity {
     private android.webkit.ValueCallback<Uri[]> pendingFileChooserCallback;
     private Uri pendingCameraUploadUri;
     private long nextUpdateCheckAtMs = 0L;
-    // 自动检测更新循环：间隔 + 可复用 Runnable（"重新加载页面"时会 removeCallbacks 后立即触发一次）
-    private static final long UPDATE_CHECK_INTERVAL_MS = 1L * 60L * 1000L;
+    // 自动检测更新循环：Runnable 可复用（"重新加载页面"时会 removeCallbacks 后立即触发一次）；
+    // 间隔取自原生配置 updateCheckIntervalMinutes（1/30/60 分钟，默认 1 分钟）
     private final Runnable updateCheckRunnable = this::runAutoUpdateCheck;
 
     private enum InjectionTrigger {
@@ -1156,7 +1156,8 @@ public class MainActivity extends BridgeActivity {
                     values.enableStoragePatch,
                     values.enableUiReadyObserver,
                     values.enableActionObserver,
-                    values.enableRuntimeReuse
+                    values.enableRuntimeReuse,
+                    values.updateCheckIntervalMinutes
                 );
                 appendNativeLog(values.buildSaveSummary());
                 toast("配置已保存，应用即将重启");
@@ -1185,10 +1186,11 @@ public class MainActivity extends BridgeActivity {
         });
     }
 
-    /** 执行一次自动更新检测并重新排程下一次；悬浮球菜单"重新加载页面"也会立即触发 */
+    /** 执行一次自动更新检测并重新排程下一次；间隔取自原生配置（1/30/60 分钟）；"重新加载页面"也会立即触发 */
     private void runAutoUpdateCheck() {
         com.getcapacitor.JSObject config = ClientConfigPlugin.getSavedConfig(this);
         String updateBase = normalizeBaseUrl(config.optString("updateBase", DEFAULT_UPDATE_BASE), DEFAULT_UPDATE_BASE);
+        long intervalMs = config.optInt("updateCheckIntervalMinutes", 1) * 60L * 1000L;
         NativeUpdateHelper.checkForAutoUpdate(this, updateBase, new NativeUpdateHelper.Callbacks() {
             @Override
             public void appendLog(String message) {
@@ -1205,8 +1207,8 @@ public class MainActivity extends BridgeActivity {
                 nativeControlOverlay.setUpdateBadgeVisible(available);
             }
         });
-        nextUpdateCheckAtMs = System.currentTimeMillis() + UPDATE_CHECK_INTERVAL_MS;
-        mainHandler.postDelayed(updateCheckRunnable, UPDATE_CHECK_INTERVAL_MS);
+        nextUpdateCheckAtMs = System.currentTimeMillis() + intervalMs;
+        mainHandler.postDelayed(updateCheckRunnable, intervalMs);
     }
 
     private final NativeLogDialog.Host nativeLogHost = new NativeLogDialog.Host() {
