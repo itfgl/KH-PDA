@@ -31,6 +31,7 @@ const normalizedReleases = releases
     releasedAt: item.releasedAt || '',
     notes: Array.isArray(item.notes) ? item.notes : [],
     promptUpdate: !!item.promptUpdate,
+    forceUpdate: !!item.forceUpdate,
   }))
   .sort((a, b) => b.versionCode - a.versionCode);
 
@@ -57,8 +58,9 @@ for (const item of normalizedReleases) {
     changelog: item.changelog,
     releasedAt: item.releasedAt,
     notes: item.notes,
-    // 仅"提示更新"标记为 true 时输出该字段，未标记版本保持精简、避免历史文件无意义变动
+    // 仅"提示更新/强制更新"标记为 true 时输出对应字段，未标记版本保持精简、避免历史文件无意义变动
     ...(item.promptUpdate ? { promptUpdate: true } : {}),
+    ...(item.forceUpdate ? { forceUpdate: true } : {}),
   };
   const detailPath = path.join(outputPath, `version-${item.versionCode}.json`);
   fs.writeFileSync(detailPath, `${JSON.stringify(detailPayload, null, 2)}\n`, 'utf8');
@@ -79,6 +81,7 @@ const legacyCurrentPayload = {
   releasedAt: currentNormalizedEntry.releasedAt,
   notes: currentNormalizedEntry.notes,
   ...(currentNormalizedEntry.promptUpdate ? { promptUpdate: true } : {}),
+  ...(currentNormalizedEntry.forceUpdate ? { forceUpdate: true } : {}),
 };
 const legacyCurrentPath = path.join(outputPath, 'version.json');
 fs.writeFileSync(legacyCurrentPath, `${JSON.stringify(legacyCurrentPayload, null, 2)}\n`, 'utf8');

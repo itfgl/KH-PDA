@@ -6,13 +6,14 @@ import path from 'node:path';
 //      node scripts/bump-version.mjs <manifestJson> --note <说明>
 //      说明累积到 manifest.pending.notes，构建时一起带出
 //   2) 正式升版（构建时由 build-local-release.ps1 调用）：
-//      node scripts/bump-version.mjs <manifestJson> [--use-pending | <changelog>] [--prompt-update]
+//      node scripts/bump-version.mjs <manifestJson> [--use-pending | <changelog>] [--prompt-update] [--force-update]
 //      --use-pending 使用累积的 pending 说明；<changelog> 用一行说明
-//      --prompt-update 标记本版本为"提示更新"（用户打开软件时会收到更新提示）
+//      --prompt-update 标记本版本为"提示更新"（弹窗可关闭）
+//      --force-update 标记本版本为"强制更新"（弹窗不可关闭，必须更新）
 //      升版后 pending 清空
 const args = process.argv.slice(2);
 if (args.length < 2) {
-  console.error('Usage: node scripts/bump-version.mjs <manifestJson> (--note <说明> | [--use-pending | <changelog>] [--prompt-update])');
+  console.error('Usage: node scripts/bump-version.mjs <manifestJson> (--note <说明> | [--use-pending | <changelog>] [--prompt-update] [--force-update])');
   process.exit(1);
 }
 
@@ -21,7 +22,8 @@ const manifestPath = path.resolve(manifestFile);
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
 const promptUpdate = rest.includes('--prompt-update');
-const cleanRest = rest.filter((item) => item !== '--prompt-update');
+const forceUpdate = rest.includes('--force-update');
+const cleanRest = rest.filter((item) => item !== '--prompt-update' && item !== '--force-update');
 const isNoteMode = cleanRest[0] === '--note';
 const usePending = cleanRest[0] === '--use-pending';
 const inlineChangelog = !isNoteMode && !usePending ? cleanRest.join(' ').trim() : '';
@@ -63,6 +65,33 @@ if (setPromptIdx >= 0) {
     else delete cur.promptUpdate;
     fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     console.log(`版本 ${curCode} 的提示更新标记已设为: ${setPromptValue === 'y' ? '标记' : '取消'}`);
+  }
+  process.exit(0);
+}
+
+// 4) 设置/取消当前版本的"强制更新"标记（不升版，供沿用当前版本重打时用）：
+//    node scripts/bump-version.mjs <manifestJson> --set-force y|n
+const setForceIdx = cleanRest.indexOf('--set-force');
+if (setForceIdx >= 0) {
+  const setForceValue = String(cleanRest[setForceIdx + 1] || '').trim().toLowerCase();
+  if (setForceValue !== 'y' && setForceValue !== 'n') {
+    console.error('--set-force 需要参数 y（标记）或 n（取消标记）');
+    process.exit(1);
+  }
+  {
+    const curCode = Number.parseInt(String(manifest.currentVersionCode ?? ''), 10);
+    if (!Number.isFinite(curCode)) {
+      throw new Error(`Invalid currentVersionCode: ${manifest.currentVersionCode ?? ''}`);
+    }
+    const rels = Array.isArray(manifest.releases) ? manifest.releases : [];
+    const cur = rels.find((item) => Number.parseInt(String(item.versionCode ?? ''), 10) === curCode);
+    if (!cur) {
+      throw new Error(`Release ${curCode} not found in manifest`);
+    }
+    if (setForceValue === 'y') cur.forceUpdate = true;
+    else delete cur.forceUpdate;
+    fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    console.log(`版本 ${curCode} 的强制更新标记已设为: ${setForceValue === 'y' ? '标记' : '取消'}`);
   }
   process.exit(0);
 }
@@ -109,6 +138,7 @@ const entry = {
   notes: [`Android 版本提升到 ${newName} (${newCode})`, ...notes],
 };
 if (promptUpdate) entry.promptUpdate = true;
+if (forceUpdate) entry.forceUpdate = true;
 
 manifest.currentVersionCode = newCode;
 manifest.releases.unshift(entry);

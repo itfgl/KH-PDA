@@ -91,17 +91,27 @@ final class NativeUpdateHelper {
         }).start();
     }
 
-    /** 启动时静默检查提示更新：仅当存在"提示更新"标记的新版本时弹提示框（可关闭），否则静默不打扰 */
-    static void checkForPromptUpdate(Activity activity, String updateBase, Callbacks callbacks) {
+    /** 启动/定时静默检查更新：优先级 强制更新 > 提示更新。
+     *  强制更新：有新版本且标记 forceUpdate → 弹不可关闭对话框（仅"立即更新"，返回键/点外部均无法关闭）
+     *  提示更新：有新版本且标记 promptUpdate 且本版本未被用户忽略 → 弹可关闭提示框
+     *  其余情况静默，不打扰用户 */
+    static void checkForAutoUpdate(Activity activity, String updateBase, Callbacks callbacks) {
         new Thread(() -> {
             try {
                 JSONObject serverInfo = fetchUpdateInfo(updateBase);
                 long localVersionCode = getLocalVersionCode(activity);
                 String localVersionName = getLocalVersionName(activity);
                 long remoteVersionCode = serverInfo.optLong("versionCode", 0);
+                if (remoteVersionCode <= localVersionCode) {
+                    return; // 无新版本 → 静默
+                }
+                boolean forceUpdate = serverInfo.optBoolean("forceUpdate", false);
                 boolean promptUpdate = serverInfo.optBoolean("promptUpdate", false);
-                if (remoteVersionCode <= localVersionCode || !promptUpdate) {
-                    return; // 无新版本或未标记"提示更新" → 静默，不弹任何框
+                if (!forceUpdate && !promptUpdate) {
+                    return; // 新版本未标记任何更新策略 → 静默
+                }
+                if (!forceUpdate && wasPromptDismissed(activity, remoteVersionCode)) {
+                    return; // 提示更新已被用户忽略过该版本 → 不再打扰
                 }
                 String remoteVersionName = serverInfo.optString("versionName", "");
                 String changelog = serverInfo.optString("changelog", "");
@@ -114,21 +124,53 @@ final class NativeUpdateHelper {
                     if (!changelog.isEmpty()) {
                         message.append("\n\n更新说明:\n").append(changelog);
                     }
-                    new AlertDialog.Builder(activity)
-                        .setTitle("发现新版本")
-                        .setMessage(message.toString())
-                        .setPositiveButton("下载更新", (dialog, which) -> {
-                            callbacks.appendLog("提示更新：开始下载 " + remoteVersionName);
-                            startDownload(activity, apkUrl, remoteVersionName, callbacks);
-                        })
-                        .setNegativeButton("取消", null)
-                        .show();
+                    if (forceUpdate) {
+                        // 强制更新：弹窗不可关闭（取消按钮/返回键/点击外部均无效），只能立即更新
+                        callbacks.appendLog("发现强制更新版本 " + remoteVersionName + " (" + remoteVersionCode + ")");
+                        new AlertDialog.Builder(activity)
+                            .setTitle("发现新版本（强制更新）")
+                            .setMessage(message.toString())
+                            .setCancelable(false)
+                            .setPositiveButton("立即更新", (dialog, which) -> {
+                                callbacks.appendLog("强制更新：开始下载 " + remoteVersionName);
+                                startDownload(activity, apkUrl, remoteVersionName, callbacks);
+                            })
+                            .show();
+                    } else {
+                        // 提示更新：可关闭，点"取消"后本版本不再提醒
+                        new AlertDialog.Builder(activity)
+                            .setTitle("发现新版本")
+                            .setMessage(message.toString())
+                            .setPositiveButton("下载更新", (dialog, which) -> {
+                                callbacks.appendLog("提示更新：开始下载 " + remoteVersionName);
+                                startDownload(activity, apkUrl, remoteVersionName, callbacks);
+                            })
+                            .setNegativeButton("取消", (dialog, which) ->
+                                rememberPromptDismissed(activity, remoteVersionCode))
+                            .show();
+                    }
                 });
             } catch (Exception e) {
                 // 静默失败，不打扰用户
-                callbacks.appendLog("启动提示更新检查失败: " + e.getMessage());
+                callbacks.appendLog("自动更新检查失败: " + e.getMessage());
             }
         }).start();
+    }
+
+    private static final String UPDATE_PREF_NAME = "kh_update_prompt";
+    private static final String PROMPT_DISMISSED_PREFIX = "prompt_dismissed_v";
+
+    /** 提示更新弹窗被用户点"取消"后记录，同一版本后续循环检测不再打扰 */
+    private static boolean wasPromptDismissed(Activity activity, long versionCode) {
+        return activity.getSharedPreferences(UPDATE_PREF_NAME, 0)
+            .getBoolean(PROMPT_DISMISSED_PREFIX + versionCode, false);
+    }
+
+    private static void rememberPromptDismissed(Activity activity, long versionCode) {
+        activity.getSharedPreferences(UPDATE_PREF_NAME, 0)
+            .edit()
+            .putBoolean(PROMPT_DISMISSED_PREFIX + versionCode, true)
+            .apply();
     }
 
     private static void startDownload(

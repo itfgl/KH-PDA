@@ -46,6 +46,12 @@ $markPrompt = Read-Host "本次构建的提示更新标记？(y=标记 / n=取�
 $markChoice = $markPrompt.Trim().ToLower()
 if ($markChoice -eq 'y') { $promptFlag = '--prompt-update' }
 
+# 询问本次构建的强制更新标记：y=标记 / n=取消标记 / 回车=保持不变（升版与沿用版本重打均生效）
+$forceFlag = ''
+$markForce = Read-Host "本次构建的强制更新标记？(y=标记 / n=取消标记 / 回车=不变)"
+$forceChoice = $markForce.Trim().ToLower()
+if ($forceChoice -eq 'y') { $forceFlag = '--force-update' }
+
 # 沿用当前版本重打时，用 --set-prompt 设置/取消当前版本的提示更新标记
 function Set-PromptMark {
     param([string]$Choice)
@@ -60,6 +66,20 @@ function Set-PromptMark {
     }
 }
 
+# 沿用当前版本重打时，用 --set-force 设置/取消当前版本的强制更新标记
+function Set-ForceMark {
+    param([string]$Choice)
+    if ($Choice -eq 'y') {
+        node $bumpScript $manifestPath '--set-force' 'y'
+        if ($LASTEXITCODE -ne 0) { throw "标记强制更新设置失败" }
+        Write-Host "已标记当前版本为强制更新" -ForegroundColor Green
+    } elseif ($Choice -eq 'n') {
+        node $bumpScript $manifestPath '--set-force' 'n'
+        if ($LASTEXITCODE -ne 0) { throw "取消强制更新标记失败" }
+        Write-Host "已取消当前版本的强制更新标记" -ForegroundColor Green
+    }
+}
+
 if ($pendingNotes.Count -gt 0) {
     Write-Host "待发布说明（共 $($pendingNotes.Count) 条，将随新版本一起写入 changelog）:" -ForegroundColor Cyan
     $pendingNotes | ForEach-Object { Write-Host "  - $_" }
@@ -69,15 +89,18 @@ if ($pendingNotes.Count -gt 0) {
     if ($choice.Trim() -eq '') {
         $bumpArgs = @($manifestPath, '--use-pending')
         if ($promptFlag) { $bumpArgs += $promptFlag }
+        if ($forceFlag) { $bumpArgs += $forceFlag }
         node $bumpScript @bumpArgs
         if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
         Write-Host "已升版并写入待发布说明" -ForegroundColor Green
     } elseif ($choice.Trim() -eq 'r' -or $choice.Trim() -eq 'R') {
         Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建，待发布说明保留" -ForegroundColor Yellow
         Set-PromptMark $markChoice
+        Set-ForceMark $forceChoice
     } else {
         $bumpArgs = @($manifestPath, $choice.Trim())
         if ($promptFlag) { $bumpArgs += $promptFlag }
+        if ($forceFlag) { $bumpArgs += $forceFlag }
         node $bumpScript @bumpArgs
         if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
         Write-Host "已升版并使用输入的说明（待发布说明仍保留在 pending 中）" -ForegroundColor Green
@@ -89,12 +112,14 @@ if ($pendingNotes.Count -gt 0) {
     if ($choice.Trim() -ne '') {
         $bumpArgs = @($manifestPath, $choice.Trim())
         if ($promptFlag) { $bumpArgs += $promptFlag }
+        if ($forceFlag) { $bumpArgs += $forceFlag }
         node $bumpScript @bumpArgs
         if ($LASTEXITCODE -ne 0) { throw "版本升级失败" }
         Write-Host "已升版，本次构建新版本" -ForegroundColor Green
     } else {
         Write-Host "沿用当前版本 $($currentNow.versionName) ($($manifestNow.currentVersionCode)) 重新构建" -ForegroundColor Yellow
         Set-PromptMark $markChoice
+        Set-ForceMark $forceChoice
     }
 }
 
