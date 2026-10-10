@@ -1,6 +1,20 @@
 {
-  "currentVersionCode": 133,
+  "currentVersionCode": 134,
   "releases": [
+    {
+      "versionCode": 134,
+      "versionName": "1.2.125",
+      "apkFileName": "kaihang-scanner-v1.2.125-134.apk",
+      "changelog": "检测到新版本时悬浮球显示红点提醒，更新后自动消失",
+      "releasedAt": "2026-10-10",
+      "notes": [
+        "Android 版本提升到 1.2.125 (134)",
+        "检测到新版本时悬浮球显示红点提醒，更新后自动消失",
+        "点「重新加载页面」时会立即检测一次更新"
+      ],
+      "promptUpdate": true,
+      "forceUpdate": true
+    },
     {
       "versionCode": 133,
       "versionName": "1.2.124",
@@ -1545,8 +1559,7 @@
   ],
   "pending": {
     "notes": [
-      "检测到新版本时悬浮球显示红点提醒，更新后自动消失",
-      "点「重新加载页面」时会立即检测一次更新"
+      "悬浮球改为球内文字显示页面状态（就绪/加载中/异常），更新红点显示在球右上角"
     ]
   }
 }

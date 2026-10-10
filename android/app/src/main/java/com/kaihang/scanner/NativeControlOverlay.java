@@ -8,9 +8,10 @@ import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.TextView;
 
 /**
- * 原生悬浮控件层：工具球（可拖拽、闲置半藏）、页面状态点、相机扫码图标按钮（独立拖拽）。
+ * 原生悬浮控件层：工具球（球内文字显示页面状态，可拖拽、闲置半藏）、相机扫码图标按钮（独立拖拽）。
  * 只负责视图呈现与手势，业务决策（点击行为、扫码入口、日志）通过 Host 回调交给 MainActivity。
  */
 final class NativeControlOverlay {
@@ -19,12 +20,10 @@ final class NativeControlOverlay {
     private static final int FAB_SIZE_DP = 56;
     private static final int MARGIN_END_DP = 18;
     private static final int MARGIN_BOTTOM_DP = 24;
-    private static final int STATUS_DOT_OFFSET_END_DP = 2;
-    private static final int STATUS_DOT_OFFSET_BOTTOM_DP = 46;
-    // 更新提醒红点：贴在工具球右上角（状态点上方），仅检测到标记版本的新更新时显示
+    // 更新提醒红点：占用工具球右上角（原状态点位置），仅检测到标记版本的新更新时显示
     private static final int UPDATE_BADGE_SIZE_DP = 12;
-    private static final int UPDATE_BADGE_OFFSET_END_DP = STATUS_DOT_OFFSET_END_DP;
-    private static final int UPDATE_BADGE_OFFSET_BOTTOM_DP = 62;
+    private static final int UPDATE_BADGE_OFFSET_END_DP = 2;
+    private static final int UPDATE_BADGE_OFFSET_BOTTOM_DP = 46;
     // 扫码按钮独立锚点：默认停在工具球正上方（与旧版跟随位置一致），支持单独拖动
     private static final int SCAN_BUTTON_SIZE_DP = 48;
     private static final int SCAN_MARGIN_END_DP = MARGIN_END_DP;
@@ -45,9 +44,8 @@ final class NativeControlOverlay {
     private final Activity activity;
     private final Host host;
 
-    private ImageButton fabButton;
+    private TextView fabButton;
     private ImageButton scanButton;
-    private View statusDot;
     private View updateBadge;
     private FrameLayout overlayContainer;
 
@@ -84,7 +82,7 @@ final class NativeControlOverlay {
 
     void setPageReadyState(String state) {
         pageReadyState = state == null ? "loading" : state;
-        updateStatusDot();
+        updateStatusDisplay();
     }
 
     void updateScanButtonVisibility() {
@@ -150,11 +148,11 @@ final class NativeControlOverlay {
         overlayContainer = container;
         touchSlopPx = ViewConfiguration.get(activity).getScaledTouchSlop();
 
-        fabButton = new ImageButton(activity);
-        fabButton.setImageResource(android.R.drawable.ic_menu_manage);
-        fabButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        fabButton = new TextView(activity);
         fabButton.setBackground(buildFabBackground());
-        fabButton.setColorFilter(android.graphics.Color.WHITE);
+        fabButton.setGravity(Gravity.CENTER);
+        fabButton.setTextSize(12);
+        fabButton.setTextColor(android.graphics.Color.WHITE);
         fabButton.setContentDescription("客户端工具");
         int size = dp(FAB_SIZE_DP);
         FrameLayout.LayoutParams fabParams = new FrameLayout.LayoutParams(size, size);
@@ -198,12 +196,6 @@ final class NativeControlOverlay {
                     return false;
             }
         });
-
-        statusDot = new View(activity);
-        FrameLayout.LayoutParams dotParams = new FrameLayout.LayoutParams(dp(12), dp(12));
-        statusDot.setLayoutParams(dotParams);
-        statusDot.setElevation(dp(12));
-        statusDot.setBackground(buildStatusDotBackground("#98A2B3"));
 
         updateBadge = new View(activity);
         FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams(dp(UPDATE_BADGE_SIZE_DP), dp(UPDATE_BADGE_SIZE_DP));
@@ -262,18 +254,16 @@ final class NativeControlOverlay {
             }
         });
 
-        container.addView(statusDot);
         container.addView(scanButton);
         container.addView(fabButton);
         container.addView(updateBadge);
         root.addView(container);
         container.bringToFront();
-        statusDot.bringToFront();
         scanButton.bringToFront();
         fabButton.bringToFront();
         updateBadge.bringToFront();
         updatePositions();
-        updateStatusDot();
+        updateStatusDisplay();
         // 布局完成后启动首次闲置计时
         fabButton.post(() -> scheduleDock());
     }
@@ -340,7 +330,7 @@ final class NativeControlOverlay {
         return Math.max(0, Math.min(requestedPx, maxMargin));
     }
 
-    /** 工具球与状态点、更新红点共用锚点（状态点/红点贴工具球）；扫码按钮独立锚点，互不影响 */
+    /** 工具球与更新红点共用锚点（红点贴球右上角）；扫码按钮独立锚点，互不影响 */
     private void updateFabPositions() {
         if (fabButton == null) {
             return;
@@ -352,13 +342,6 @@ final class NativeControlOverlay {
         fabParams.gravity = Gravity.END | Gravity.BOTTOM;
         fabParams.setMargins(0, 0, end, bottom);
         fabButton.setLayoutParams(fabParams);
-
-        if (statusDot != null) {
-            FrameLayout.LayoutParams dotParams = (FrameLayout.LayoutParams) statusDot.getLayoutParams();
-            dotParams.gravity = Gravity.END | Gravity.BOTTOM;
-            dotParams.setMargins(0, 0, end + dp(STATUS_DOT_OFFSET_END_DP), bottom + dp(STATUS_DOT_OFFSET_BOTTOM_DP));
-            statusDot.setLayoutParams(dotParams);
-        }
 
         if (updateBadge != null) {
             FrameLayout.LayoutParams badgeParams = (FrameLayout.LayoutParams) updateBadge.getLayoutParams();
@@ -400,9 +383,6 @@ final class NativeControlOverlay {
         float translation = targetLeft - left;
         docked = true;
         fabButton.animate().translationX(translation).setDuration(220).start();
-        if (statusDot != null) {
-            statusDot.animate().translationX(translation).setDuration(220).start();
-        }
         if (updateBadge != null) {
             updateBadge.animate().translationX(translation).setDuration(220).start();
         }
@@ -418,9 +398,6 @@ final class NativeControlOverlay {
         docked = false;
         if (fabButton != null) {
             fabButton.animate().translationX(0f).setDuration(180).start();
-        }
-        if (statusDot != null) {
-            statusDot.animate().translationX(0f).setDuration(180).start();
         }
         if (updateBadge != null) {
             updateBadge.animate().translationX(0f).setDuration(180).start();
@@ -441,15 +418,7 @@ final class NativeControlOverlay {
         return background;
     }
 
-    private android.graphics.drawable.Drawable buildStatusDotBackground(String color) {
-        android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
-        background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-        background.setColor(android.graphics.Color.parseColor(color));
-        background.setStroke(dp(2), android.graphics.Color.WHITE);
-        return background;
-    }
-
-    /** 更新提醒红点背景：红色圆点 + 白描边（与状态点同风格） */
+    /** 更新提醒红点背景：红色圆点 + 白描边 */
     private android.graphics.drawable.Drawable buildUpdateBadgeBackground() {
         android.graphics.drawable.GradientDrawable background = new android.graphics.drawable.GradientDrawable();
         background.setShape(android.graphics.drawable.GradientDrawable.OVAL);
@@ -465,21 +434,30 @@ final class NativeControlOverlay {
         return background;
     }
 
-    private void updateStatusDot() {
-        if (statusDot == null) {
+    /** 页面状态改用球内文字显示：就绪（绿）/ 加载中（灰）/ 异常（红） */
+    private void updateStatusDisplay() {
+        if (fabButton == null) {
             return;
         }
-        String color = "#98A2B3";
-        String description = "页面初始化中";
+        String text;
+        String color;
+        String description;
         if ("ready".equals(pageReadyState)) {
+            text = "就绪";
             color = "#12B76A";
             description = "页面已就绪";
         } else if ("error".equals(pageReadyState)) {
+            text = "异常";
             color = "#F04438";
             description = "页面初始化异常";
+        } else {
+            text = "加载中";
+            color = "#98A2B3";
+            description = "页面初始化中";
         }
-        statusDot.setBackground(buildStatusDotBackground(color));
-        statusDot.setContentDescription(description);
+        fabButton.setText(text);
+        fabButton.setTextColor(android.graphics.Color.parseColor(color));
+        fabButton.setContentDescription(description);
     }
 
     private int dp(int value) {
